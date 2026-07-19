@@ -4,7 +4,7 @@ import { getRequestOrigin } from "@/lib/auth/origin";
 import {
   createRegistrationInvite,
   isInstanceAdmin,
-  normalizeEmail,
+  normalizeUsername,
 } from "@/lib/auth/registration";
 import { requireSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -23,7 +23,7 @@ export async function GET() {
   const invitations = await db
     .select({
       id: registrationInvites.id,
-      email: registrationInvites.email,
+      username: registrationInvites.username,
       expiresAt: registrationInvites.expiresAt,
       createdAt: registrationInvites.createdAt,
     })
@@ -48,17 +48,19 @@ export async function POST(request: Request) {
     await request.json().catch(() => null),
   );
   if (!parsed.success) {
-    return Response.json({ error: "Enter a valid email address." }, { status: 400 });
+    return Response.json({ error: "Enter a valid username." }, { status: 400 });
   }
 
-  const email = parsed.data.email ? normalizeEmail(parsed.data.email) : null;
-  if (email) {
+  const username = parsed.data.username
+    ? normalizeUsername(parsed.data.username)
+    : null;
+  if (username) {
     const [existing] = await db
       .select({ id: registrationInvites.id })
       .from(registrationInvites)
       .where(
         and(
-          eq(registrationInvites.email, email),
+          eq(registrationInvites.username, username),
           isNull(registrationInvites.usedAt),
           isNull(registrationInvites.revokedAt),
           gt(registrationInvites.expiresAt, new Date()),
@@ -67,7 +69,7 @@ export async function POST(request: Request) {
       .limit(1);
     if (existing) {
       return Response.json(
-        { error: "That email already has an active signup link." },
+        { error: "That username already has an active signup link." },
         { status: 409 },
       );
     }
@@ -75,7 +77,7 @@ export async function POST(request: Request) {
 
   const { invite, rawToken } = await createRegistrationInvite({
     createdByUserId: admin.id,
-    email,
+    username,
   });
   const origin = getRequestOrigin(request);
   if (!origin) {

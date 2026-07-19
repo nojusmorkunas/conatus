@@ -19,21 +19,14 @@ npm install
 npm run dev
 ```
 
-Attachments need a MinIO container and reminder emails an SMTP sink (see
-`docker-compose.yml` for both); everything else runs with just Postgres.
-
-OAuth sign-in is optional and credentials login remains available.
-Set both `AUTH_GITHUB_ID` and `AUTH_GITHUB_SECRET` to enable GitHub.
-Set both `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET` to enable Google.
-Use `http://localhost:3000/api/auth/callback/github` as GitHub's callback URL.
-Use `http://localhost:3000/api/auth/callback/google` as Google's redirect URI.
+Attachments need a MinIO container. Email reminders are optional and activate
+only when all SMTP variables are configured; everything else runs without mail.
 
 Registration is invite-only. On an empty database, `/register` allows the
-first account to bootstrap the server and makes that account the instance
-administrator. After signing in, that administrator can create single-use,
-seven-day signup links under **Settings → Registration**. New OAuth accounts
-are subject to the same bootstrap or invitation requirement; existing OAuth
-users can continue to sign in normally.
+first username/password account to bootstrap the server and makes that account
+the instance administrator. No email address or SMTP configuration is required.
+After signing in, that administrator can create single-use, seven-day signup
+links under **Settings → Registration**.
 
 ## Tests
 
@@ -45,10 +38,24 @@ npm run test:e2e  # Playwright flows against a dev server
 ## Self-hosted deployment
 
 ```bash
+cp .env.example .env
+# Set AUTH_SECRET. Optionally set CONATUS_ADMIN_USERNAME and
+# CONATUS_ADMIN_PASSWORD for unattended first-user creation.
+# Behind a domain/reverse proxy, set AUTH_URL and PUBLIC_BASE_URL to its
+# external HTTPS origin.
 docker compose up --build
 ```
 
-Runs the app and Postgres together. See `docker-compose.yml`.
+Runs the app and Postgres together. See `docker-compose.yml`. When both
+bootstrap variables are set, an administrator is created only if the
+database is empty. Existing accounts are never updated from the environment.
+After the first login, change the password under **Settings → Account**, then remove both
+bootstrap variables from `.env` and remove the stopped container that held the
+initial password:
+
+```bash
+docker compose rm -f bootstrap
+```
 
 ## API and MCP access
 

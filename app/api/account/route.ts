@@ -1,6 +1,6 @@
 import { and, count, eq, sql } from "drizzle-orm";
 
-import { normalizeEmail, REGISTRATION_LOCK_ID } from "@/lib/auth/registration";
+import { normalizeUsername, REGISTRATION_LOCK_ID } from "@/lib/auth/registration";
 import { requireSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
@@ -16,7 +16,7 @@ export async function DELETE(request: Request) {
     await request.json().catch(() => null),
   );
   if (!parsed.success) {
-    return Response.json({ error: "Email does not match" }, { status: 400 });
+    return Response.json({ error: "Username does not match" }, { status: 400 });
   }
 
   // Keep the instance-admin invariant intact. The sole remaining account may
@@ -39,7 +39,7 @@ export async function DELETE(request: Request) {
       .where(
         and(
           eq(users.id, sessionUser.id),
-          eq(users.email, normalizeEmail(parsed.data.email)),
+          eq(users.username, normalizeUsername(parsed.data.username)),
         ),
       )
       .returning({ id: users.id });
@@ -49,7 +49,7 @@ export async function DELETE(request: Request) {
     return Response.json(
       {
         error:
-          "Email does not match, or another administrator must be appointed before deleting this account.",
+          "Username does not match, or another administrator must be appointed before deleting this account.",
       },
       { status: 400 },
     );

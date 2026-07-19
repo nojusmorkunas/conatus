@@ -246,6 +246,13 @@
       "when": 1784458609572,
       "tag": "0034_curly_drax",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1784468069682,
+      "tag": "0035_amused_king_cobra",
+      "breakpoints": true
     }
   ]
 }

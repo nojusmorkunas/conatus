@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { registerVerifyAndLogin } from "./helpers";
+import { registerAndLogin } from "./helpers";
 
 async function addProject(page: Page, name: string) {
   await page.getByRole("button", { name: "Add project" }).click();
@@ -92,7 +92,6 @@ async function dragFavoriteProject(page: Page, sourceName: string, targetName: s
 
 test("projects drag from the whole row without a visible drag handle", async ({
   page,
-  request,
 }) => {
   const hydrationErrors: string[] = [];
   const runtimeErrors: string[] = [];
@@ -107,8 +106,8 @@ test("projects drag from the whole row without a visible drag handle", async ({
   });
   page.on("pageerror", (error) => runtimeErrors.push(error.message));
 
-  const email = `e2e-${Date.now()}-projects@test.local`;
-  await registerVerifyAndLogin(page, request, email);
+  const username = `e2e-${Date.now()}-projects`;
+  await registerAndLogin(page, username);
   await addProject(page, "Alpha project");
   await addProject(page, "Beta project");
   // Login redirects through the root route in development, where Next.js can
@@ -243,7 +242,9 @@ test("projects drag from the whole row without a visible drag handle", async ({
   await page.mouse.up();
   await expect(taskRow).toHaveCSS("cursor", "pointer");
   await page.reload();
-  await expect(page.getByText("Hydration check", { exact: true })).toBeVisible();
+  await expect(
+    page.locator('[data-task-content="Hydration check"]:visible').first(),
+  ).toBeVisible();
   expect(hydrationErrors).toEqual([]);
   expect(runtimeErrors).toEqual([]);
 });

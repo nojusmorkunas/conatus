@@ -5,6 +5,12 @@ const globalForMailer = globalThis as unknown as {
   transporter?: nodemailer.Transporter;
 };
 
+export function isEmailConfigured() {
+  return Boolean(
+    process.env.SMTP_HOST && process.env.SMTP_PORT && process.env.SMTP_FROM,
+  );
+}
+
 export const transporter =
   globalForMailer.transporter ??
   nodemailer.createTransport({

@@ -7,10 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export function AccountSettings({
-  email,
+  username,
   hasPassword,
 }: {
-  email: string;
+  username: string;
   hasPassword: boolean;
 }) {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -19,7 +19,7 @@ export function AccountSettings({
   const [passwordExists, setPasswordExists] = useState(hasPassword);
   const [passwordPending, setPasswordPending] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
-  const [confirmationEmail, setConfirmationEmail] = useState("");
+  const [confirmationUsername, setConfirmationUsername] = useState("");
   const [deletePending, setDeletePending] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -69,7 +69,7 @@ export function AccountSettings({
     const response = await fetch("/api/account", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: confirmationEmail }),
+      body: JSON.stringify({ username: confirmationUsername }),
     });
 
     if (!response.ok) {
@@ -95,9 +95,8 @@ export function AccountSettings({
       <h2 id="account-heading" className="scroll-mt-6 text-lg font-semibold">Account</h2>
 
       <div className="space-y-2">
-        <label htmlFor="account-email" className="text-sm font-medium">Email</label>
-        <Input id="account-email" type="email" value={email} readOnly />
-        <p className="text-sm text-muted-foreground">Email changes are not supported.</p>
+        <label htmlFor="account-username" className="text-sm font-medium">Username</label>
+        <Input id="account-username" type="text" value={username} readOnly />
       </div>
 
       <form onSubmit={changePassword} className="space-y-3">
@@ -119,7 +118,7 @@ export function AccountSettings({
         )}
         {!passwordExists && (
           <p className="text-sm text-muted-foreground">
-            This account uses OAuth. Set a password to also sign in with email.
+            Set a password to sign in with this username.
           </p>
         )}
         <div className="space-y-2">
@@ -165,20 +164,20 @@ export function AccountSettings({
         </div>
         <div className="space-y-2">
           <label htmlFor="delete-confirmation" className="text-sm font-medium">
-            Type {email} to confirm
+            Type {username} to confirm
           </label>
           <Input
             id="delete-confirmation"
-            type="email"
+            type="text"
             autoComplete="off"
-            value={confirmationEmail}
-            onChange={(event) => setConfirmationEmail(event.target.value)}
+            value={confirmationUsername}
+            onChange={(event) => setConfirmationUsername(event.target.value)}
           />
         </div>
         <Button
           type="submit"
           variant="destructive"
-          disabled={deletePending || confirmationEmail !== email}
+          disabled={deletePending || confirmationUsername !== username}
         >
           {deletePending ? "Deleting…" : "Delete account"}
         </Button>

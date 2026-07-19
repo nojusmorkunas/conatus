@@ -31,7 +31,7 @@ export default async function AppLayout({
       .orderBy(filters.order),
     db
       .select({
-        email: users.email,
+        username: users.username,
         name: users.name,
         image: users.image,
         timezone: users.timezone,
@@ -69,7 +69,7 @@ export default async function AppLayout({
         initialProjects={userProjects}
         initialLabels={userLabels}
         initialFilters={userFilters}
-        userEmail={account.email}
+        username={account.username}
         userName={account.name}
         hasAvatar={!!account.image}
         avatarVersion={String(account.updatedAt.getTime())}

@@ -32,7 +32,7 @@ export function ProjectView({
 }: {
   project: Project;
   role: "owner" | "editor";
-  members: { userId: string; email: string; role: "owner" | "editor" }[];
+  members: { userId: string; username: string; role: "owner" | "editor" }[];
   currentUserId: string;
   projectCommentCount: number;
   sections: Section[];
@@ -60,7 +60,7 @@ export function ProjectView({
   const [openTaskCount, setOpenTaskCount] = useState(
     () => tasks.filter((task) => !task.isCompleted).length,
   );
-  const taskMembers = members.map(({ userId: id, email }) => ({ id, email }));
+  const taskMembers = members.map(({ userId: id, username }) => ({ id, username }));
 
   function switchView(next: "list" | "board") {
     setView(next);

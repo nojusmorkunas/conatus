@@ -17,7 +17,7 @@ export const REGISTRATION_INVITE_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 export type RegistrationState =
   | { kind: "bootstrap" }
   | { kind: "open" }
-  | { kind: "invited"; email: string | null }
+  | { kind: "invited"; username: string | null }
   | { kind: "closed"; reason: "invite_required" | "invalid_invite" };
 
 export class RegistrationEnrollmentError extends Error {
@@ -25,10 +25,14 @@ export class RegistrationEnrollmentError extends Error {
     public readonly code:
       | "invite_required"
       | "invalid_invite"
-      | "email_mismatch",
+      | "username_mismatch",
   ) {
     super(code);
   }
+}
+
+export function normalizeUsername(username: string) {
+  return username.trim().toLowerCase();
 }
 
 export function normalizeEmail(email: string) {
@@ -41,7 +45,7 @@ export function isOpenRegistrationEnabled() {
 
 async function activeInvite(rawToken: string) {
   const [invite] = await db
-    .select({ email: registrationInvites.email })
+    .select({ username: registrationInvites.username })
     .from(registrationInvites)
     .where(
       and(
@@ -68,7 +72,7 @@ export async function getRegistrationState(
 
   const invite = await activeInvite(rawToken);
   return invite
-    ? { kind: "invited", email: invite.email }
+    ? { kind: "invited", username: invite.username }
     : { kind: "closed", reason: "invalid_invite" };
 }
 
@@ -92,7 +96,7 @@ export async function enrollUser(
       const [invite] = await tx
         .select({
           id: registrationInvites.id,
-          email: registrationInvites.email,
+          username: registrationInvites.username,
           expiresAt: registrationInvites.expiresAt,
           usedAt: registrationInvites.usedAt,
           revokedAt: registrationInvites.revokedAt,
@@ -108,15 +112,18 @@ export async function enrollUser(
       ) {
         throw new RegistrationEnrollmentError("invalid_invite");
       }
-      if (invite.email && invite.email !== normalizeEmail(input.email)) {
-        throw new RegistrationEnrollmentError("email_mismatch");
+      if (
+        invite.username &&
+        invite.username !== normalizeUsername(input.username)
+      ) {
+        throw new RegistrationEnrollmentError("username_mismatch");
       }
       inviteId = invite.id;
     }
 
     const user = await createUserWithInboxUsing(tx, {
       ...input,
-      email: normalizeEmail(input.email),
+      username: normalizeUsername(input.username),
       instanceRole: isBootstrap ? "admin" : "member",
     });
 
@@ -133,24 +140,24 @@ export async function enrollUser(
 
 export async function createRegistrationInvite({
   createdByUserId,
-  email,
+  username,
 }: {
   createdByUserId: string;
-  email?: string | null;
+  username?: string | null;
 }) {
   const rawToken = randomBytes(32).toString("base64url");
-  const normalizedEmail = email ? normalizeEmail(email) : null;
+  const normalizedUsername = username ? normalizeUsername(username) : null;
   const [invite] = await db
     .insert(registrationInvites)
     .values({
       tokenHash: hashToken(rawToken),
-      email: normalizedEmail,
+      username: normalizedUsername,
       createdByUserId,
       expiresAt: new Date(Date.now() + REGISTRATION_INVITE_LIFETIME_MS),
     })
     .returning({
       id: registrationInvites.id,
-      email: registrationInvites.email,
+      username: registrationInvites.username,
       expiresAt: registrationInvites.expiresAt,
       createdAt: registrationInvites.createdAt,
     });

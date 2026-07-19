@@ -9,7 +9,6 @@ import Link from "next/link";
 import type { z } from "zod";
 
 import { credentialsSchema } from "@/lib/validation";
-import { ResendVerificationForm } from "@/components/auth/resend-verification-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -22,44 +21,31 @@ import {
 type LoginInput = z.infer<typeof credentialsSchema>;
 
 export function LoginForm({
-  oauthError,
-  passwordReset = false,
-  verificationSent = false,
   bootstrapAvailable = false,
 }: {
-  oauthError?: string;
-  passwordReset?: boolean;
-  verificationSent?: boolean;
   bootstrapAvailable?: boolean;
 }) {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(oauthError ?? null);
-  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<LoginInput>({ resolver: zodResolver(credentialsSchema) });
 
-  const onSubmit = handleSubmit(async ({ email, password }) => {
+  const onSubmit = handleSubmit(async ({ username, password }) => {
     setError(null);
-    setUnverifiedEmail(null);
     const result = await signIn("credentials", {
-      email,
+      username,
       password,
       redirect: false,
     });
     if (result?.error) {
-      if (result.code === "email_unverified") {
-        setError("Please verify your email first.");
-        setUnverifiedEmail(email);
-        return;
-      }
       if (result.code === "rate_limited") {
         setError("Too many attempts. Please wait a bit and try again.");
         return;
       }
-      setError("Invalid email or password.");
+      setError("Invalid username or password.");
       return;
     }
     router.push("/");
@@ -74,20 +60,12 @@ export function LoginForm({
           <p className="text-sm text-muted-foreground">Welcome back.</p>
         </div>
         <Field>
-          <FieldLabel htmlFor="email">Email</FieldLabel>
-          <Input id="email" type="email" autoComplete="email" {...register("email")} />
-          <FieldError errors={[errors.email]} />
+          <FieldLabel htmlFor="username">Username</FieldLabel>
+          <Input id="username" type="text" autoComplete="username" {...register("username")} />
+          <FieldError errors={[errors.username]} />
         </Field>
         <Field>
-          <div className="flex items-center justify-between">
-            <FieldLabel htmlFor="password">Password</FieldLabel>
-            <Link
-              href="/forgot-password"
-              className="text-sm underline underline-offset-4"
-            >
-              Forgot password?
-            </Link>
-          </div>
+          <FieldLabel htmlFor="password">Password</FieldLabel>
           <Input
             id="password"
             type="password"
@@ -96,20 +74,7 @@ export function LoginForm({
           />
           <FieldError errors={[errors.password]} />
         </Field>
-        {passwordReset && (
-          <p className="text-sm text-muted-foreground">
-            Your password has been reset. Log in with your new password.
-          </p>
-        )}
-        {verificationSent && (
-          <p className="text-sm text-muted-foreground">
-            Check your email for a verification link before logging in.
-          </p>
-        )}
         {error && <p className="text-sm text-destructive">{error}</p>}
-        {unverifiedEmail && (
-          <ResendVerificationForm email={unverifiedEmail} />
-        )}
         <Button type="submit" disabled={isSubmitting}>
           Log in
         </Button>

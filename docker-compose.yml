@@ -14,7 +14,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -U app"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 10s
 
   minio:
     image: minio/minio
@@ -30,6 +31,7 @@ services:
       - minio-data:/data
 
   mailpit:
+    profiles: ["email-test"]
     image: axllent/mailpit
     restart: unless-stopped
     ports:
@@ -71,6 +73,19 @@ services:
     environment:
       DATABASE_URL: postgres://app:app@db:5432/app
 
+  bootstrap:
+    build:
+      context: .
+      target: bootstrap
+    restart: "no"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgres://app:app@db:5432/app
+      CONATUS_ADMIN_USERNAME: ${CONATUS_ADMIN_USERNAME:-}
+      CONATUS_ADMIN_PASSWORD: ${CONATUS_ADMIN_PASSWORD:-}
+
   app:
     build: .
     restart: unless-stopped
@@ -79,17 +94,21 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      bootstrap:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgres://app:app@db:5432/app
       AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
+      AUTH_URL: ${AUTH_URL:-}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
       S3_ENDPOINT: minio
       S3_PORT: 9000
       S3_ACCESS_KEY: minioadmin
       S3_SECRET_KEY: minioadmin
       S3_BUCKET: attachments
-      SMTP_HOST: mailpit
-      SMTP_PORT: 1025
-      SMTP_FROM: "Conatus <reminders@localhost>"
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_FROM: ${SMTP_FROM:-}
     ports:
       - "3000:3000"
 

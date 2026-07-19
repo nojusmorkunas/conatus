@@ -6,6 +6,8 @@ All notable changes are documented here. Versions follow Semantic Versioning.
 
 ### Added
 
+- Username/password registration with no email or SMTP requirement.
+- Optional one-time administrator bootstrap through Docker environment variables.
 - Persisted first-time onboarding with a short product tutorial.
 - Direct Todoist API import with current recurring due dates, hierarchy, labels, and comments.
 - Pointer and keyboard project drag/drop with nesting and unnesting.

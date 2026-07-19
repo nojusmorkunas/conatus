@@ -4,7 +4,8 @@ import { db } from "@/lib/db";
 import { projects, users } from "@/lib/db/schema";
 
 export type CreateUserInput = {
-  email: string;
+  username: string;
+  email?: string | null;
   passwordHash: string | null;
   timezone?: string;
   emailVerified?: Date | null;
@@ -16,7 +17,8 @@ type UserCreationClient = Pick<typeof db, "insert">;
 export async function createUserWithInboxUsing(
   client: UserCreationClient,
   {
-    email,
+    username,
+    email = null,
     passwordHash,
     timezone = "UTC",
     emailVerified = null,
@@ -25,8 +27,8 @@ export async function createUserWithInboxUsing(
 ) {
   const [user] = await client
     .insert(users)
-    .values({ email, passwordHash, timezone, emailVerified, instanceRole })
-    .returning({ id: users.id, email: users.email, instanceRole: users.instanceRole });
+    .values({ username, email, passwordHash, timezone, emailVerified, instanceRole })
+    .returning({ id: users.id, username: users.username, instanceRole: users.instanceRole });
 
   await client.insert(projects).values({
     userId: user.id,
@@ -39,7 +41,8 @@ export async function createUserWithInboxUsing(
 }
 
 export async function createUserWithInbox({
-  email,
+  username,
+  email = null,
   passwordHash,
   timezone = "UTC",
   emailVerified = null,
@@ -47,6 +50,7 @@ export async function createUserWithInbox({
 }: CreateUserInput) {
   return db.transaction((tx) =>
     createUserWithInboxUsing(tx, {
+      username,
       email,
       passwordHash,
       timezone,

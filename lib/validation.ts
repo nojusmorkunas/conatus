@@ -12,12 +12,21 @@ export const dateFormats = [
 ] as const;
 
 export const credentialsSchema = z.object({
-  email: z.string().email(),
+  username: z.string().trim().min(1),
   password: z.string().min(1),
 });
 
 export const registerSchema = z.object({
-  email: z.string().email(),
+  username: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(3, "Username must be at least 3 characters")
+    .max(32, "Username must be at most 32 characters")
+    .regex(
+      /^[a-z0-9][a-z0-9._-]*$/,
+      "Use letters, numbers, dots, underscores, or hyphens",
+    ),
   password: z.string().min(8, "Password must be at least 8 characters"),
   timezone: z.string().min(1).default("UTC"),
 });
@@ -27,7 +36,7 @@ export const registrationRequestSchema = registerSchema.extend({
 });
 
 export const registrationInviteCreateSchema = z.object({
-  email: z.union([z.string().email(), z.literal("")]).optional(),
+  username: z.union([registerSchema.shape.username, z.literal("")]).optional(),
 });
 
 export const requestPasswordResetSchema = z.object({
@@ -75,7 +84,7 @@ export const passwordChangeSchema = z
   });
 
 export const accountDeleteSchema = z.object({
-  email: z.string().email(),
+  username: z.string().trim().min(1),
 });
 
 export const settingsSchema = z.object({

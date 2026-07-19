@@ -21,7 +21,7 @@ export default async function SettingsPage() {
       weekStart: users.weekStart,
       dailyGoal: users.dailyGoal,
       icalToken: users.icalToken,
-      email: users.email,
+      username: users.username,
       passwordHash: users.passwordHash,
       instanceRole: users.instanceRole,
     })
@@ -58,7 +58,7 @@ export default async function SettingsPage() {
     ? await db
         .select({
           id: registrationInvites.id,
-          email: registrationInvites.email,
+          username: registrationInvites.username,
           expiresAt: registrationInvites.expiresAt,
           createdAt: registrationInvites.createdAt,
         })
@@ -104,7 +104,7 @@ export default async function SettingsPage() {
         </nav>
         <div className="min-w-0 space-y-8">
           <AccountSettings
-            email={user.email}
+            username={user.username}
             hasPassword={user.passwordHash !== null}
           />
           {user.instanceRole === "admin" && (

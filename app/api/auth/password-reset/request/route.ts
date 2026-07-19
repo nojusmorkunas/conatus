@@ -6,7 +6,7 @@ import { getRequestOrigin } from "@/lib/auth/origin";
 import { normalizeEmail } from "@/lib/auth/registration";
 import { db } from "@/lib/db";
 import { passwordResetTokens, users } from "@/lib/db/schema";
-import { transporter } from "@/lib/mailer";
+import { isEmailConfigured, transporter } from "@/lib/mailer";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { requestPasswordResetSchema } from "@/lib/validation";
 
@@ -21,6 +21,9 @@ function rateLimited(retryAfter: number) {
 }
 
 export async function POST(request: Request) {
+  if (!isEmailConfigured()) {
+    return Response.json({ error: "Email is not configured on this server." }, { status: 503 });
+  }
   const ipLimit = checkRateLimit(
     `password-reset:ip:${getClientIp(request)}`,
     PASSWORD_RESET_IP_LIMIT,

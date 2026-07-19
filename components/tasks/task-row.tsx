@@ -399,15 +399,15 @@ export function AssigneeChip({
 
   return (
     <span
-      title={assignee.email}
-      aria-label={`Assigned to ${assignee.email}`}
+      title={assignee.username}
+      aria-label={`Assigned to ${assignee.username}`}
       className={cn(
         "flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground",
         assignee.id === currentUserId &&
           "bg-primary/10 text-primary ring-1 ring-primary/50",
       )}
     >
-      {assignee.email.charAt(0).toUpperCase()}
+      {assignee.username.charAt(0).toUpperCase()}
     </span>
   );
 }
@@ -437,7 +437,7 @@ function AssigneeEditor({
         <SelectContent>
           {members.map((member) => (
             <SelectItem key={member.id} value={member.id}>
-              {member.email}
+              {member.username}
             </SelectItem>
           ))}
         </SelectContent>

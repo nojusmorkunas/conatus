@@ -3,12 +3,14 @@ import { and, eq, isNull, lte } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { projects, reminders, tasks, users } from "@/lib/db/schema";
 import { reportError } from "@/lib/error-reporter";
-import { transporter } from "@/lib/mailer";
+import { isEmailConfigured, transporter } from "@/lib/mailer";
 
 // Runs every minute (see lib/jobs.ts). Leaves sentAt unset on failure so
 // the next tick retries; one reminder's send failure must not block the
 // rest of the batch.
 export async function sendDueReminders() {
+  if (!isEmailConfigured()) return;
+
   const due = await db
     .select({
       id: reminders.id,
@@ -26,6 +28,7 @@ export async function sendDueReminders() {
     .where(and(lte(reminders.remindAt, new Date()), isNull(reminders.sentAt)));
 
   for (const reminder of due) {
+    if (!reminder.userEmail) continue;
     try {
       const due = reminder.dueDate
         ? `${reminder.dueDate}${reminder.dueTime ? ` ${reminder.dueTime}` : ""}`

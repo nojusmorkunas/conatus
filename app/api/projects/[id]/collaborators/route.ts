@@ -2,23 +2,17 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { requireUser } from "@/lib/auth/session";
-import { getRequestOrigin } from "@/lib/auth/origin";
-import { createRegistrationInvite } from "@/lib/auth/registration";
+import { normalizeUsername } from "@/lib/auth/registration";
 import { db } from "@/lib/db";
 import { requireProjectAccess } from "@/lib/db/access";
 import {
   projectCollaborators,
-  projectInvitations,
   tasks,
   users,
 } from "@/lib/db/schema";
-import { transporter } from "@/lib/mailer";
 
-const addSchema = z.object({ email: z.string().email() });
-const removeSchema = z.union([
-  z.object({ userId: z.string().uuid() }),
-  z.object({ invitationId: z.string().uuid() }),
-]);
+const addSchema = z.object({ username: z.string().trim().min(1) });
+const removeSchema = z.object({ userId: z.string().uuid() });
 
 export async function GET(
   _request: Request,
@@ -44,7 +38,7 @@ export async function GET(
   const collaborators = await db
     .select({
       userId: projectCollaborators.userId,
-      email: users.email,
+      username: users.username,
       role: projectCollaborators.role,
       createdAt: projectCollaborators.createdAt,
     })
@@ -53,18 +47,7 @@ export async function GET(
     .where(eq(projectCollaborators.projectId, id))
     .orderBy(projectCollaborators.createdAt);
 
-  const invitations = await db
-    .select({
-      id: projectInvitations.id,
-      email: projectInvitations.email,
-      role: projectInvitations.role,
-      createdAt: projectInvitations.createdAt,
-    })
-    .from(projectInvitations)
-    .where(eq(projectInvitations.projectId, id))
-    .orderBy(projectInvitations.createdAt);
-
-  return Response.json({ collaborators, invitations });
+  return Response.json({ collaborators });
 }
 
 export async function POST(
@@ -90,65 +73,21 @@ export async function POST(
 
   const parsed = addSchema.safeParse(await request.json());
   if (!parsed.success) {
-    return Response.json({ error: "A valid email is required" }, { status: 400 });
+    return Response.json({ error: "A username is required" }, { status: 400 });
   }
 
-  const normalizedEmail = parsed.data.email.trim().toLowerCase();
+  const normalizedUsername = normalizeUsername(parsed.data.username);
   const [invited] = await db
     .select({ id: users.id })
     .from(users)
-    .where(eq(users.email, normalizedEmail));
+    .where(eq(users.username, normalizedUsername));
   if (!invited) {
-    const [inviter] = await db
-      .select({ email: users.email, instanceRole: users.instanceRole })
-      .from(users)
-      .where(eq(users.id, user.id))
-      .limit(1);
-    if (inviter?.instanceRole !== "admin") {
-      return Response.json(
-        {
-          error:
-            "Only the server administrator can invite someone who does not have an account yet.",
-        },
-        { status: 403 },
-      );
-    }
-    const inserted = await db
-      .insert(projectInvitations)
-      .values({
-        projectId: id,
-        email: normalizedEmail,
-        invitedByUserId: user.id,
-      })
-      .onConflictDoNothing()
-      .returning({ id: projectInvitations.id });
-    if (inserted.length === 0) {
-      return Response.json({ error: "Already invited" }, { status: 409 });
-    }
-
-    const { rawToken } = await createRegistrationInvite({
-      createdByUserId: user.id,
-      email: normalizedEmail,
-    });
-
-    try {
-      const origin = getRequestOrigin(request);
-      if (!origin) throw new Error("Project invitation origin is not configured");
-      const link = `${origin}/register?invite=${encodeURIComponent(rawToken)}`;
-      const message = `${inviter?.email ?? "A project owner"} invited you to collaborate on "${access.project.name}". Sign up to accept.`;
-      await transporter.sendMail({
-        from: process.env.SMTP_FROM,
-        to: normalizedEmail,
-        subject: `Invitation to collaborate on ${access.project.name}`,
-        text: `${message}\n\n${link}`,
-      });
-    } catch (error) {
-      console.error("project invitation send failed", inserted[0].id, error);
-    }
-
     return Response.json(
-      { pending: true, email: normalizedEmail },
-      { status: 201 },
+      {
+        error:
+          "No account has that username. Ask the server administrator to create a signup link first.",
+      },
+      { status: 404 },
     );
   }
   if (invited.id === access.project.userId) {
@@ -194,28 +133,6 @@ export async function DELETE(
       { error: "userId or invitationId is required" },
       { status: 400 },
     );
-  }
-
-  if ("invitationId" in parsed.data) {
-    if (access.role !== "owner") {
-      return Response.json(
-        { error: "Only the project owner can revoke invitations" },
-        { status: 403 },
-      );
-    }
-    const revoked = await db
-      .delete(projectInvitations)
-      .where(
-        and(
-          eq(projectInvitations.projectId, id),
-          eq(projectInvitations.id, parsed.data.invitationId),
-        ),
-      )
-      .returning({ id: projectInvitations.id });
-    if (revoked.length === 0) {
-      return Response.json({ error: "Not found" }, { status: 404 });
-    }
-    return Response.json({ ok: true });
   }
 
   // Owners remove anyone; editors may only remove themselves (leave).

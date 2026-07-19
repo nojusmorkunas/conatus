@@ -15,7 +15,7 @@ export async function GET() {
       .select({
         id: users.id,
         name: users.name,
-        email: users.email,
+        username: users.username,
         timezone: users.timezone,
         dateFormat: users.dateFormat,
         weekStart: users.weekStart,

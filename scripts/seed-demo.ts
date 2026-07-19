@@ -23,7 +23,7 @@ type TaskInput = Omit<typeof tasks.$inferInsert, "userId" | "order"> & {
   labels?: string[];
 };
 
-const email = process.env.SEED_EMAIL ?? "alice@example.com";
+const username = process.env.SEED_USERNAME ?? "alice";
 
 function dateInTimezone(timezone: string, offsetDays = 0): string {
   const instant = new Date(Date.now() + offsetDays * 86_400_000);
@@ -63,13 +63,13 @@ function validFilter(query: string): string {
 }
 
 async function seed(tx: Tx) {
-  const [alice] = await tx.select().from(users).where(eq(users.email, email)).limit(1);
-  if (!alice) throw new Error(`No user found for ${email}. Create the account before seeding demo data.`);
+  const [alice] = await tx.select().from(users).where(eq(users.username, username)).limit(1);
+  if (!alice) throw new Error(`No user found for ${username}. Create the account before seeding demo data.`);
 
-  const [bob] = await tx.select().from(users).where(eq(users.email, "bob@example.com")).limit(1);
+  const [bob] = await tx.select().from(users).where(eq(users.username, "bob")).limit(1);
   const owned = await tx.select().from(projects).where(eq(projects.userId, alice.id));
   const inbox = owned.find((project) => project.isInbox);
-  if (!inbox) throw new Error(`User ${email} has no inbox project.`);
+  if (!inbox) throw new Error(`User ${username} has no inbox project.`);
 
   let roadmap = owned.find((project) => project.name === "Team Roadmap" && !project.isInbox);
   const preservedIds = [inbox.id, ...(roadmap ? [roadmap.id] : [])];
@@ -244,8 +244,8 @@ async function seed(tx: Tx) {
 
   // Attachments are intentionally not seeded because they require real S3/MinIO objects.
   return {
-    user: alice.email,
-    collaborator: bob ? bob.email : "not found (collaboration data used Alice only)",
+    user: alice.username,
+    collaborator: bob ? bob.username : "not found (collaboration data used Alice only)",
     projects: createdProjects.length + preservedIds.length,
     sections: sectionCount,
     tasks: taskRows.size,

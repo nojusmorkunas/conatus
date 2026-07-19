@@ -27,17 +27,17 @@ export default async function ProjectPage({
   const project = access.project;
 
   const [owner] = await db
-    .select({ id: users.id, email: users.email })
+    .select({ id: users.id, username: users.username })
     .from(users)
     .where(eq(users.id, project.userId));
   const collaborators = await db
-    .select({ userId: projectCollaborators.userId, email: users.email })
+    .select({ userId: projectCollaborators.userId, username: users.username })
     .from(projectCollaborators)
     .innerJoin(users, eq(users.id, projectCollaborators.userId))
     .where(eq(projectCollaborators.projectId, id))
     .orderBy(projectCollaborators.createdAt);
   const members = [
-    { userId: owner.id, email: owner.email, role: "owner" as const },
+    { userId: owner.id, username: owner.username, role: "owner" as const },
     ...collaborators.map((member) => ({ ...member, role: "editor" as const })),
   ];
 

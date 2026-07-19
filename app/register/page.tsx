@@ -1,25 +1,16 @@
 import { connection } from "next/server";
 import Link from "next/link";
 
-import { OAuthButtons } from "@/components/auth/oauth-buttons";
 import { RegisterForm } from "@/components/auth/register-form";
-import { getConfiguredOAuthProviders } from "@/lib/auth/oauth-providers";
 import { getRegistrationState } from "@/lib/auth/registration";
-
-const oauthErrors: Record<string, string> = {
-  registration_invite_required: "Registration requires an administrator invitation.",
-  registration_invite_invalid: "This signup link is invalid, expired, or already used.",
-  registration_email_mismatch: "This invitation was issued for a different email address.",
-};
 
 export default async function RegisterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ email?: string; invite?: string; oauthError?: string }>;
+  searchParams: Promise<{ username?: string; invite?: string }>;
 }) {
   await connection();
-  const { email, invite, oauthError } = await searchParams;
-  const providers = getConfiguredOAuthProviders();
+  const { username, invite } = await searchParams;
   const state = await getRegistrationState(invite);
 
   if (state.kind === "closed") {
@@ -40,23 +31,17 @@ export default async function RegisterPage({
     );
   }
 
-  const invitedEmail = state.kind === "invited" ? state.email : null;
+  const invitedUsername = state.kind === "invited" ? state.username : null;
 
   return (
     <div className="flex flex-1 items-center justify-center p-6">
       <div className="w-full max-w-sm">
-        {oauthError && (
-          <p className="mb-4 text-sm text-destructive">
-            {oauthErrors[oauthError] ?? "Could not create an account with that provider."}
-          </p>
-        )}
         <RegisterForm
-          defaultEmail={invitedEmail ?? email}
+          defaultUsername={invitedUsername ?? username}
           inviteToken={invite}
           bootstrap={state.kind === "bootstrap"}
-          emailLocked={Boolean(invitedEmail)}
+          usernameLocked={Boolean(invitedUsername)}
         />
-        <OAuthButtons providers={providers} inviteToken={invite} />
       </div>
     </div>
   );

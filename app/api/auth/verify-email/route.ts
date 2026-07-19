@@ -35,10 +35,12 @@ export async function POST(request: Request) {
       .update(users)
       .set({ emailVerified: new Date(), updatedAt: new Date() })
       .where(eq(users.id, verificationToken.userId));
-    await acceptProjectInvitations(tx, {
-      userId: verificationToken.userId,
-      email: verifiedUser.email,
-    });
+    if (verifiedUser.email) {
+      await acceptProjectInvitations(tx, {
+        userId: verificationToken.userId,
+        email: verifiedUser.email,
+      });
+    }
     await tx
       .delete(emailVerificationTokens)
       .where(eq(emailVerificationTokens.userId, verificationToken.userId));

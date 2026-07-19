@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import Link from "next/link";
 import type { z } from "zod";
 
@@ -21,15 +22,15 @@ const signupSchema = registerSchema.omit({ timezone: true });
 type SignupInput = z.infer<typeof signupSchema>;
 
 export function RegisterForm({
-  defaultEmail = "",
+  defaultUsername = "",
   inviteToken,
   bootstrap = false,
-  emailLocked = false,
+  usernameLocked = false,
 }: {
-  defaultEmail?: string;
+  defaultUsername?: string;
   inviteToken?: string;
   bootstrap?: boolean;
-  emailLocked?: boolean;
+  usernameLocked?: boolean;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -39,24 +40,24 @@ export function RegisterForm({
     formState: { errors, isSubmitting },
   } = useForm<SignupInput>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { email: defaultEmail },
+    defaultValues: { username: defaultUsername },
   });
 
-  const onSubmit = handleSubmit(async ({ email, password }) => {
+  const onSubmit = handleSubmit(async ({ username, password }) => {
     setError(null);
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
     const response = await fetch("/api/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, timezone, inviteToken }),
+      body: JSON.stringify({ username, password, timezone, inviteToken }),
     });
 
     if (!response.ok) {
       const body = await response.json().catch(() => null);
       setError(
         response.status === 409
-          ? "That email is already registered."
+          ? "That username is already registered."
           : typeof body?.error === "string"
             ? body.error
             : "Something went wrong. Please try again.",
@@ -64,7 +65,12 @@ export function RegisterForm({
       return;
     }
 
-    router.push("/login?verificationSent=true");
+    const result = await signIn("credentials", {
+      username,
+      password,
+      redirect: false,
+    });
+    router.push(result?.error ? "/login" : "/onboarding");
     router.refresh();
   });
 
@@ -82,15 +88,15 @@ export function RegisterForm({
           </p>
         </div>
         <Field>
-          <FieldLabel htmlFor="email">Email</FieldLabel>
+          <FieldLabel htmlFor="username">Username</FieldLabel>
           <Input
-            id="email"
-            type="email"
-            autoComplete="email"
-            readOnly={emailLocked}
-            {...register("email")}
+            id="username"
+            type="text"
+            autoComplete="username"
+            readOnly={usernameLocked}
+            {...register("username")}
           />
-          <FieldError errors={[errors.email]} />
+          <FieldError errors={[errors.username]} />
         </Field>
         <Field>
           <FieldLabel htmlFor="password">Password</FieldLabel>

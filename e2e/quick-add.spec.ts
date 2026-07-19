@@ -1,10 +1,10 @@
 import { test, expect } from "@playwright/test";
-import { registerVerifyAndLogin } from "./helpers";
+import { registerAndLogin } from "./helpers";
 
-test("quick add parses due date and priority, drops unknown label token", async ({ page, request }) => {
-  const email = `e2e-${Date.now()}-quickadd@test.local`;
+test("quick add parses due date and priority, drops unknown label token", async ({ page }) => {
+  const username = `e2e-${Date.now()}-quickadd`;
 
-  await registerVerifyAndLogin(page, request, email);
+  await registerAndLogin(page, username);
 
   // Registration lands on the app shell stub; navigate into the Inbox.
   await page.getByRole("link", { name: "Inbox" }).click();

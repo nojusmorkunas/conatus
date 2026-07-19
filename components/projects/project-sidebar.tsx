@@ -89,7 +89,7 @@ export function ProjectSidebar({
   initialProjects,
   initialLabels,
   initialFilters,
-  userEmail,
+  username,
   userName,
   hasAvatar,
   avatarVersion,
@@ -102,7 +102,7 @@ export function ProjectSidebar({
   initialProjects: Project[];
   initialLabels: Label[];
   initialFilters: Filter[];
-  userEmail: string;
+  username: string;
   userName: string | null;
   hasAvatar: boolean;
   avatarVersion: string;
@@ -172,8 +172,7 @@ export function ProjectSidebar({
   const favoriteLabelsOnly = favoriteLabels.filter((label) => label.isFavorite);
   const favoriteFiltersOnly = favoriteFilters.filter((filter) => filter.isFavorite);
   const hasFavorites = favorites.length + favoriteLabelsOnly.length + favoriteFiltersOnly.length > 0;
-  const emailPrefix = userEmail.split("@")[0];
-  const fallbackName = emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1);
+  const fallbackName = username.charAt(0).toUpperCase() + username.slice(1);
   const displayName = userName?.trim() || fallbackName;
   const projectSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),

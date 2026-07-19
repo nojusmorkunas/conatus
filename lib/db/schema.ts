@@ -17,7 +17,8 @@ export const users = pgTable(
   "users",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    email: text("email").notNull().unique(),
+    username: text("username").notNull().unique(),
+    email: text("email").unique(),
     name: text("name"),
     image: text("image"),
     passwordHash: text("password_hash"),
@@ -110,7 +111,7 @@ export const registrationInvites = pgTable("registration_invites", {
   tokenHash: text("token_hash").notNull().unique(),
   // Null creates a shareable one-time link; otherwise registration is locked
   // to this normalized email address.
-  email: text("email"),
+  username: text("username"),
   createdByUserId: uuid("created_by_user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),

@@ -19,6 +19,9 @@ RUN DATABASE_URL=postgres://build:build@127.0.0.1:5432/build \
 FROM build AS migrate
 CMD ["npx", "drizzle-kit", "migrate"]
 
+FROM build AS bootstrap
+CMD ["npm", "run", "bootstrap-admin"]
+
 FROM node:22-alpine AS run
 WORKDIR /app
 ENV NODE_ENV=production

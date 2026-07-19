@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 
 type Invitation = {
   id: string;
-  email: string | null;
+  username: string | null;
   expiresAt: string;
   createdAt: string;
 };
@@ -18,7 +18,7 @@ export function RegistrationInvites({
 }: {
   initialInvitations: Invitation[];
 }) {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [invitations, setInvitations] = useState(initialInvitations);
   const [createdUrl, setCreatedUrl] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -32,7 +32,7 @@ export function RegistrationInvites({
     const response = await fetch("/api/admin/registration-invites", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: email.trim() }),
+      body: JSON.stringify({ username: username.trim() }),
     });
     const body = await response.json().catch(() => null);
     setPending(false);
@@ -44,13 +44,13 @@ export function RegistrationInvites({
     setInvitations((current) => [
       {
         id: body.id,
-        email: body.email,
+        username: body.username,
         expiresAt: body.expiresAt,
         createdAt: body.createdAt,
       },
       ...current,
     ]);
-    setEmail("");
+    setUsername("");
     setCreatedUrl(body.url);
   }
 
@@ -89,11 +89,11 @@ export function RegistrationInvites({
 
       <form onSubmit={create} className="flex flex-col gap-2 sm:flex-row">
         <Input
-          type="email"
-          aria-label="Invite email"
-          placeholder="Email (optional)"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
+          type="text"
+          aria-label="Invite username"
+          placeholder="Username (optional)"
+          value={username}
+          onChange={(event) => setUsername(event.target.value)}
         />
         <Button type="submit" disabled={pending}>
           <Link2 /> {pending ? "Creating…" : "Create signup link"}
@@ -120,7 +120,7 @@ export function RegistrationInvites({
           {invitations.map((invite) => (
             <li key={invite.id} className="flex items-center gap-3 p-3 text-sm">
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{invite.email ?? "Anyone with the link"}</p>
+                <p className="truncate font-medium">{invite.username ?? "Anyone with the link"}</p>
                 <p className="text-xs text-muted-foreground">
                   Expires {new Date(invite.expiresAt).toLocaleString()}
                 </p>
@@ -129,7 +129,7 @@ export function RegistrationInvites({
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                aria-label={`Revoke signup link for ${invite.email ?? "anyone"}`}
+                aria-label={`Revoke signup link for ${invite.username ?? "anyone"}`}
                 onClick={() => revoke(invite.id)}
               >
                 <X />

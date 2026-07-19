@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
 
-import { registerVerifyAndLogin } from "./helpers";
+import { registerAndLogin } from "./helpers";
 
 test("scoped v1 API supports context, idempotent creation, listing, and scope denial", async ({ page, request }) => {
-  const email = `e2e-${Date.now()}-api@test.local`;
-  await registerVerifyAndLogin(page, request, email);
+  const username = `e2e-${Date.now()}-api`;
+  await registerAndLogin(page, username);
 
   const inboxHref = await page.getByRole("link", { name: "Inbox" }).getAttribute("href");
   const projectId = inboxHref?.split("/").at(-1);
@@ -19,7 +19,7 @@ test("scoped v1 API supports context, idempotent creation, listing, and scope de
 
   const context = await request.get("/api/v1/context", { headers });
   expect(context.status()).toBe(200);
-  await expect(context.json()).resolves.toMatchObject({ apiVersion: "v1", user: { email } });
+  await expect(context.json()).resolves.toMatchObject({ apiVersion: "v1", user: { username } });
 
   const createHeaders = { ...headers, "Idempotency-Key": "same-request" };
   const first = await request.post("/api/v1/tasks", {

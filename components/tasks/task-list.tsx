@@ -71,7 +71,7 @@ export type TaskWithLabels = typeof tasksTable.$inferSelect & {
   labels: Label[];
   commentCount: number;
 };
-export type ProjectMember = { id: string; email: string };
+export type ProjectMember = { id: string; username: string };
 export type DropIndicator = {
   anchorId: string | null;
   depth: number;

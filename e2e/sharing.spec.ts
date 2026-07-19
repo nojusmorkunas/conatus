@@ -1,16 +1,15 @@
 import { test, expect, type Page } from "@playwright/test";
-import type { APIRequestContext } from "@playwright/test";
-import { registerVerifyAndLogin } from "./helpers";
+import { registerAndLogin } from "./helpers";
 
-async function register(page: Page, request: APIRequestContext, email: string) {
-  await registerVerifyAndLogin(page, request, email);
+async function register(page: Page, username: string) {
+  await registerAndLogin(page, username);
   await expect(page.getByRole("link", { name: "Inbox" })).toBeVisible();
 }
 
-test("owner shares a project with a collaborator who gets read access", async ({ browser, request }) => {
+test("owner shares a project with a collaborator who gets read access", async ({ browser }) => {
   const stamp = Date.now();
-  const emailA = `e2e-${stamp}-owner@test.local`;
-  const emailB = `e2e-${stamp}-member@test.local`;
+  const usernameA = `e2e-${stamp}-owner`;
+  const usernameB = `e2e-${stamp}-member`;
 
   const contextA = await browser.newContext();
   const contextB = await browser.newContext();
@@ -18,13 +17,13 @@ test("owner shares a project with a collaborator who gets read access", async ({
   const pageB = await contextB.newPage();
 
   try {
-    await register(pageA, request, emailA);
+    await register(pageA, usernameA);
 
     // A creates a project and a task inside it.
     await pageA.getByRole("button", { name: "Add project" }).click();
     await pageA.getByPlaceholder("Project name").fill("Shared E2E");
     await pageA.getByRole("button", { name: "Add", exact: true }).click();
-    await pageA.getByRole("link", { name: "Shared E2E" }).click();
+    await pageA.getByText("Shared E2E", { exact: true }).click();
     await expect(pageA).toHaveURL(/\/projects\//);
 
     await pageA.getByRole("main").getByRole("button", { name: "New task" }).click();
@@ -33,21 +32,21 @@ test("owner shares a project with a collaborator who gets read access", async ({
     await expect(pageA.getByText("shared task", { exact: true })).toBeVisible();
 
     // B registers in a separate context.
-    await register(pageB, request, emailB);
+    await register(pageB, usernameB);
 
-    // A shares the project with B's email.
+    // A shares the project with B's username.
     await pageA.getByRole("button", { name: "Project options" }).click();
     await pageA.getByRole("menuitem", { name: "Share", exact: true }).click();
-    const shareEmailInput = pageA.getByPlaceholder("Add member by email");
-    await shareEmailInput.fill(emailB);
-    await shareEmailInput.press("Enter");
-    await expect(pageA.getByText(emailB)).toBeVisible();
+    const shareUsernameInput = pageA.getByPlaceholder("Add member by username");
+    await shareUsernameInput.fill(usernameB);
+    await shareUsernameInput.press("Enter");
+    await expect(pageA.getByText(usernameB)).toBeVisible();
 
     // B sees the shared project in their sidebar and can open it.
     await pageB.reload();
-    const sharedLink = pageB.getByRole("link", { name: "Shared E2E" });
-    await expect(sharedLink).toBeVisible();
-    await sharedLink.click();
+    const sharedProject = pageB.getByText("Shared E2E", { exact: true });
+    await expect(sharedProject).toBeVisible();
+    await sharedProject.click();
     await expect(pageB).toHaveURL(/\/projects\//);
     await expect(pageB.getByText("shared task", { exact: true })).toBeVisible();
 
@@ -57,7 +56,7 @@ test("owner shares a project with a collaborator who gets read access", async ({
     await expect(viewMembersItem).toBeVisible();
     await expect(pageB.getByRole("menuitem", { name: "Share", exact: true })).toHaveCount(0);
     await viewMembersItem.click();
-    await expect(pageB.getByPlaceholder("Add member by email")).toHaveCount(0);
+    await expect(pageB.getByPlaceholder("Add member by username")).toHaveCount(0);
   } finally {
     await contextA.close();
     await contextB.close();

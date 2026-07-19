@@ -10,3 +10,7 @@ const client = globalForDb.pgClient ?? postgres(process.env.DATABASE_URL!);
 if (process.env.NODE_ENV !== "production") globalForDb.pgClient = client;
 
 export const db = drizzle(client, { schema });
+
+export async function closeDatabase() {
+  await client.end({ timeout: 5 });
+}

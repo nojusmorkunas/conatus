@@ -1,16 +1,16 @@
 import { test, expect } from "@playwright/test";
-import { registerVerifyAndLogin } from "./helpers";
+import { registerAndLogin } from "./helpers";
 
 function throwawayUser(suffix: string) {
   return {
-    email: `e2e-${Date.now()}-${suffix}@test.local`,
+    username: `e2e-${Date.now()}-${suffix}`,
     password: "correct-horse-battery-staple",
   };
 }
 
-test("registration, verification, and onboarding land in the authenticated app shell", async ({ page, request }) => {
+test("registration and onboarding land in the authenticated app shell", async ({ page }) => {
   const user = throwawayUser("auth");
-  await registerVerifyAndLogin(page, request, user.email);
+  await registerAndLogin(page, user.username);
   await expect(page.getByRole("link", { name: "Inbox" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Focus" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Calendar" })).toBeVisible();

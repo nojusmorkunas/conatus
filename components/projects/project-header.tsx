@@ -37,13 +37,7 @@ import { ProjectColorDot } from "./project-color-dot";
 import { ProjectIcon } from "./project-icons";
 
 type Project = typeof projects.$inferSelect;
-type Member = { userId: string; email: string; role: "owner" | "editor" };
-type Invitation = {
-  id: string;
-  email: string;
-  role: string;
-  createdAt: string;
-};
+type Member = { userId: string; username: string; role: "owner" | "editor" };
 
 export function ProjectHeader({
   project,
@@ -348,34 +342,14 @@ function SharePanel({
   currentUserId: string;
 }) {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [confirmation, setConfirmation] = useState<string | null>(null);
-
-  async function refreshInvitations() {
-    if (!isOwner) return;
-    const response = await fetch(`/api/projects/${projectId}/collaborators`);
-    if (!response.ok) return;
-    const body = (await response.json()) as { invitations: Invitation[] };
-    setInvitations(body.invitations);
-  }
-
-  useEffect(() => {
-    if (!isOwner) return;
-    void fetch(`/api/projects/${projectId}/collaborators`).then(
-      async (response) => {
-        if (!response.ok) return;
-        const body = (await response.json()) as { invitations: Invitation[] };
-        setInvitations(body.invitations);
-      },
-    );
-  }, [isOwner, projectId]);
 
   async function add(event: React.FormEvent) {
     event.preventDefault();
-    if (!email.trim()) return;
+    if (!username.trim()) return;
 
     setPending(true);
     setError(null);
@@ -383,7 +357,7 @@ function SharePanel({
     const response = await fetch(`/api/projects/${projectId}/collaborators`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: email.trim() }),
+      body: JSON.stringify({ username: username.trim() }),
     });
     setPending(false);
 
@@ -393,12 +367,8 @@ function SharePanel({
       return;
     }
 
-    const body = (await response.json()) as { pending?: boolean; email?: string };
-    setEmail("");
-    if (body.pending) {
-      setConfirmation(`Invitation sent to ${body.email ?? email.trim()}`);
-      await refreshInvitations();
-    }
+    setConfirmation(`Added ${username.trim()}.`);
+    setUsername("");
     router.refresh();
   }
 
@@ -416,30 +386,19 @@ function SharePanel({
     router.refresh();
   }
 
-  async function revoke(invitationId: string) {
-    const response = await fetch(`/api/projects/${projectId}/collaborators`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ invitationId }),
-    });
-    if (!response.ok) return;
-    setConfirmation(null);
-    await refreshInvitations();
-  }
-
   return (
     <div className="mt-2 w-full max-w-sm rounded-md border border-border p-3 text-sm">
       <ul className="flex flex-col gap-1">
         {members.map((member) => (
           <li key={member.userId} className="flex h-7 items-center gap-2">
-            <span className="flex-1 truncate">{member.email}</span>
+            <span className="flex-1 truncate">{member.username}</span>
             {member.role === "owner" ? (
               <span className="text-xs text-muted-foreground">owner</span>
             ) : isOwner ? (
               <Button
                 variant="ghost"
                 size="icon-xs"
-                aria-label={`Remove ${member.email}`}
+                aria-label={`Remove ${member.username}`}
                 onClick={() => remove(member.userId)}
               >
                 <X />
@@ -456,35 +415,13 @@ function SharePanel({
           </li>
         ))}
       </ul>
-      {isOwner && invitations.length > 0 && (
-        <ul className="mt-1 flex flex-col gap-1">
-          {invitations.map((invitation) => (
-            <li
-              key={invitation.id}
-              className="flex h-7 items-center gap-2 text-muted-foreground"
-            >
-              <span className="flex-1 truncate">
-                {invitation.email} — Invited
-              </span>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label={`Revoke invitation for ${invitation.email}`}
-                onClick={() => revoke(invitation.id)}
-              >
-                <X />
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
       {isOwner && (
         <form onSubmit={add} className="mt-2 flex gap-2">
           <Input
-            type="email"
-            placeholder="Add member by email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            type="text"
+            placeholder="Add member by username"
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
           />
           <Button type="submit" size="sm" disabled={pending}>
             Add
