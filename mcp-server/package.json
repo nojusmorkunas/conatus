@@ -1,0 +1,47 @@
+{
+  "name": "@conatus/mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server for the self-hosted Conatus task manager",
+  "type": "module",
+  "bin": {
+    "conatus-mcp": "dist/stdio.js",
+    "conatus-mcp-http": "dist/http.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/stdio.ts",
+    "dev:http": "tsx src/http.ts",
+    "start": "node dist/stdio.js",
+    "start:http": "node dist/http.js",
+    "test": "vitest run",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "tasks",
+    "todoist",
+    "ai-agent"
+  ],
+  "license": "AGPL-3.0-only",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.3",
+    "express": "^5.1.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^20.19.25",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  }
+}

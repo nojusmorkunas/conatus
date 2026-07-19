@@ -1,0 +1,14 @@
+.git
+.github
+.env*
+!.env.example
+.next
+node_modules
+test-results
+playwright-report
+coverage
+*.tsbuildinfo
+*.dump
+mcp-server/node_modules
+mcp-server/dist
+mcp-server/coverage

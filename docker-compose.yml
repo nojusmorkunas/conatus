@@ -1,0 +1,125 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+
+  mailpit:
+    image: axllent/mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: app
+      PGPASSWORD: app
+      PGDATABASE: app
+      BACKUP_INTERVAL: ${BACKUP_INTERVAL:-86400}
+      BACKUP_KEEP: ${BACKUP_KEEP:-7}
+    volumes:
+      - backups:/backups
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        while true; do
+          pg_dump -Fc -f "/backups/app-$$(date -u +%Y%m%dT%H%M%SZ).dump"
+          ls -1t /backups/app-*.dump | tail -n +$$((BACKUP_KEEP + 1)) | xargs -r rm --
+          sleep "$$BACKUP_INTERVAL"
+        done
+
+  migrate:
+    build:
+      context: .
+      target: migrate
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://app:app@db:5432/app
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgres://app:app@db:5432/app
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
+      S3_ENDPOINT: minio
+      S3_PORT: 9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+      S3_BUCKET: attachments
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_FROM: "Conatus <reminders@localhost>"
+    ports:
+      - "3000:3000"
+
+  # Optional per-user MCP proxy. Start with: docker compose --profile mcp up --build
+  # Create a scoped tdm_ token in Settings before enabling this profile.
+  mcp:
+    profiles: ["mcp"]
+    build:
+      context: ./mcp-server
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_started
+    environment:
+      TASKS_BASE_URL: http://app:3000
+      TASKS_API_TOKEN: ${TASKS_API_TOKEN:-tdm_configure_a_real_token_before_starting}
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: 3001
+      MCP_PUBLIC_URL: ${MCP_PUBLIC_URL:-}
+      MCP_OAUTH_PASSWORD: ${MCP_OAUTH_PASSWORD:-}
+      MCP_OAUTH_STORE_PATH: /data/oauth-store.json
+      MCP_BEARER_TOKEN: ${MCP_BEARER_TOKEN:-}
+      MCP_ALLOWED_ORIGINS: ${MCP_ALLOWED_ORIGINS:-http://localhost:3000}
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - mcp-oauth-data:/data
+
+volumes:
+  db-data:
+  minio-data:
+  backups:
+  mcp-oauth-data:
