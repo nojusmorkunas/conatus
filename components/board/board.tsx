@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   DndContext,
   MouseSensor,
@@ -309,7 +310,9 @@ function Card({
           checked={task.isCompleted}
           onToggle={() => onToggle(task)}
         />
-        <span className="text-sm">{task.content}</span>
+        <Link href={`/projects/${task.projectId}?task=${task.id}`} className="text-base sm:text-sm">
+          {task.content}
+        </Link>
       </div>
 
       {(task.dueDate ||

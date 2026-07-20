@@ -731,7 +731,7 @@ export function TaskList({
       )}
 
       {pending && (
-        <div className="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-foreground px-4 py-2 text-sm text-background shadow-lg">
+        <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-foreground px-4 py-2 text-sm text-background shadow-lg">
           <span>{pending.label}</span>
           <button type="button" className="font-medium underline" onClick={undo}>
             Undo
@@ -1209,7 +1209,7 @@ function BulkToolbar({
   const [dueDate, setDueDate] = useState("");
 
   return (
-    <div className="fixed right-4 bottom-4 left-4 z-40 mx-auto flex w-fit max-w-[calc(100vw-2rem)] flex-wrap items-center justify-center gap-2 rounded-lg border bg-background p-2 shadow-lg">
+    <div className="fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 z-40 mx-auto flex w-fit max-w-[calc(100vw-2rem)] flex-wrap items-center justify-center gap-2 rounded-lg border bg-background p-2 shadow-lg">
       <span className="px-1 text-sm text-muted-foreground">{count} selected</span>
       <Button size="sm" onClick={onComplete}>Complete</Button>
       <Button size="sm" variant="destructive" onClick={onDelete}>Delete</Button>

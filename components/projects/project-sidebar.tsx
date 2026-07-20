@@ -119,9 +119,7 @@ export function ProjectSidebar({
   const [favoriteFilters, setFavoriteFilters] = useState(initialFilters);
   const [creating, setCreating] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(() =>
-    typeof window !== "undefined" && localStorage.getItem("sidebar:collapsed") === "true",
-  );
+  const [collapsed, setCollapsed] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickAddError, setQuickAddError] = useState(false);
   const [projectMoveError, setProjectMoveError] = useState<string | null>(null);
@@ -132,16 +130,8 @@ export function ProjectSidebar({
     ReturnType<typeof projectTaskDepth>
   >(null);
   const projectProjectionRef = useRef<ReturnType<typeof projectTaskDepth>>(null);
-  const [favoritesExpanded, setFavoritesExpanded] = useState(() =>
-    typeof window !== "undefined" && localStorage.getItem("sidebar:favorites") === "collapsed"
-      ? false
-      : true,
-  );
-  const [projectsExpanded, setProjectsExpanded] = useState(() =>
-    typeof window !== "undefined" && localStorage.getItem("sidebar:projects") === "collapsed"
-      ? false
-      : true,
-  );
+  const [favoritesExpanded, setFavoritesExpanded] = useState(true);
+  const [projectsExpanded, setProjectsExpanded] = useState(true);
 
   // A shared project can be its owner's Inbox; only my own Inbox is pinned.
   const inbox = projects.find((project) => project.isInbox && !project.shared);
@@ -182,6 +172,15 @@ export function ProjectSidebar({
     }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      setCollapsed(localStorage.getItem("sidebar:collapsed") === "true");
+      setFavoritesExpanded(localStorage.getItem("sidebar:favorites") !== "collapsed");
+      setProjectsExpanded(localStorage.getItem("sidebar:projects") !== "collapsed");
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -397,8 +396,8 @@ export function ProjectSidebar({
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-72 shrink-0 -translate-x-full flex-col overflow-hidden border-r border-sidebar-border bg-sidebar p-3 transition-transform md:z-auto md:w-72",
-          mobileOpen && "translate-x-0",
+          "project-sidebar invisible fixed inset-y-0 left-0 z-50 flex w-72 shrink-0 -translate-x-full flex-col overflow-hidden border-r border-sidebar-border bg-sidebar p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-transform md:visible md:z-auto md:w-72 md:pb-3",
+          mobileOpen && "visible translate-x-0",
           collapsed && "md:absolute md:-translate-x-full",
           !collapsed && "md:static md:translate-x-0",
         )}
@@ -412,7 +411,10 @@ export function ProjectSidebar({
               variant="ghost"
               size="icon-sm"
               aria-label="Collapse sidebar"
-              onClick={() => setSidebarCollapsed(true)}
+              onClick={() => {
+                if (mobileOpen) setMobileOpen(false);
+                else setSidebarCollapsed(true);
+              }}
             >
               <PanelLeft />
             </Button>
@@ -786,7 +788,7 @@ function SidebarSearch() {
         onChange={(event) => setValue(event.target.value)}
         placeholder="Search"
         aria-label="Search tasks, projects and comments"
-        className="min-w-0 flex-1 bg-transparent text-foreground outline-none placeholder:text-muted-foreground"
+        className="min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground md:text-sm"
       />
       <kbd className="shrink-0 rounded border border-sidebar-border bg-background/60 px-1.5 text-[10px] font-medium text-muted-foreground">/</kbd>
     </form>
@@ -1275,10 +1277,14 @@ function ProjectBranch({
   depth?: number;
 }) {
   const hasChildren = node.children.length > 0;
-  const [collapsed, setCollapsed] = useState(() =>
-    typeof window !== "undefined" &&
-    localStorage.getItem(`project:${node.project.id}:collapsed`) === "true",
-  );
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      setCollapsed(localStorage.getItem(`project:${node.project.id}:collapsed`) === "true");
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [node.project.id]);
 
   function toggleCollapsed() {
     setCollapsed((current) => {

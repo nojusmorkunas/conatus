@@ -120,8 +120,8 @@ export function ProjectHeader({
 
   return (
     <div className="mb-8 border-b border-border/70 pb-5">
-      <div className="flex items-start justify-between gap-5">
-        <div className="flex min-w-0 items-start gap-3.5">
+      <div className="flex items-start justify-between gap-1 sm:gap-5">
+        <div className="flex min-w-0 flex-1 items-start gap-2 sm:gap-3.5">
           <div className="relative mt-0.5 flex size-11 shrink-0 items-center justify-center rounded-xl border border-border bg-muted/45 text-muted-foreground shadow-sm">
             <ProjectIcon icon={project.icon} className="size-5" />
             <ProjectColorDot
@@ -130,18 +130,18 @@ export function ProjectHeader({
             />
           </div>
           <div className="min-w-0">
-            <h1 className="truncate text-[28px] leading-8 font-bold tracking-tight">
+            <h1 className="truncate text-2xl leading-8 font-bold tracking-tight sm:text-[28px]">
               {project.name}
             </h1>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 truncate text-xs text-muted-foreground">
               {openTaskCount} open {openTaskCount === 1 ? "task" : "tasks"}
               {sectionCount > 0 && ` · ${sectionCount} ${sectionCount === 1 ? "section" : "sections"}`}
             </p>
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1 text-muted-foreground">
-          <div className="mr-1 flex items-center rounded-lg border border-border bg-muted/40 p-0.5">
+        <div className="flex shrink-0 flex-nowrap items-center justify-end gap-1 text-muted-foreground">
+          <div className="hidden items-center rounded-lg border border-border bg-muted/40 p-0.5 sm:mr-1 sm:flex">
             <Button
               variant={view === "list" ? "secondary" : "ghost"}
               size="sm"
@@ -223,6 +223,22 @@ export function ProjectHeader({
             }
           />
           <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuGroup className="sm:hidden">
+              <DropdownMenuLabel>View</DropdownMenuLabel>
+              <DropdownMenuCheckboxItem
+                checked={view === "list"}
+                onClick={() => onViewChange("list")}
+              >
+                <ListTodo /> List
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={view === "board"}
+                onClick={() => onViewChange("board")}
+              >
+                <LayoutGrid /> Board
+              </DropdownMenuCheckboxItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator className="sm:hidden" />
             {isOwner && !project.isInbox && (
               <DropdownMenuCheckboxItem
                 checked={project.isFavorite}

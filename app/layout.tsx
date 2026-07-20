@@ -1,7 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
-import { SessionProvider } from "@/components/session-provider";
 import { ThemeGuard } from "@/components/theme-guard";
 
 const hanken = Hanken_Grotesk({
@@ -17,6 +16,12 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Conatus",
   description: "A self-hosted task manager.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -43,7 +48,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col">
         <ThemeGuard />
-        <SessionProvider>{children}</SessionProvider>
+        {children}
       </body>
     </html>
   );

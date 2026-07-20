@@ -74,12 +74,12 @@ export default async function SettingsPage() {
     : [];
 
   return (
-    <div className="mx-auto w-full max-w-5xl p-6">
+    <div className="mx-auto w-full max-w-5xl px-3 py-2 sm:p-6">
       <h1 className="mb-6 text-xl font-semibold">Settings</h1>
       <div className="lg:grid lg:grid-cols-[10rem_minmax(0,1fr)] lg:gap-10">
         <nav
           aria-label="Settings sections"
-          className="mb-6 overflow-x-auto lg:sticky lg:top-6 lg:mb-0 lg:self-start lg:overflow-visible"
+          className="mb-1 snap-x overflow-x-auto lg:sticky lg:top-6 lg:mb-0 lg:self-start lg:overflow-visible"
         >
           <div className="flex w-max gap-1 lg:w-auto lg:flex-col">
             {[
@@ -95,13 +95,14 @@ export default async function SettingsPage() {
               <a
                 key={id}
                 href={`#${id}`}
-                className="whitespace-nowrap rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="flex min-h-11 snap-start items-center whitespace-nowrap rounded-md px-3 py-1 text-sm text-muted-foreground hover:bg-muted hover:text-foreground lg:min-h-0 lg:px-2"
               >
                 {label}
               </a>
             ))}
           </div>
         </nav>
+        <p className="mb-5 text-xs text-muted-foreground lg:hidden">Swipe sideways for more settings.</p>
         <div className="min-w-0 space-y-8">
           <AccountSettings
             username={user.username}

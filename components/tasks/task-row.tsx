@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -124,6 +124,10 @@ export function TaskRow({
   const [addingTask, setAddingTask] = useState<"above" | "below" | null>(null);
   const [editingDue, setEditingDue] = useState(false);
   const [editingAssignee, setEditingAssignee] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
+  const [completionHeight, setCompletionHeight] = useState<number | null>(null);
+  const completionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shellRef = useRef<HTMLDivElement | null>(null);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     disabled: !draggable,
@@ -142,14 +146,39 @@ export function TaskRow({
     .filter((candidate) => candidate.parentId === task.parentId && candidate.sectionId === task.sectionId)
     .sort((a, b) => (a.order < b.order ? -1 : 1));
   const previousSibling = siblings[siblings.findIndex((candidate) => candidate.id === task.id) - 1];
+
+  useEffect(() => () => {
+    if (completionTimer.current) clearTimeout(completionTimer.current);
+  }, []);
+
+  function handleToggle() {
+    if (task.isCompleted) {
+      onToggle(task);
+      return;
+    }
+    if (isCompleting) return;
+
+    setCompletionHeight(shellRef.current?.scrollHeight ?? null);
+    setIsCompleting(true);
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    completionTimer.current = setTimeout(() => onToggle(task), reduceMotion ? 0 : 480);
+  }
+
   return (
     <div
-      ref={setNodeRef}
-      className="flex flex-col"
+      ref={(node) => {
+        shellRef.current = node;
+        setNodeRef(node);
+      }}
+      className={cn(
+        "task-row-shell flex flex-col",
+        isCompleting && "task-row-shell-completing",
+      )}
       style={{
+        "--task-row-height": completionHeight ? `${completionHeight}px` : undefined,
         transform: CSS.Transform.toString(transform),
         transition,
-      }}
+      } as CSSProperties}
     >
       {addingTask === "above" && (
         <div style={{ paddingLeft: 8 + depth * 28 }}>
@@ -169,8 +198,12 @@ export function TaskRow({
       <div
         data-task-id={task.id}
         data-task-content={task.content}
+        data-has-children={directChildren.length > 0}
         {...attributes}
         {...listeners}
+        role="group"
+        aria-label={`Task: ${task.content}`}
+        tabIndex={0}
         onMouseDown={(event) => {
           // Only real controls opt out of row-drag. The row itself carries
           // role="button" from dnd-kit attributes, so a [role=button] check
@@ -189,14 +222,15 @@ export function TaskRow({
           listeners?.onTouchStart?.(event);
         }}
         className={cn(
-          "group relative mb-0.5 flex items-start gap-2 rounded-lg py-2.5 pr-2 transition-colors hover:bg-muted/55",
+          "task-row group relative mb-0.5 flex items-start gap-2 rounded-lg py-2.5 pr-2 transition-colors hover:bg-muted/55",
           selecting && "cursor-pointer",
           draggable && "touch-pan-y select-none cursor-pointer",
           isDragging && "z-0 cursor-grabbing opacity-40 hover:bg-transparent",
         )}
         style={{
+          "--task-mobile-indent": `${depth * 20}px`,
           paddingLeft: 44 + depth * 28,
-        }}
+        } as CSSProperties}
         onClick={(event) => {
           if (selecting) {
             onSelectionToggle?.(task);
@@ -211,6 +245,13 @@ export function TaskRow({
           if (control) return;
           onOpenDetail(task);
         }}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget || selecting) return;
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onOpenDetail(task);
+          }
+        }}
       >
         {dropIndicator?.anchorId === task.id && dropIndicator.sectionId === task.sectionId && (
           <span
@@ -222,7 +263,7 @@ export function TaskRow({
         {draggable && (
           <GripVertical
             aria-hidden
-            className="absolute top-2.5 size-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+            className="task-row-drag-handle absolute top-2.5 size-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
             style={{ left: depth * 28 + (directChildren.length > 0 ? 4 : 20) }}
           />
         )}
@@ -230,7 +271,7 @@ export function TaskRow({
           <button
             type="button"
             aria-label={collapsed ? "Expand subtasks" : "Collapse subtasks"}
-            className="absolute top-2 flex size-5 items-center justify-center text-muted-foreground"
+            className="task-row-collapse absolute top-2 flex size-5 items-center justify-center text-muted-foreground after:absolute after:-inset-3"
             style={{ left: depth * 28 + 24 }}
             onClick={(event) => {
               event.stopPropagation();
@@ -253,16 +294,22 @@ export function TaskRow({
         ) : (
           <TaskCheckbox
             priority={task.priority}
-            checked={task.isCompleted}
-            onToggle={() => onToggle(task)}
+            checked={task.isCompleted || isCompleting}
+            celebrating={isCompleting}
+            onToggle={handleToggle}
           />
         )}
 
-        <div className="min-w-0 flex-1 pr-9 sm:pr-40">
+        <div
+          className={cn(
+            "min-w-0 flex-1 sm:pr-40",
+            directChildren.length > 0 ? "pr-20" : "pr-14",
+          )}
+        >
           <TaskContent task={task} />
 
           {task.description?.trim() && (
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            <p className="mt-0.5 truncate text-[13px] text-muted-foreground sm:text-xs">
               {task.description}
             </p>
           )}
@@ -646,7 +693,7 @@ function DueEditor({
 }
 
 function TaskContent({ task }: { task: TaskWithLabels }) {
-  return <div className="text-sm select-none">{task.content}</div>;
+  return <div className="text-base select-none sm:text-sm">{task.content}</div>;
 }
 
 function TaskContextMenu({
@@ -748,22 +795,24 @@ function TaskContextMenu({
           </DropdownMenuSubContent>
         </DropdownMenuSub>
         <DropdownMenuSeparator />
-        <div className="flex items-center justify-between px-1 py-1" aria-label="Quick date">
+        <div className="grid grid-cols-2 gap-1 p-1" aria-label="Quick date">
           {([
             ["Today", today],
             ["Tomorrow", addDays(today, 1)],
             ["Next week", addDays(today, 7)],
             ["No date", null],
           ] as const).map(([label, dueDate]) => (
-            <Button key={label} variant="ghost" size="icon-xs" aria-label={label} title={label} onClick={() => run(() => onDueDate(dueDate))}>
+            <Button key={label} variant="ghost" size="sm" className="justify-start" aria-label={label} onClick={() => run(() => onDueDate(dueDate))}>
               <CalendarDays className="size-3.5" />
+              <span>{label}</span>
             </Button>
           ))}
         </div>
-        <div className="flex items-center justify-between px-1 py-1" aria-label="Quick priority">
+        <div className="grid grid-cols-4 gap-1 p-1" aria-label="Quick priority">
           {[1, 2, 3, 4].map((priority) => (
-            <Button key={priority} variant="ghost" size="icon-xs" aria-label={`Priority ${priority}`} title={`Priority ${priority}`} onClick={() => run(() => onPriority(priority))}>
+            <Button key={priority} variant="ghost" size="sm" className="gap-0.5 px-1" aria-label={`Priority ${priority}`} onClick={() => run(() => onPriority(priority))}>
               <Flag className={cn("size-3.5 fill-current", ["text-red-500", "text-orange-500", "text-blue-500", "text-muted-foreground"][priority - 1])} />
+              <span>P{priority}</span>
             </Button>
           ))}
         </div>

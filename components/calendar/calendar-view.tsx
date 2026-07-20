@@ -100,31 +100,31 @@ export function CalendarView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Link href={prevHref} className="rounded-md border border-border px-2 py-1 text-sm hover:bg-muted">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-1 sm:gap-2">
+          <Link aria-label="Previous period" href={prevHref} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-border px-2 py-1 text-sm hover:bg-muted sm:min-h-0 sm:min-w-0">
             ‹
           </Link>
-          <Link href={todayHref} className="rounded-md border border-border px-2 py-1 text-sm hover:bg-muted">
+          <Link href={todayHref} className="inline-flex min-h-11 items-center justify-center rounded-md border border-border px-3 py-1 text-sm hover:bg-muted sm:min-h-0">
             Today
           </Link>
-          <Link href={nextHref} className="rounded-md border border-border px-2 py-1 text-sm hover:bg-muted">
+          <Link aria-label="Next period" href={nextHref} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-border px-2 py-1 text-sm hover:bg-muted sm:min-h-0 sm:min-w-0">
             ›
           </Link>
-          <span className="ml-2 text-sm font-medium">
+          <span className="order-last w-full text-sm font-medium sm:order-none sm:ml-2 sm:w-auto">
             {view === "month" ? month : `${formatDate(week, dateFormat)} – ${formatDate(addDays(week, 6), dateFormat)}`}
           </span>
         </div>
         <div className="flex items-center gap-1 rounded-md border border-border p-0.5 text-sm">
           <Link
             href={`/calendar?view=month&month=${month}`}
-            className={cn("rounded px-2 py-1", view === "month" && "bg-muted font-medium")}
+            className={cn("inline-flex min-h-11 items-center rounded px-2 py-1 sm:min-h-0", view === "month" && "bg-muted font-medium")}
           >
             Month
           </Link>
           <Link
             href={`/calendar?view=week&week=${week}`}
-            className={cn("rounded px-2 py-1", view === "week" && "bg-muted font-medium")}
+            className={cn("inline-flex min-h-11 items-center rounded px-2 py-1 sm:min-h-0", view === "week" && "bg-muted font-medium")}
           >
             Week
           </Link>
@@ -191,7 +191,8 @@ function DayCell({
   tasks: Task[];
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: date });
-  const shown = tasks.slice(0, 3);
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? tasks : tasks.slice(0, 3);
   const hidden = tasks.length - shown.length;
 
   return (
@@ -215,8 +216,16 @@ function DayCell({
         {shown.map((task) => (
           <TaskChip key={task.id} task={task} />
         ))}
-        {/* ponytail: "+N more" is a static label, not a popover — clicking through to see the rest is a cut */}
-        {hidden > 0 && <span className="px-1 text-xs text-muted-foreground">+{hidden} more</span>}
+        {hidden > 0 && (
+          <button type="button" className="min-h-11 px-1 text-left text-xs text-muted-foreground underline-offset-2 hover:underline sm:min-h-6" onClick={() => setExpanded(true)}>
+            +{hidden} more
+          </button>
+        )}
+        {expanded && tasks.length > 3 && (
+          <button type="button" className="min-h-11 px-1 text-left text-xs text-muted-foreground underline-offset-2 hover:underline sm:min-h-6" onClick={() => setExpanded(false)}>
+            Show less
+          </button>
+        )}
       </div>
     </div>
   );
@@ -228,22 +237,24 @@ function TaskChip({ task }: { task: Task }) {
   });
 
   return (
-    <div
+    <Link
+      href={`/projects/${task.projectId}?task=${task.id}`}
       ref={setNodeRef}
       {...attributes}
       {...listeners}
+      role="link"
       style={{
         transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
       }}
       className={cn(
-        "flex cursor-grab touch-auto select-none items-center gap-1 truncate rounded border border-border bg-background px-1 py-0.5 text-xs",
+        "flex min-h-11 cursor-grab touch-auto select-none items-center gap-1 truncate rounded border border-border bg-background px-1 py-0.5 text-sm sm:min-h-0 sm:text-xs",
         isDragging && "opacity-50",
       )}
     >
       <span className={cn("size-1.5 shrink-0 rounded-full border-2", priorityColors[task.priority])} />
       <span className="truncate">{task.content}</span>
       {task.dueTime && <span className="shrink-0 text-muted-foreground">{task.dueTime}</span>}
-    </div>
+    </Link>
   );
 }
 
@@ -350,10 +361,12 @@ function TimeBlock({ task, offset }: { task: Task; offset: number }) {
   const height = Math.max(((task.durationMinutes ?? 60) / 60) * HOUR_HEIGHT, 20);
 
   return (
-    <div
+    <Link
+      href={`/projects/${task.projectId}?task=${task.id}`}
       ref={setNodeRef}
       {...attributes}
       {...listeners}
+      role="link"
       style={{
         top,
         height,
@@ -362,7 +375,7 @@ function TimeBlock({ task, offset }: { task: Task; offset: number }) {
         transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
       }}
       className={cn(
-        "absolute z-10 flex cursor-grab touch-auto select-none flex-col overflow-hidden rounded border border-border bg-background px-1 py-0.5 text-xs shadow-sm",
+        "absolute z-10 flex min-h-11 cursor-grab touch-auto select-none flex-col overflow-hidden rounded border border-border bg-background px-1 py-0.5 text-xs shadow-sm sm:min-h-0",
         isDragging && "opacity-50",
       )}
     >
@@ -371,6 +384,6 @@ function TimeBlock({ task, offset }: { task: Task; offset: number }) {
         <span className="truncate font-medium">{task.content}</span>
       </div>
       <span className="text-muted-foreground">{task.dueTime}</span>
-    </div>
+    </Link>
   );
 }

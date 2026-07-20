@@ -188,7 +188,7 @@ export function TaskDateList({
       {error && <p className="text-xs text-destructive">{error}</p>}
 
       {pending && (
-        <div className="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-foreground px-4 py-2 text-sm text-background shadow-lg">
+        <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-foreground px-4 py-2 text-sm text-background shadow-lg">
           <span>{pending.label}</span>
           <button type="button" className="font-medium underline" onClick={undo}>
             Undo

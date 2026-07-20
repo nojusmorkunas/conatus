@@ -24,7 +24,7 @@ export default async function SearchPage({
 
   if (!query) {
     return (
-      <div className="mx-auto w-full max-w-4xl p-6">
+      <div className="mx-auto w-full max-w-4xl px-3 py-2 sm:p-6">
         <h1 className="mb-2 text-xl font-semibold">Search</h1>
         <p className="text-sm text-muted-foreground">
           Enter a search term in the sidebar to find tasks, projects, and comments.
@@ -96,7 +96,7 @@ export default async function SearchPage({
   const hasResults = matchingTasks.length + matchingProjects.length + matchingComments.length > 0;
 
   return (
-    <div className="mx-auto w-full max-w-4xl p-6">
+    <div className="mx-auto w-full max-w-4xl px-3 py-2 sm:p-6">
       <h1 className="text-xl font-semibold">Search</h1>
       <p className="mb-6 mt-1 text-sm text-muted-foreground">
         Results for <span className="font-medium text-foreground">{query}</span>
@@ -116,7 +116,7 @@ export default async function SearchPage({
                 className="flex items-start gap-3 rounded-md px-2 py-2 hover:bg-muted/50"
               >
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm">{task.content}</span>
+                  <span className="block truncate text-base sm:text-sm">{task.content}</span>
                   <span className="block truncate text-xs text-muted-foreground">
                     {task.projectName}
                   </span>
@@ -135,7 +135,7 @@ export default async function SearchPage({
               <Link
                 key={project.id}
                 href={`/projects/${project.id}`}
-                className="block rounded-md px-2 py-2 text-sm hover:bg-muted/50"
+                className="block rounded-md px-2 py-2 text-base hover:bg-muted/50 sm:text-sm"
               >
                 {project.name}
               </Link>

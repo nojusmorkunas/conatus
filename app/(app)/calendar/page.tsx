@@ -48,7 +48,7 @@ export default async function CalendarPage({
     .orderBy(tasks.dueDate, tasks.dueTime, tasks.order);
 
   return (
-    <div className="flex h-full w-full flex-col p-6">
+    <div className="flex h-full w-full flex-col px-3 py-2 sm:p-6">
       <h1 className="mb-4 text-xl font-semibold">Calendar</h1>
       <CalendarView
         view={view}

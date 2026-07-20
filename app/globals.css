@@ -139,3 +139,108 @@
     @apply font-sans;
   }
 }
+
+@keyframes task-checkbox-pop {
+  0% { transform: scale(1); }
+  42% { transform: scale(1.16); }
+  72% { transform: scale(0.96); }
+  100% { transform: scale(1); }
+}
+
+@keyframes task-checkbox-ring {
+  0% { opacity: 0.5; transform: scale(0.72); }
+  100% { opacity: 0; transform: scale(1.45); }
+}
+
+@keyframes task-check-draw {
+  from { stroke-dashoffset: 24; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes task-row-complete {
+  0%, 36% {
+    max-height: var(--task-row-height, 16rem);
+    opacity: 1;
+    transform: translateX(0);
+  }
+  62% {
+    max-height: var(--task-row-height, 16rem);
+    opacity: 0.62;
+    transform: translateX(4px);
+  }
+  100% {
+    max-height: 0;
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+
+.task-checkbox-completing {
+  animation: task-checkbox-pop 320ms cubic-bezier(0.2, 0.9, 0.3, 1.25) both;
+}
+
+.task-checkbox-ring {
+  animation: task-checkbox-ring 360ms ease-out both;
+}
+
+.task-checkbox-check path {
+  animation: task-check-draw 220ms ease-out both;
+  stroke-dasharray: 24;
+}
+
+.task-row-shell-completing {
+  animation: task-row-complete 480ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-checkbox-completing,
+  .task-checkbox-ring,
+  .task-checkbox-check path,
+  .task-row-shell-completing {
+    animation-duration: 1ms;
+  }
+}
+
+@media (max-width: 639px) {
+  .task-row {
+    padding-left: calc(0.5rem + var(--task-mobile-indent)) !important;
+  }
+
+  .task-row .task-row-drag-handle {
+    display: none;
+  }
+
+  .task-row .task-row-collapse {
+    right: 3.75rem;
+    left: auto !important;
+  }
+}
+
+@media (max-width: 767px) {
+  [data-slot="button"] {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  [data-slot="dropdown-menu-item"],
+  [data-slot="dropdown-menu-checkbox-item"],
+  [data-slot="dropdown-menu-radio-item"],
+  [data-slot="dropdown-menu-sub-trigger"] {
+    min-height: 2.75rem;
+    padding-block: 0.625rem;
+  }
+
+  [data-slot="input"] {
+    min-height: 2.75rem;
+  }
+
+  .project-sidebar a,
+  .project-sidebar button,
+  .project-sidebar form,
+  .task-dialog a,
+  .task-dialog button {
+    min-height: 2.75rem;
+  }
+}

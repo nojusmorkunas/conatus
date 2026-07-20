@@ -88,7 +88,7 @@ export function CompletedTaskList({
           {group.tasks.map((task) => (
             <div
               key={task.id}
-              className="group flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted"
+              className="group flex flex-wrap items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted sm:flex-nowrap"
             >
               <Button
                 variant="ghost"
@@ -99,7 +99,7 @@ export function CompletedTaskList({
                 <CheckCircle2 className="text-green-600" />
               </Button>
 
-              <span className="flex-1 truncate text-sm text-muted-foreground line-through">
+              <span className="min-w-0 flex-1 truncate text-base text-muted-foreground line-through sm:text-sm">
                 {task.content}
               </span>
 
@@ -119,7 +119,7 @@ export function CompletedTaskList({
               <Button
                 variant="ghost"
                 size="icon-xs"
-                className="opacity-0 group-hover:opacity-100"
+                className="opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
                 aria-label="Delete task"
                 onClick={() => remove(task)}
               >

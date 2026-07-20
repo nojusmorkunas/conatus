@@ -52,7 +52,7 @@ export default async function CompletedPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-4xl p-6">
+    <div className="mx-auto w-full max-w-4xl px-3 py-6 sm:p-6">
       <h1 className="mb-6 text-xl font-semibold">Completed</h1>
       <CompletedTaskList
         initialGroups={groups}

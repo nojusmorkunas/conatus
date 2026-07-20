@@ -54,7 +54,7 @@ export default async function ReportingPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-4xl p-6">
+    <div className="mx-auto w-full max-w-4xl px-3 py-6 sm:p-6">
       <h1 className="mb-8 text-xl font-semibold">Reporting</h1>
       <div className="space-y-10">
         <section>
