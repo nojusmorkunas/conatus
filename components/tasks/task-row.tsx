@@ -171,7 +171,7 @@ export function TaskRow({
         data-task-content={task.content}
         {...attributes}
         {...listeners}
-        onPointerDown={(event) => {
+        onMouseDown={(event) => {
           // Only real controls opt out of row-drag. The row itself carries
           // role="button" from dnd-kit attributes, so a [role=button] check
           // would match every press and kill dragging entirely.
@@ -179,12 +179,19 @@ export function TaskRow({
             "button, input, a, textarea, select",
           );
           if (control && control !== event.currentTarget) return;
-          listeners?.onPointerDown?.(event);
+          listeners?.onMouseDown?.(event);
+        }}
+        onTouchStart={(event) => {
+          const control = (event.target as Element).closest?.(
+            "button, input, a, textarea, select",
+          );
+          if (control && control !== event.currentTarget) return;
+          listeners?.onTouchStart?.(event);
         }}
         className={cn(
           "group relative mb-0.5 flex items-start gap-2 rounded-lg py-2.5 pr-2 transition-colors hover:bg-muted/55",
           selecting && "cursor-pointer",
-          draggable && "cursor-pointer",
+          draggable && "touch-pan-y select-none cursor-pointer",
           isDragging && "z-0 cursor-grabbing opacity-40 hover:bg-transparent",
         )}
         style={{
@@ -251,7 +258,7 @@ export function TaskRow({
           />
         )}
 
-        <div className="min-w-0 flex-1 pr-40">
+        <div className="min-w-0 flex-1 pr-9 sm:pr-40">
           <TaskContent task={task} />
 
           {task.description?.trim() && (
@@ -292,7 +299,7 @@ export function TaskRow({
         </div>
 
         {!selecting && (
-          <div className="absolute top-1.5 right-1.5 flex items-center gap-0.5 rounded-md bg-muted px-0.5 py-0.5 opacity-0 shadow-sm ring-1 ring-border/80 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+          <div className="absolute top-1.5 right-1.5 flex items-center gap-0.5 rounded-md bg-muted px-0.5 py-0.5 opacity-100 shadow-sm ring-1 ring-border/80 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
             <TaskContextMenu
               task={task}
               today={today}

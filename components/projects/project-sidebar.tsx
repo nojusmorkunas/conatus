@@ -29,7 +29,8 @@ import {
   DragOverlay,
   KeyboardSensor,
   MeasuringStrategy,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   closestCenter,
   useSensor,
   useSensors,
@@ -175,7 +176,10 @@ export function ProjectSidebar({
   const fallbackName = username.charAt(0).toUpperCase() + username.slice(1);
   const displayName = userName?.trim() || fallbackName;
   const projectSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 250, tolerance: 8 },
+    }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
@@ -432,7 +436,19 @@ export function ProjectSidebar({
         </div>
 
         <div
-          onClick={() => setMobileOpen(false)}
+          onClick={(event) => {
+            // Keep the drawer open for expand, add, and overflow-menu actions.
+            // Only an actual navigation target should dismiss it.
+            const target = event.target as Element;
+            const link = target.closest("a");
+            const row = target.closest("[data-sidebar-navigate]");
+            const control = target.closest(
+              "button, input, textarea, select, [role=menuitem]",
+            );
+            if (link != null || (row != null && control == null)) {
+              setMobileOpen(false);
+            }
+          }}
           className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1"
           data-testid="sidebar-scroll-region"
         >
@@ -721,7 +737,7 @@ function SidebarGroupHeader({
       {onAdd && (
         <button
           type="button"
-          className="flex size-6 items-center justify-center rounded-md opacity-0 transition-opacity hover:bg-background hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover/header:opacity-100 group-focus-within/header:opacity-100 dark:hover:bg-background"
+          className="flex size-6 items-center justify-center rounded-md opacity-100 transition-opacity hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:opacity-0 md:group-hover/header:opacity-100 md:group-focus-within/header:opacity-100 dark:hover:bg-background"
           aria-label="Add project"
           onClick={onAdd}
         >
@@ -730,7 +746,7 @@ function SidebarGroupHeader({
       )}
       <button
         type="button"
-        className="flex size-6 items-center justify-center rounded-md opacity-0 transition-opacity hover:bg-background hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover/header:opacity-100 group-focus-within/header:opacity-100 dark:hover:bg-background"
+        className="flex size-6 items-center justify-center rounded-md opacity-100 transition-opacity hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:opacity-0 md:group-hover/header:opacity-100 md:group-focus-within/header:opacity-100 dark:hover:bg-background"
         aria-label={expanded ? `Collapse ${String(children)}` : `Expand ${String(children)}`}
         onClick={onClick}
       >
@@ -793,6 +809,7 @@ function ViewLink({
   return (
     <Link
       href={href}
+      data-sidebar-navigate
       className={cn(
         "flex h-8 items-center gap-2 rounded-lg px-2.5 text-sm transition-colors hover:bg-background/70 [&_svg]:text-muted-foreground",
         pathname === href &&
@@ -1069,9 +1086,10 @@ function ProjectRow({
       data-project-name={treeRow ? project.name : undefined}
       data-favorite-project-id={favoriteRow ? project.id : undefined}
       data-favorite-project-name={favoriteRow ? project.name : undefined}
+      data-sidebar-navigate={draggable ? "" : undefined}
       {...(draggable ? attributes : {})}
       {...(draggable ? listeners : {})}
-      onPointerDown={
+      onMouseDown={
         draggable
           ? (event) => {
               // The whole project row is the drag surface.
@@ -1080,7 +1098,18 @@ function ProjectRow({
                 "button, input, textarea, select",
               );
               if (control && control !== event.currentTarget) return;
-              listeners?.onPointerDown?.(event);
+              listeners?.onMouseDown?.(event);
+            }
+          : undefined
+      }
+      onTouchStart={
+        draggable
+          ? (event) => {
+              const control = (event.target as Element).closest?.(
+                "button, input, textarea, select",
+              );
+              if (control && control !== event.currentTarget) return;
+              listeners?.onTouchStart?.(event);
             }
           : undefined
       }
@@ -1096,7 +1125,7 @@ function ProjectRow({
       }}
       className={cn(
         "group/project relative flex min-h-9 items-center gap-2 rounded-lg border border-transparent py-1 pr-1.5 text-sm transition-all hover:bg-background/65 focus-within:bg-background/65",
-        draggable && "touch-none cursor-pointer",
+        draggable && "touch-pan-y select-none cursor-pointer",
         active && "border-sidebar-border bg-background font-semibold shadow-sm",
         isDragging && "relative z-20 cursor-grabbing opacity-60 shadow-md",
       )}
@@ -1131,7 +1160,7 @@ function ProjectRow({
       {treeRow && hasChildren && (
         <button
           type="button"
-          className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-background hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover/project:opacity-100 group-focus-within/project:opacity-100 dark:hover:bg-background"
+          className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-100 transition-opacity hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:opacity-0 md:group-hover/project:opacity-100 md:group-focus-within/project:opacity-100 dark:hover:bg-background"
           aria-label={collapsed ? `Expand ${project.name}` : `Collapse ${project.name}`}
           onClick={onCollapse}
         >
@@ -1148,7 +1177,7 @@ function ProjectRow({
               <Button
                 variant="ghost"
                 size="icon-xs"
-                className="opacity-0 hover:bg-background group-hover/project:opacity-100 group-focus-within/project:opacity-100 dark:hover:bg-background"
+                className="opacity-100 hover:bg-background md:opacity-0 md:group-hover/project:opacity-100 md:group-focus-within/project:opacity-100 dark:hover:bg-background"
                 aria-label={`More options for ${project.name}`}
               >
                 <MoreHorizontal />

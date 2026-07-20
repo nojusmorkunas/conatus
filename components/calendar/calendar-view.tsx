@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useDraggable,
   useDroppable,
   useSensor,
@@ -50,7 +51,10 @@ export function CalendarView({
   const [tasks, setTasks] = useState(initialTasks);
   const [error, setError] = useState<string | null>(null);
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 250, tolerance: 8 },
+    }),
   );
 
   const [syncedFrom, setSyncedFrom] = useState(initialTasks);
@@ -232,7 +236,7 @@ function TaskChip({ task }: { task: Task }) {
         transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
       }}
       className={cn(
-        "flex cursor-grab items-center gap-1 truncate rounded border border-border bg-background px-1 py-0.5 text-xs",
+        "flex cursor-grab touch-auto select-none items-center gap-1 truncate rounded border border-border bg-background px-1 py-0.5 text-xs",
         isDragging && "opacity-50",
       )}
     >
@@ -358,7 +362,7 @@ function TimeBlock({ task, offset }: { task: Task; offset: number }) {
         transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
       }}
       className={cn(
-        "absolute z-10 flex cursor-grab flex-col overflow-hidden rounded border border-border bg-background px-1 py-0.5 text-xs shadow-sm",
+        "absolute z-10 flex cursor-grab touch-auto select-none flex-col overflow-hidden rounded border border-border bg-background px-1 py-0.5 text-xs shadow-sm",
         isDragging && "opacity-50",
       )}
     >

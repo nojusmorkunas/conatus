@@ -8,7 +8,8 @@ import {
   DndContext,
   DragOverlay,
   MeasuringStrategy,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   closestCenter,
   closestCorners,
   useDroppable,
@@ -117,9 +118,13 @@ export function TaskList({
   const [projects, setProjects] = useState<Project[]>([]);
   const { pending, schedule, undo } = usePendingAction();
   const router = useRouter();
-  // Distance activation keeps ordinary row clicks and controls working.
+  // Mouse dragging stays quick, while touch requires an intentional hold.
+  // The touch movement tolerance lets a normal swipe remain native scrolling.
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 250, tolerance: 8 },
+    }),
   );
 
   // Re-sync when the server gives us a fresh task list (e.g. a section was
@@ -1024,7 +1029,7 @@ function SectionHeading({
         {...attributes}
         {...listeners}
         aria-label="Drag section"
-        className="absolute left-1 flex size-5 cursor-grab items-center justify-center text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+        className="absolute left-1 flex size-5 cursor-grab touch-manipulation items-center justify-center text-muted-foreground opacity-100 transition-opacity active:cursor-grabbing md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
       >
         <GripVertical aria-hidden className="size-4" />
       </span>

@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import {
   DndContext,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   closestCorners,
   useDroppable,
   useSensor,
@@ -59,9 +60,12 @@ export function Board({
 }) {
   const [tasks, setTasks] = useState(initialTasks);
   const [error, setError] = useState<string | null>(null);
-  // Distance activation keeps plain clicks (checkbox, quick-add) working.
+  // Touch cards drag only after a hold; swipes keep scrolling the board.
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 250, tolerance: 8 },
+    }),
   );
 
   const [syncedFrom, setSyncedFrom] = useState(initialTasks);
@@ -295,7 +299,7 @@ function Card({
         transition,
       }}
       className={cn(
-        "flex cursor-grab flex-col gap-1 rounded-md border border-border bg-background p-2",
+        "flex cursor-grab touch-auto select-none flex-col gap-1 rounded-md border border-border bg-background p-2",
         isDragging && "opacity-50",
       )}
     >
