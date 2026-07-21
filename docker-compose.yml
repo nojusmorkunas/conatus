@@ -110,7 +110,7 @@ services:
       SMTP_FROM: ${SMTP_FROM:-}
       ERROR_WEBHOOK_URL: ${ERROR_WEBHOOK_URL:-}
     ports:
-      - "${CONATUS_BIND_ADDRESS:-0.0.0.0}:${CONATUS_PORT:-3000}:3000"
+      - "${CONATUS_BIND_ADDRESS:-0.0.0.0}:${CONATUS_PORT:-4399}:3000"
 
   # Optional per-user MCP proxy. Start with: docker compose --profile mcp up -d
   # Create a scoped tdm_ token in Settings before enabling this profile.
@@ -130,7 +130,7 @@ services:
       MCP_OAUTH_PASSWORD: ${MCP_OAUTH_PASSWORD:-}
       MCP_OAUTH_STORE_PATH: /data/oauth-store.json
       MCP_BEARER_TOKEN: ${MCP_BEARER_TOKEN:-}
-      MCP_ALLOWED_ORIGINS: ${MCP_ALLOWED_ORIGINS:-http://localhost:3000}
+      MCP_ALLOWED_ORIGINS: ${MCP_ALLOWED_ORIGINS:-http://localhost:4399}
     ports:
       - "127.0.0.1:3001:3001"
     volumes:

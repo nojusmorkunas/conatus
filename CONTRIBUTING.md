@@ -1,7 +1,8 @@
 # Contributing to Conatus
 
-Contributions should keep `main` releasable. Use a short-lived branch, open a
-pull request and merge only after every required check passes.
+This guide covers local development and verification. Contributions should keep
+`main` releasable. Use a short-lived branch, open a pull request and merge only
+after every required check passes.
 
 ## Development setup
 
@@ -13,6 +14,12 @@ npm run dev
 
 Point `DATABASE_URL` at a development PostgreSQL instance. Attachments require
 MinIO. Email is optional.
+
+Registration is invite-only. On an empty database, `/register` allows the
+first username/password account to bootstrap the server and makes that account
+the instance administrator. No email address or SMTP configuration is required.
+After signing in, that administrator can create single-use, seven-day signup
+links under **Settings → Registration**.
 
 ## Required checks
 
@@ -41,137 +48,71 @@ Validate the container deployment:
 docker compose -f docker-compose.yml -f docker-compose.build.yml config
 docker compose -f docker-compose.yml -f docker-compose.build.yml up --build -d
 docker compose ps
-curl --fail http://localhost:3000/api/health
+curl --fail http://localhost:4399/api/health
 docker compose down
 ```
 
-## Release policy
+## Local container development
 
-Conatus uses Semantic Versioning. A beta fix increments the beta suffix. A
-stable bug fix increments the patch version. A backward-compatible feature
-increments the minor version. Every breaking change must be called out in the
-GitHub Release notes.
+Build and run the current checkout with the Compose build override:
 
-Never move or reuse a published tag. Back up a production database before an
-upgrade because a database rollback can require restoring that backup.
+```bash
+docker compose -f docker-compose.yml -f docker-compose.build.yml up --build
+```
 
-## Prepare a release
+When both bootstrap variables are set, an administrator is created only if the
+database is empty. Existing accounts are never updated from the environment.
+After the first login, change the password under **Settings → Account**, then
+remove both bootstrap variables from `.env` and remove the stopped container
+that held the initial password:
 
-The example below uses `0.2.0-beta.1`. Replace it with the intended version.
+```bash
+docker compose rm -f bootstrap
+```
 
-1. Create a release branch from `main`.
+## API and webhook integration
 
-   ```bash
-   git switch main
-   git pull --ff-only
-   git switch -c release/v0.2.0-beta.1
-   ```
+Create a scoped access token in Settings. The token is shown only once, so copy
+it before leaving the page. Send it as a bearer token to any protected v1 API
+route:
 
-2. Update the application version plus the MCP and operations package versions.
+```bash
+curl -H "Authorization: Bearer tdm_..." "http://localhost:4399/api/v1/tasks?completed=false"
+```
 
-   ```bash
-   npm version 0.2.0-beta.1 --no-git-tag-version
-   npm --prefix mcp-server version 0.2.0-beta.1 --no-git-tag-version
-   npm --prefix ops version 0.2.0-beta.1 --no-git-tag-version
-   ```
+Tokens can be reviewed and revoked from Settings. The OpenAPI 3.1 description
+is served at `/api/v1/openapi.json`. Mutating task creation endpoints accept
+`Idempotency-Key` while list endpoints use opaque cursor pagination.
 
-   `npm version` requires a clean working tree. If release preparation has
-   uncommitted changes, update the versions with `npm pkg set` instead:
+Add HTTPS or localhost endpoints in Settings to receive `task.created`,
+`task.completed`, `task.uncompleted`, `task.deleted`, `comment.added`,
+`project.created`, `project.archived` and `project.deleted` events. Each POST
+body is `{ type, taskContent, projectId, projectName, occurredAt }`. Verify the
+`X-Webhook-Signature` header by computing an HMAC-SHA256 of the raw request
+body with the webhook secret, which is shown only once when the endpoint is
+created.
 
-   ```bash
-   npm pkg set version=0.2.0-beta.1
-   npm --prefix mcp-server pkg set version=0.2.0-beta.1
-   npm --prefix ops pkg set version=0.2.0-beta.1
-   npm install --package-lock-only --ignore-scripts
-   npm --prefix mcp-server install --package-lock-only --ignore-scripts
-   npm --prefix ops install --package-lock-only --ignore-scripts
-   ```
+## Database migrations and backups
 
-3. Prepare GitHub Release notes with these sections:
+```bash
+npm run db:generate   # generate a migration from lib/db/schema.ts
+npm run db:migrate    # apply migrations
+npm run db:studio     # browse the database
+```
 
-   - Highlights
-   - Image-only installation commands
-   - Upgrade and migration notes
-   - Known limitations
-   - A summary of fixes
+The `backup` service in `docker-compose.yml` dumps the database on a timer into
+the `backups` volume. It keeps the newest `BACKUP_KEEP` dumps, which defaults
+to 7. The default `BACKUP_INTERVAL` is 86400 seconds. Override either value
+through environment variables.
 
-4. Run every check from the Required checks section.
+Restore a dump:
 
-5. Check the proposed change before committing it.
+```bash
+docker compose exec -T db pg_restore -U app -d app --clean --if-exists < /path/to/app-<timestamp>.dump
+```
 
-   ```bash
-   git diff --check
-   git status --short
-   git diff
-   ```
+Create a manual dump:
 
-6. Commit the release preparation and push the branch.
-
-   ```bash
-   git add --all
-   git diff --cached
-   git commit -m "Prepare v0.2.0-beta.1 release"
-   git push -u origin release/v0.2.0-beta.1
-   ```
-
-7. Open a pull request. Wait for every check, review the complete diff and merge
-   it into `main`.
-
-## Publish a release
-
-1. Update local `main` and confirm that the working tree is clean.
-
-   ```bash
-   git switch main
-   git pull --ff-only
-   git status --short
-   ```
-
-2. Create an annotated tag from the verified commit and push it.
-
-   ```bash
-   git tag -a v0.2.0-beta.1 -m "Conatus 0.2.0-beta.1"
-   git show v0.2.0-beta.1 --no-patch
-   git push origin v0.2.0-beta.1
-   ```
-
-3. Publish the GitHub prerelease. Put the prepared notes in a temporary file
-   outside the repository, such as `/tmp/conatus-release-notes.txt`.
-
-   ```bash
-   gh release create v0.2.0-beta.1 \
-     --verify-tag \
-     --prerelease \
-     --latest=false \
-     --title "Conatus 0.2.0-beta.1" \
-     --notes-file /tmp/conatus-release-notes.txt
-   ```
-
-4. Open GitHub Actions and wait for every Publish release images job. The
-   workflow builds `linux/amd64` plus `linux/arm64` images. It publishes the
-   application, operations and MCP artifacts. It also attaches
-   `docker-compose.yml` plus `.env.example` to the GitHub Release.
-
-5. Verify the published images.
-
-   ```bash
-   docker pull ghcr.io/nojusmorkunas/conatus:0.2.0-beta.1
-   docker pull ghcr.io/nojusmorkunas/conatus:0.2.0-beta.1-ops
-   docker pull ghcr.io/nojusmorkunas/conatus-mcp:0.2.0-beta.1
-   ```
-
-6. Open the settings for the `conatus` and `conatus-mcp` packages. Change their
-   visibility to public only when anonymous installation is intended. GitHub
-   does not allow a public package to become private again.
-
-7. Test the release by following the image-only installation instructions in
-   the root README from an empty directory.
-
-## Promote a stable release
-
-After beta validation, prepare `0.2.0` through the same process. Publish it as a
-normal release rather than a prerelease. The release workflow will then update
-the `latest` and `latest-ops` tags.
-
-Use `0.2.1` only for a bug fix released after `0.2.0`. Do not use `0.2.1` merely
-because the Docker workflow was added before the first `0.2.0` release.
+```bash
+docker compose exec db pg_dump -U app -Fc app > backup.dump
+```
