@@ -97,7 +97,7 @@ export function ProjectCommentsPanel({
     <div className="fixed inset-0 z-50 flex justify-end bg-black/20 md:bg-transparent">
       <div className="flex h-full w-full flex-col border-l bg-background p-4 md:w-96">
         <div className="mb-4 flex items-center justify-between gap-2">
-          <h2 className="truncate text-sm font-medium">Comments — {projectName}</h2>
+          <h2 className="truncate text-sm font-medium">Comments: {projectName}</h2>
           <Button variant="ghost" size="icon-xs" aria-label="Close comments" onClick={onClose}>
             <X className="size-3.5" />
           </Button>

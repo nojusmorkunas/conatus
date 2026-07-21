@@ -43,7 +43,7 @@ export default async function AppLayout({
   ]);
   if (!account) redirect("/login");
 
-  // A shared project can be someone else's Inbox — mine is the unshared one.
+  // A shared project can be someone else's Inbox. Mine is the unshared one.
   const inboxProjectId =
     userProjects.find((project) => project.isInbox && !project.shared)?.id ?? null;
   const today = todayInTimezone(account.timezone);

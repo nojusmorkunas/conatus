@@ -35,7 +35,7 @@ test("password resets accept matching passwords", () => {
   ).toBe(true);
 });
 
-test("password resets reject missing tokens, short passwords, and mismatches", () => {
+test("password resets reject missing tokens, short passwords and mismatches", () => {
   expect(
     resetPasswordSchema.safeParse({
       token: "",

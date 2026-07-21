@@ -38,7 +38,7 @@ export async function GET(
   const activeTaskIds = new Set(activeTasks.map((task) => task.id));
 
   // Templates are dateless and personal-scope: dates, assignees, labels,
-  // comments, attachments, reminders, and completion state do not transfer.
+  // comments, attachments, reminders and completion state do not transfer.
   const body = {
     version: 1,
     kind: "project-template" as const,

@@ -33,7 +33,7 @@ export function readBootstrapAdminConfig(
   const normalizedUsername = normalizeUsername(username);
   if (!/^[a-z0-9][a-z0-9._-]{2,31}$/.test(normalizedUsername)) {
     throw new Error(
-      "CONATUS_ADMIN_USERNAME must be 3-32 characters using letters, numbers, dots, underscores, or hyphens",
+      "CONATUS_ADMIN_USERNAME must be 3-32 characters using letters, numbers, dots, underscores or hyphens",
     );
   }
   if (password.length < 8) {

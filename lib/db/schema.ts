@@ -159,7 +159,7 @@ export const projects = pgTable("projects", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-// Owner is projects.userId — never mirrored here. Only "editor" exists for
+// Owner is projects.userId and is never mirrored here. Only "editor" exists for
 // now; the column is text so more roles don't need a migration.
 export const projectCollaborators = pgTable(
   "project_collaborators",
@@ -316,7 +316,7 @@ export const comments = pgTable(
   ],
 );
 
-// Task-level only for now (no commentId) — comment attachments from the
+// Task-level only for now (no commentId). Comment attachments from the
 // spec are a scope cut; add a nullable commentId column later if needed.
 export const attachments = pgTable("attachments", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -332,7 +332,7 @@ export const attachments = pgTable("attachments", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-// Absolute datetime reminders only — relative ("30 min before due") and
+// Absolute datetime reminders only. Relative ("30 min before due") and
 // location reminders from the spec are deferred.
 export const reminders = pgTable("reminders", {
   id: uuid("id").primaryKey().defaultRandom(),

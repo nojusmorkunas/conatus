@@ -25,7 +25,7 @@ export const registerSchema = z.object({
     .max(32, "Username must be at most 32 characters")
     .regex(
       /^[a-z0-9][a-z0-9._-]*$/,
-      "Use letters, numbers, dots, underscores, or hyphens",
+      "Use letters, numbers, dots, underscores or hyphens",
     ),
   password: z.string().min(8, "Password must be at least 8 characters"),
   timezone: z.string().min(1).default("UTC"),
@@ -180,7 +180,7 @@ export type SectionUpdateInput = z.infer<typeof sectionUpdateSchema>;
 
 const dueDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
 const dueTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Expected HH:mm");
-// One day max — long enough for any real task block, short enough to catch typos.
+// One day max is long enough for a real task block but short enough to catch typos.
 const durationMinutesSchema = z.number().int().min(1).max(1440);
 
 // Normalizes to the canonical rule string at the boundary.
@@ -225,7 +225,7 @@ export const taskCreateSchema = z
 
 export const taskUpdateSchema = z.union([
   // Drag-drop placement: move a task after a sibling, optionally reparenting it.
-  // Must precede the general shape —
+  // Must precede the general shape because
   // zod objects strip unknown keys, so it would swallow `afterId`.
   z.object({
     sectionId: z.uuid().nullable(),

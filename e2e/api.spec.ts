@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import { registerAndLogin } from "./helpers";
 
-test("scoped v1 API supports context, idempotent creation, listing, and scope denial", async ({ page, request }) => {
+test("scoped v1 API supports context, idempotent creation, listing and scope denial", async ({ page, request }) => {
   const username = `e2e-${Date.now()}-api`;
   await registerAndLogin(page, username);
 

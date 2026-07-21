@@ -67,7 +67,7 @@ export async function POST(request: Request) {
         error.code === "username_mismatch"
           ? "This invitation was issued for a different username."
           : error.code === "invalid_invite"
-            ? "This signup link is invalid, expired, or has already been used."
+            ? "This signup link is invalid, expired or has already been used."
             : "Registration requires an invitation from the server administrator.";
       return Response.json({ error: message }, { status: 403 });
     }

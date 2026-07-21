@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 
 import { buildCalendar, escapeText, foldLine } from "./ical";
 
-test("escapes backslash, comma, semicolon, and newline", () => {
+test("escapes backslash, comma, semicolon and newline", () => {
   expect(escapeText("a,b;c\\d\ne")).toBe("a\\,b\\;c\\\\d\\ne");
 });
 

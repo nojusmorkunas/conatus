@@ -470,7 +470,7 @@ export function TodoistImporter({ onboarding = false }: { onboarding?: boolean }
           </span>
           <h2 id="import-complete-heading" className="text-xl font-semibold">Import complete</h2>
           <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
-            Added {result.projects} projects, {result.sections} sections, {result.tasks} tasks, and {result.comments} comments.
+            Added {result.projects} projects, {result.sections} sections, {result.tasks} tasks and {result.comments} comments.
             {result.labels > 0 ? ` Created ${result.labels} new ${result.labels === 1 ? "label" : "labels"}.` : ""}
             {result.renamed > 0 ? ` ${result.renamed} conflicting project ${result.renamed === 1 ? "was" : "were"} renamed.` : ""}
             {result.skipped > 0 ? ` ${result.skipped} ${result.skipped === 1 ? "project was" : "projects were"} skipped.` : ""}

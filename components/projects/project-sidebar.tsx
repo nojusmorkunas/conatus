@@ -300,7 +300,7 @@ export function ProjectSidebar({
         return;
       }
 
-      // Keep the optimistic UI mounted—router.refresh() after every drop can
+      // Keep the optimistic UI mounted because router.refresh() after every drop can
       // race a navigation/render and surface a transient Next.js error. Apply
       // the server's canonical fractional order without refreshing the page.
       const updated = await response.json() as Project;
@@ -439,7 +439,7 @@ export function ProjectSidebar({
 
         <div
           onClick={(event) => {
-            // Keep the drawer open for expand, add, and overflow-menu actions.
+            // Keep the drawer open for expand, add and overflow-menu actions.
             // Only an actual navigation target should dismiss it.
             const target = event.target as Element;
             const link = target.closest("a");

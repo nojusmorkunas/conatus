@@ -1,0 +1,20 @@
+services:
+  migrate:
+    build:
+      context: .
+      target: ops
+
+  bootstrap:
+    build:
+      context: .
+      target: ops
+
+  app:
+    build:
+      context: .
+      target: run
+
+  mcp:
+    build:
+      context: ./mcp-server
+      target: runtime

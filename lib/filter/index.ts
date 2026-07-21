@@ -15,7 +15,7 @@
 // Documented semantics:
 // - Tasks with no due date never match any date term (only 'no date' and
 //   their negations, e.g. '!today', match them).
-// - 'overdue' is date-only: dueDate < today. dueTime is ignored — the
+// - 'overdue' is date-only: dueDate < today. dueTime is ignored because the
 //   evaluator has no clock, only a 'today' string.
 // - before:/after: are exclusive: 'due before: tomorrow' means due <= today.
 // - Project/label names are single tokens (no spaces or &|!(),) and are

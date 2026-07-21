@@ -13,7 +13,7 @@ function csv(...rows: string[]) {
 }
 
 describe("parseTodoistCsv", () => {
-  test("preserves sections, nesting, descriptions, notes, dates, and priorities", () => {
+  test("preserves sections, nesting, descriptions, notes, dates and priorities", () => {
     const project = parseTodoistCsv(
       csv(
         "meta,view_style=list,,,,,,,,,,,,,",
@@ -40,7 +40,7 @@ describe("parseTodoistCsv", () => {
     });
     expect(project.tasks[1].parentKey).toBe(project.tasks[0].key);
     expect(project.comments).toEqual([
-      { taskKey: null, content: "Section note — Planning\n\nA section, with context" },
+      { taskKey: null, content: "Section note: Planning\n\nA section, with context" },
       { taskKey: project.tasks[1].key, content: "A useful note" },
       { taskKey: null, content: "Project context" },
     ]);

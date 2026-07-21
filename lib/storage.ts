@@ -18,7 +18,7 @@ export const BUCKET = process.env.S3_BUCKET!;
 
 let bucketReady: Promise<void> | null = null;
 
-// Idempotent, cached per-process — callers just await this before any
+// Idempotent and cached per process. Callers await this before any
 // putObject/getObject/removeObject.
 export function ensureBucket() {
   bucketReady ??= s3

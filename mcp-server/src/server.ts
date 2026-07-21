@@ -54,7 +54,7 @@ export function createTaskManagerServer(api: TaskApiClient) {
     {
       name: "conatus-task-manager",
       version: "0.1.0",
-      description: "Manage projects, sections, tasks, labels, comments, and reminders",
+      description: "Manage projects, sections, tasks, labels, comments and reminders",
     },
     {
       instructions:
@@ -66,7 +66,7 @@ export function createTaskManagerServer(api: TaskApiClient) {
     "get_workspace_context",
     {
       title: "Get workspace context",
-      description: "Get the authenticated user, timezone, local date, Inbox, server time, and granted scopes.",
+      description: "Get the authenticated user, timezone, local date, Inbox, server time and granted scopes.",
       outputSchema,
       annotations: readOnly,
     },
@@ -101,7 +101,7 @@ export function createTaskManagerServer(api: TaskApiClient) {
     "update_project",
     {
       title: "Update project",
-      description: "Rename, recolor, favorite, archive, or reparent a project. Inbox cannot be renamed or archived.",
+      description: "Rename, recolor, favorite, archive or reparent a project. Inbox cannot be renamed or archived.",
       inputSchema: { projectId: uuid, name: z.string().trim().min(1).max(120).optional(), color: color.optional(), icon: z.string().max(16).nullable().optional(), parentId: uuid.nullable().optional(), isFavorite: z.boolean().optional(), isArchived: z.boolean().optional() },
       outputSchema,
       annotations: mutation,
@@ -186,7 +186,7 @@ export function createTaskManagerServer(api: TaskApiClient) {
     "quick_add_task",
     {
       title: "Quick add task",
-      description: "Parse and create a task from text using #project, @label, p1-p4, dates, times, deadlines in braces, durations, and recurrence.",
+      description: "Parse and create a task from text using #project, @label, p1-p4, dates, times, deadlines in braces, durations and recurrence.",
       inputSchema: { text: z.string().trim().min(1).max(1000), idempotencyKey: z.string().trim().min(1).max(200).optional() },
       outputSchema,
       annotations: { ...mutation, idempotentHint: true },
@@ -266,7 +266,7 @@ export function createTaskManagerServer(api: TaskApiClient) {
   server.registerResource(
     "workspace-context",
     "taskapp://workspace",
-    { title: "Workspace context", description: "User, timezone, local date, Inbox, and scopes", mimeType: "application/json" },
+    { title: "Workspace context", description: "User, timezone, local date, Inbox and scopes", mimeType: "application/json" },
     async (uri) => ({ contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(await api.context()) }] }),
   );
   server.registerResource(

@@ -20,7 +20,7 @@ export default async function RegisterPage({
           <h1 className="text-xl font-semibold">Registration is invite-only</h1>
           <p className="text-sm text-muted-foreground">
             {state.reason === "invalid_invite"
-              ? "This signup link is invalid, expired, or has already been used."
+              ? "This signup link is invalid, expired or has already been used."
               : "Ask the server administrator for a signup link."}
           </p>
           <Link href="/login" className="text-sm underline underline-offset-4">

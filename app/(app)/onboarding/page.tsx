@@ -10,9 +10,9 @@ import { users } from "@/lib/db/schema";
 
 const guide = [
   { Icon: Inbox, title: "Capture", text: "Use New task to put ideas in Inbox before organizing them." },
-  { Icon: SquareCheckBig, title: "Organize", text: "Projects, sections, labels, and subtasks keep related work together." },
+  { Icon: SquareCheckBig, title: "Organize", text: "Projects, sections, labels and subtasks keep related work together." },
   { Icon: CalendarDays, title: "Plan", text: "Focus shows overdue and due work; Calendar helps you plan ahead." },
-  { Icon: Search, title: "Find", text: "Press / anywhere to search tasks, projects, and comments." },
+  { Icon: Search, title: "Find", text: "Press / anywhere to search tasks, projects and comments." },
 ];
 
 export default async function OnboardingPage() {

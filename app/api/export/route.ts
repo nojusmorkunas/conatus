@@ -10,7 +10,7 @@ export async function GET() {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Export covers own projects only — tasks created in someone else's
+  // Export covers own projects only. Tasks created in someone else's
   // shared project stay out so the file round-trips through import.
   const userProjects = await db
     .select()
@@ -32,7 +32,7 @@ export async function GET() {
 
   const taskIds = userTasks.map((task) => task.id);
   const labelIds = userLabels.map((label) => label.id);
-  // Only links to the exporter's own labels — collaborators' label
+  // Only links to the exporter's own labels. Collaborators' label
   // assignments would dangle in the file.
   const userTaskLabels =
     taskIds.length && labelIds.length

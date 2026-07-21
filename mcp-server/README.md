@@ -2,7 +2,7 @@
 
 An independently installable [Model Context Protocol](https://modelcontextprotocol.io/) server for the self-hosted Conatus task manager.
 
-It exposes agent-safe tools for projects, sections, tasks, labels, comments, and reminders. It supports local `stdio` clients and remote Streamable HTTP clients. Permanent deletion is intentionally not exposed.
+It exposes agent-safe tools for projects, sections, tasks, labels, comments and reminders. It supports local `stdio` clients and remote Streamable HTTP clients. Permanent deletion is intentionally not exposed.
 
 ## Requirements
 
@@ -54,7 +54,7 @@ MCP_ALLOWED_ORIGINS=https://your-ai-host.example \
 conatus-mcp-http
 ```
 
-Give the AI client only `https://mcp.example.com/mcp`. A compatible client discovers the protected-resource metadata, dynamically registers itself, opens the approval page, and completes an OAuth authorization-code flow with S256 PKCE. Enter `MCP_OAUTH_PASSWORD` in that page to approve it.
+Give the AI client only `https://mcp.example.com/mcp`. A compatible client discovers the protected-resource metadata, dynamically registers itself, opens the approval page and completes an OAuth authorization-code flow with S256 PKCE. Enter `MCP_OAUTH_PASSWORD` in that page to approve it.
 
 The server issues one-hour access tokens and rotating 30-day refresh tokens. OAuth client registrations and token hashes are stored in the file at `MCP_OAUTH_STORE_PATH` with mode `0600`; raw OAuth tokens and the approval password are not stored. Run one MCP replica per store file. For multiple replicas, replace the JSON store with a shared transactional store first.
 
@@ -67,7 +67,7 @@ The task app and MCP gateway can use separate addresses:
 - `https://tasks.example.com` → the web app and `/api/v1`
 - `https://mcp.example.com/mcp` → this child MCP service
 
-Create DNS records for both names, terminate TLS at your proxy, and forward `mcp.example.com` to port 3001. Only the proxy should expose that port. The OAuth metadata, registration, authorization, token, revocation, approval, and MCP endpoints all share the MCP origin.
+Create DNS records for both names, terminate TLS at your proxy and forward `mcp.example.com` to port 3001. Only the proxy should expose that port. The OAuth metadata, registration, authorization, token, revocation, approval and MCP endpoints all share the MCP origin.
 
 ### Static bearer fallback
 
@@ -94,18 +94,18 @@ docker run --rm -p 127.0.0.1:3001:3001 \
 
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
-| `TASKS_BASE_URL` | yes | — | Task-manager origin, without `/api/v1` |
-| `TASKS_API_TOKEN` | yes | — | `tdm_` scoped token, or a legacy `tdc_` token |
+| `TASKS_BASE_URL` | yes | none | Task-manager origin without `/api/v1` |
+| `TASKS_API_TOKEN` | yes | none | `tdm_` scoped token or a legacy `tdc_` token |
 | `TASKS_REQUEST_TIMEOUT_MS` | no | `15000` | Upstream API timeout |
 | `MCP_HOST` | HTTP only | `127.0.0.1` | HTTP bind address |
 | `MCP_PORT` | HTTP only | `3001` | HTTP port |
 | `MCP_ALLOWED_ORIGINS` | no | task-manager origin | Comma-separated browser origins |
-| `MCP_PUBLIC_URL` | OAuth mode | — | Exact public HTTPS MCP URL ending in `/mcp` |
-| `MCP_OAUTH_PASSWORD` | OAuth mode | — | Separate 16+ byte password entered on the approval page |
+| `MCP_PUBLIC_URL` | OAuth mode | none | Exact public HTTPS MCP URL ending in `/mcp` |
+| `MCP_OAUTH_PASSWORD` | OAuth mode | none | Separate 16+ byte password entered on the approval page |
 | `MCP_OAUTH_STORE_PATH` | no | `./data/oauth-store.json` | Persistent OAuth registrations and token hashes |
-| `MCP_BEARER_TOKEN` | bearer mode | — | Static fallback credential clients use to access MCP |
+| `MCP_BEARER_TOKEN` | bearer mode | none | Static fallback credential clients use to access MCP |
 
-Do not put tokens in prompts, tool arguments, source control, or command-line arguments. Environment variables keep them out of MCP messages and most process listings.
+Do not put tokens in prompts, tool arguments, source control or command-line arguments. Environment variables keep them out of MCP messages and most process listings.
 
 To revoke one OAuth client, let that client call the advertised revocation endpoint. To revoke every connected client, stop the service and remove its OAuth store file, then restart; all clients must connect again. Revoke or rotate `TASKS_API_TOKEN` in task-manager Settings if the gateway itself is compromised.
 

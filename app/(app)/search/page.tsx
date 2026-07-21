@@ -27,7 +27,7 @@ export default async function SearchPage({
       <div className="mx-auto w-full max-w-4xl px-3 py-2 sm:p-6">
         <h1 className="mb-2 text-xl font-semibold">Search</h1>
         <p className="text-sm text-muted-foreground">
-          Enter a search term in the sidebar to find tasks, projects, and comments.
+          Enter a search term in the sidebar to find tasks, projects and comments.
         </p>
       </div>
     );

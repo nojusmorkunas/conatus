@@ -39,7 +39,7 @@ export default function RootLayout({
       <head>
         {/* Raw tag on purpose: next/script beforeInteractive won't execute
             inline bodies here, and the React dev warning this triggers is
-            dev-only noise — the script must run before first paint. */}
+            dev-only noise. The script must run before first paint. */}
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var t=localStorage.getItem("theme");var d=t==="dark"||(t!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d)}catch(e){}})()`,

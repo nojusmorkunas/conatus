@@ -26,7 +26,7 @@ function responseRecorder() {
 }
 
 describe("TaskMcpOAuthProvider", () => {
-  test("persists a PKCE grant, rotates refresh tokens, and stores only token hashes", async () => {
+  test("persists a PKCE grant, rotates refresh tokens and stores only token hashes", async () => {
     const directory = await mkdtemp(join(tmpdir(), "task-mcp-oauth-"));
     temporaryDirectories.push(directory);
     const storePath = join(directory, "oauth.json");

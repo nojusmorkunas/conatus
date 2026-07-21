@@ -15,7 +15,7 @@ export type ActivityEventType =
   | "project.deleted";
 
 // ponytail: field edits (content/description/priority/due/labels/reorder)
-// are deliberately not logged — scope cut, add if the log feels too sparse.
+// are deliberately not logged. This is a scope cut that can change if needed.
 export async function logActivity(event: {
   userId: string;
   type: ActivityEventType;

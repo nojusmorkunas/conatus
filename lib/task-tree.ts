@@ -173,7 +173,7 @@ export function projectTaskDepth({
   // Canonical sortable-tree projection: depth comes from the drop slot's
   // section-confined neighbours and the horizontal offset, never pinned to the
   // active row's original depth. This lets a subtask dropped ABOVE its own
-  // parent promote out — a child can never render above its parent.
+  // parent promote out because a child can never render above its parent.
   const projectedDepth = crossesSectionBoundary ? 0 : active.depth + dragDepthDelta;
   const minimum = next?.depth ?? 0;
   const maximum = crossesSectionBoundary

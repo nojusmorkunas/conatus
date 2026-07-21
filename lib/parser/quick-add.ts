@@ -131,7 +131,7 @@ function matchTime(word: string): string | null {
 }
 
 // "for <duration>" starting at words[i], e.g. "for 2h", "for 90m", "for
-// 1h30m". Requires the "for" prefix — a bare "2h" is ambiguous with matchTime
+// 1h30m". Requires the "for" prefix because a bare "2h" is ambiguous with matchTime
 // (24h-style hour tokens like "23" or combined with "at") so it's not treated
 // as a duration on its own.
 function matchDuration(words: string[], i: number): { minutes: number; length: number } | null {

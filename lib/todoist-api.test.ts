@@ -3,7 +3,7 @@ import { describe, expect, test, vi } from "vitest";
 import { fetchTodoistProjects, parseTodoistSync } from "./todoist-api";
 
 describe("Todoist API import", () => {
-  test("keeps current recurring dates and maps hierarchy, notes, labels, and priority", () => {
+  test("keeps current recurring dates and maps hierarchy, notes, labels and priority", () => {
     const [project] = parseTodoistSync({
       projects: [{ id: "p1", name: "Work [6g8WPqw25HQhcQgV]", child_order: 1 }],
       sections: [{ id: "s1", project_id: "p1", name: "Next", section_order: 1 }],

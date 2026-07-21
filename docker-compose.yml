@@ -3,15 +3,15 @@ services:
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: app
-      POSTGRES_PASSWORD: app
-      POSTGRES_DB: app
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-app}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U app"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -25,8 +25,8 @@ services:
       MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
       MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minioadmin}
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:${MINIO_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
     volumes:
       - minio-data:/data
 
@@ -46,9 +46,9 @@ services:
         condition: service_healthy
     environment:
       PGHOST: db
-      PGUSER: app
-      PGPASSWORD: app
-      PGDATABASE: app
+      PGUSER: ${POSTGRES_USER:-app}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      PGDATABASE: ${POSTGRES_DB:-app}
       BACKUP_INTERVAL: ${BACKUP_INTERVAL:-86400}
       BACKUP_KEEP: ${BACKUP_KEEP:-7}
     volumes:
@@ -63,31 +63,29 @@ services:
         done
 
   migrate:
-    build:
-      context: .
-      target: migrate
+    image: ${CONATUS_IMAGE:-ghcr.io/nojusmorkunas/conatus}:${CONATUS_VERSION:-latest}-ops
+    command: ["npm", "run", "migrate"]
     restart: "no"
     depends_on:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://app:app@db:5432/app
+      DATABASE_URL: postgres://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-app}
 
   bootstrap:
-    build:
-      context: .
-      target: bootstrap
+    image: ${CONATUS_IMAGE:-ghcr.io/nojusmorkunas/conatus}:${CONATUS_VERSION:-latest}-ops
+    command: ["npm", "run", "bootstrap"]
     restart: "no"
     depends_on:
       migrate:
         condition: service_completed_successfully
     environment:
-      DATABASE_URL: postgres://app:app@db:5432/app
+      DATABASE_URL: postgres://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-app}
       CONATUS_ADMIN_USERNAME: ${CONATUS_ADMIN_USERNAME:-}
       CONATUS_ADMIN_PASSWORD: ${CONATUS_ADMIN_PASSWORD:-}
 
   app:
-    build: .
+    image: ${CONATUS_IMAGE:-ghcr.io/nojusmorkunas/conatus}:${CONATUS_VERSION:-latest}
     restart: unless-stopped
     depends_on:
       db:
@@ -97,31 +95,32 @@ services:
       bootstrap:
         condition: service_completed_successfully
     environment:
-      DATABASE_URL: postgres://app:app@db:5432/app
+      DATABASE_URL: postgres://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-app}
       AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
       AUTH_URL: ${AUTH_URL:-}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+      REGISTRATION_MODE: ${REGISTRATION_MODE:-invite-only}
       S3_ENDPOINT: minio
       S3_PORT: 9000
-      S3_ACCESS_KEY: minioadmin
-      S3_SECRET_KEY: minioadmin
-      S3_BUCKET: attachments
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in .env}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env}
+      S3_BUCKET: ${S3_BUCKET:-attachments}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-}
       SMTP_FROM: ${SMTP_FROM:-}
+      ERROR_WEBHOOK_URL: ${ERROR_WEBHOOK_URL:-}
     ports:
-      - "3000:3000"
+      - "${CONATUS_BIND_ADDRESS:-0.0.0.0}:${CONATUS_PORT:-3000}:3000"
 
-  # Optional per-user MCP proxy. Start with: docker compose --profile mcp up --build
+  # Optional per-user MCP proxy. Start with: docker compose --profile mcp up -d
   # Create a scoped tdm_ token in Settings before enabling this profile.
   mcp:
     profiles: ["mcp"]
-    build:
-      context: ./mcp-server
+    image: ${CONATUS_MCP_IMAGE:-ghcr.io/nojusmorkunas/conatus-mcp}:${CONATUS_VERSION:-latest}
     restart: unless-stopped
     depends_on:
       app:
-        condition: service_started
+        condition: service_healthy
     environment:
       TASKS_BASE_URL: http://app:3000
       TASKS_API_TOKEN: ${TASKS_API_TOKEN:-tdm_configure_a_real_token_before_starting}
@@ -136,6 +135,12 @@ services:
       - "127.0.0.1:3001:3001"
     volumes:
       - mcp-oauth-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   db-data:

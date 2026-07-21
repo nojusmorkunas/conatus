@@ -39,7 +39,7 @@ export async function GET() {
       },
       "/tasks/quick-add": { post: { operationId: "quickAddTask", responses: { "201": { description: "Parsed and created task" } } } },
       "/tasks/{id}": {
-        get: { operationId: "getTask", parameters: [{ $ref: "#/components/parameters/id" }], responses: { "200": { description: "Task with labels, comments, and reminders" } } },
+        get: { operationId: "getTask", parameters: [{ $ref: "#/components/parameters/id" }], responses: { "200": { description: "Task with labels, comments and reminders" } } },
         patch: { operationId: "updateTask", parameters: [{ $ref: "#/components/parameters/id" }], responses: { "200": { description: "Updated task" } } },
         delete: { operationId: "deleteTask", parameters: [{ $ref: "#/components/parameters/id" }], responses: { "200": { description: "Deleted task" } } },
       },

@@ -89,7 +89,7 @@ describe("nextOccurrence", () => {
   });
 
   test("every 3 days keeps its cadence when overdue", () => {
-    // From 07-07: 07-10, 07-13, 07-16 — first one after today.
+    // From 07-07: 07-10, 07-13, 07-16. The first one is after today.
     expect(nextOccurrence("every 3 days", "2026-07-07", today)).toBe("2026-07-16");
   });
 
@@ -114,7 +114,7 @@ describe("nextOccurrence", () => {
   });
 
   test("every month keeps the day-31 anchor across a clamped month", () => {
-    // Overdue from Jan 31: Feb 28, Mar 31 — anchor not stuck at 28.
+    // Overdue from Jan 31: Feb 28, Mar 31. The anchor is not stuck at 28.
     expect(nextOccurrence("every month", "2026-01-31", "2026-03-01")).toBe("2026-03-31");
   });
 

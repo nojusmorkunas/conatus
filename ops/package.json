@@ -1,0 +1,19 @@
+{
+  "name": "conatus-ops",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "migrate": "tsx scripts/migrate.ts",
+    "bootstrap": "tsx scripts/bootstrap-admin.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.2",
+    "fractional-indexing": "^4.0.0",
+    "postgres": "^3.4.9",
+    "tsx": "^4.23.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

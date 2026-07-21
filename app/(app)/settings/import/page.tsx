@@ -19,7 +19,7 @@ export default async function TodoistImportPage() {
         <p className="text-sm font-medium text-muted-foreground">Data migration</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Import from Todoist</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Bring over projects, sections, nested tasks, dates, deadlines, recurring schedules, descriptions, and notes from a Todoist backup.
+          Bring over projects, sections, nested tasks, dates, deadlines, recurring schedules, descriptions and notes from a Todoist backup.
         </p>
       </div>
       <TodoistImporter />

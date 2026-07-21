@@ -66,7 +66,7 @@ export function parseRecurrence(text: string): string | null {
 // DST stance: all recurrence math is calendar-date arithmetic on
 // 'YYYY-MM-DD' strings via Date.UTC. A due *time* is stored separately and
 // never shifted by this module, so DST transitions cannot skew occurrences
-// by construction — no timezone database needed.
+// by construction, so no timezone database is needed.
 function addDays(date: string, n: number): string {
   const utc = new Date(`${date}T00:00:00Z`);
   utc.setUTCDate(utc.getUTCDate() + n);
@@ -104,7 +104,7 @@ export function nextOccurrence(rule: string, from: string, today: string): strin
   // "other <weekday>": fortnightly, anchor-preserving. The anchor is `from`
   // itself when it falls on the weekday, else the first such weekday after
   // it; occurrences are anchor + 14k. A long-overdue task catches up to the
-  // next occurrence that keeps the original fortnight parity — it does not
+  // next occurrence that keeps the original fortnight parity. It does not
   // reset to "next <weekday> after today".
   if (words[1] === "other") {
     const day = weekdayIndex(words[2]);

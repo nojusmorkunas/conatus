@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+/ops/node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -35,6 +36,11 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+
+# Keep public Markdown limited to readmes and contribution instructions.
+*.md
+!README.md
+!CONTRIBUTING.md
 
 # vercel
 .vercel

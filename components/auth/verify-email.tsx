@@ -40,7 +40,7 @@ export function VerifyEmail({ token }: { token?: string }) {
       <div className="space-y-3">
         <h1 className="text-xl font-semibold">Email verified</h1>
         <p className="text-sm text-muted-foreground">
-          Email verified — you can now log in.
+          Email verified. You can now log in.
         </p>
         <Link href="/login" className="text-sm underline underline-offset-4">
           Log in

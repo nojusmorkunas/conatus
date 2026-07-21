@@ -333,7 +333,7 @@ export function parseTodoistCsv(
       if (row.DESCRIPTION.trim()) {
         comments.push({
           taskKey: null,
-          content: `Section note — ${name}\n\n${row.DESCRIPTION.trim()}`,
+          content: `Section note: ${name}\n\n${row.DESCRIPTION.trim()}`,
         });
       }
       return;

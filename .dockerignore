@@ -4,6 +4,7 @@
 !.env.example
 .next
 node_modules
+ops/node_modules
 test-results
 playwright-report
 coverage

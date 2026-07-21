@@ -9,7 +9,7 @@ export function escapeText(value: string): string {
 }
 
 // ponytail: folds on a fixed 74-char chunk size rather than counting UTF-8
-// octets exactly (RFC wants a fold before byte 76) — fine for ASCII-heavy
+// octets exactly (RFC wants a fold before byte 76). This is fine for ASCII-heavy
 // task text, would need real byte counting for wide-char-heavy content.
 export function foldLine(line: string): string {
   if (line.length <= 75) return line;
@@ -31,7 +31,7 @@ export type IcalTask = {
 function dtstart(task: IcalTask): string {
   const date = task.dueDate.replace(/-/g, "");
   if (!task.dueTime) return `DTSTART;VALUE=DATE:${date}`;
-  // Floating local time: no Z suffix, no TZID. The honest lazy choice —
+  // Floating local time: no Z suffix and no TZID. The honest lazy choice is to
   // this app stores due times as wall-clock, not a specific IANA zone per
   // task, so there's no correct TZID to attach.
   const time = task.dueTime.replace(":", "") + "00";
