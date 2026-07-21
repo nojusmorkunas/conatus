@@ -70,40 +70,6 @@ For upgrades, update `CONATUS_VERSION` then run `docker compose up -d` again.
 Back up the database before upgrading because some migrations require a restore
 to roll back safely.
 
-## Local development
-
-```bash
-cp .env.example .env
-npm install
-npm run dev
-```
-
-Attachments need a MinIO container. Email reminders are optional and activate
-only when all SMTP variables are configured; everything else runs without mail.
-
-Registration is invite-only. On an empty database, `/register` allows the
-first username/password account to bootstrap the server and makes that account
-the instance administrator. No email address or SMTP configuration is required.
-After signing in, that administrator can create single-use, seven-day signup
-links under **Settings → Registration**.
-
-Maintainers can build and run the current checkout with the build override:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.build.yml up --build
-```
-
-When both
-bootstrap variables are set, an administrator is created only if the
-database is empty. Existing accounts are never updated from the environment.
-After the first login, change the password under **Settings → Account**, then remove both
-bootstrap variables from `.env` and remove the stopped container that held the
-initial password:
-
-```bash
-docker compose rm -f bootstrap
-```
-
 ## API and MCP access
 
 Create a scoped access token in Settings. The token is shown only once,
