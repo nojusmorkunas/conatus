@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { filters, labels } from "@/lib/db/schema";
 import { FiltersLabelsManager } from "@/components/filters-labels/filters-labels-manager";
+import { MobilePageHeader } from "@/components/projects/mobile-sidebar-trigger";
 
 export default async function FiltersLabelsPage() {
   const user = await requireUser();
@@ -16,7 +17,9 @@ export default async function FiltersLabelsPage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl p-6">
-      <h1 className="mb-8 text-xl font-semibold">Filters &amp; Labels</h1>
+      <MobilePageHeader className="mb-8">
+        <h1 className="text-xl font-semibold">Filters &amp; Labels</h1>
+      </MobilePageHeader>
       <FiltersLabelsManager initialFilters={userFilters} initialLabels={userLabels} />
     </div>
   );

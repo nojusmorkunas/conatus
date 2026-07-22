@@ -6,6 +6,7 @@ import { accessibleProjectIds } from "@/lib/db/access";
 import { tasks, users } from "@/lib/db/schema";
 import { addDays, monthGridStart, todayInTimezone, weekStartOf } from "@/lib/dates";
 import { CalendarView } from "@/components/calendar/calendar-view";
+import { MobilePageHeader } from "@/components/projects/mobile-sidebar-trigger";
 
 export default async function CalendarPage({
   searchParams,
@@ -49,7 +50,9 @@ export default async function CalendarPage({
 
   return (
     <div className="flex h-full w-full flex-col px-3 py-2 sm:p-6">
-      <h1 className="mb-4 text-xl font-semibold">Calendar</h1>
+      <MobilePageHeader className="mb-4">
+        <h1 className="text-xl font-semibold">Calendar</h1>
+      </MobilePageHeader>
       <CalendarView
         view={view}
         month={month}

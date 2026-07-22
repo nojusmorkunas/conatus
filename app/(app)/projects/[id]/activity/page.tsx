@@ -7,6 +7,7 @@ import { requireProjectAccess } from "@/lib/db/access";
 import { activityEvents, users } from "@/lib/db/schema";
 import { todayInTimezone } from "@/lib/dates";
 import { ActivityList } from "@/components/activity/activity-list";
+import { MobilePageHeader } from "@/components/projects/mobile-sidebar-trigger";
 
 const LIMIT = 200;
 
@@ -39,7 +40,9 @@ export default async function ProjectActivityPage({
 
   return (
     <div className="mx-auto w-full max-w-2xl p-6">
-      <h1 className="mb-6 text-xl font-semibold">{project.name} · Activity</h1>
+      <MobilePageHeader className="mb-6">
+        <h1 className="text-xl font-semibold">{project.name} · Activity</h1>
+      </MobilePageHeader>
       <ActivityList
         events={events}
         today={todayInTimezone(settings.timezone)}

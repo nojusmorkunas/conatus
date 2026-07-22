@@ -8,6 +8,7 @@ import type { SettingsInput } from "@/lib/validation";
 import { AccountSettings } from "@/components/account/account-settings";
 import { RegistrationInvites } from "@/components/admin/registration-invites";
 import { SettingsForm } from "./settings-form";
+import { MobilePageHeader } from "@/components/projects/mobile-sidebar-trigger";
 
 export default async function SettingsPage() {
   const sessionUser = await requireSessionUser();
@@ -75,7 +76,9 @@ export default async function SettingsPage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-3 py-2 sm:p-6">
-      <h1 className="mb-6 text-xl font-semibold">Settings</h1>
+      <MobilePageHeader className="mb-6">
+        <h1 className="text-xl font-semibold">Settings</h1>
+      </MobilePageHeader>
       <div className="lg:grid lg:grid-cols-[10rem_minmax(0,1fr)] lg:gap-10">
         <nav
           aria-label="Settings sections"

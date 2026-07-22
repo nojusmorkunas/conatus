@@ -7,6 +7,7 @@ import { labels, projects, tasks, users } from "@/lib/db/schema";
 import { todayInTimezone } from "@/lib/dates";
 import { withCommentCounts, withLabels } from "@/lib/db/task-labels";
 import { ProjectColorDot } from "@/components/projects/project-color-dot";
+import { MobilePageHeader } from "@/components/projects/mobile-sidebar-trigger";
 import { TaskDateList } from "@/components/tasks/task-date-list";
 
 export default async function LabelPage({
@@ -72,10 +73,10 @@ export default async function LabelPage({
 
   return (
     <div className="mx-auto w-full max-w-2xl p-6">
-      <div className="mb-6 flex items-center gap-2">
+      <MobilePageHeader className="mb-6">
         <ProjectColorDot color={label.color} />
         <h1 className="text-xl font-semibold">{label.name}</h1>
-      </div>
+      </MobilePageHeader>
       {matches.length === 0 ? (
         <p className="text-sm text-muted-foreground">No matching tasks.</p>
       ) : (

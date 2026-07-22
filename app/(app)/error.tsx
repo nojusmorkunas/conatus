@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 
 import { Button } from "@/components/ui/button";
+import { MobileSidebarTrigger } from "@/components/projects/mobile-sidebar-trigger";
 import { reportClientError } from "@/lib/client-error-reporter";
 
 export default function Error({
@@ -23,6 +24,7 @@ export default function Error({
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 p-16">
+      <MobileSidebarTrigger />
       <p className="text-sm text-muted-foreground">Something went wrong.</p>
       <Button variant="outline" size="sm" onClick={reset}>
         Try again

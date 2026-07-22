@@ -4,6 +4,7 @@ import { CalendarDays, Inbox, Search, SquareCheckBig } from "lucide-react";
 
 import { TodoistImporter } from "@/components/import/todoist-importer";
 import { OnboardingSkip } from "@/components/onboarding/onboarding-skip";
+import { MobileSidebarTrigger } from "@/components/projects/mobile-sidebar-trigger";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
@@ -28,12 +29,15 @@ export default async function OnboardingPage() {
   return (
     <div className="mx-auto w-full max-w-5xl p-5 md:p-8">
       <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div className="flex items-start gap-2">
+          <MobileSidebarTrigger />
+          <div>
           <p className="text-sm font-medium text-muted-foreground">Welcome</p>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight">Set up your workspace</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
             Here is the whole app in a minute. You can start clean or bring your current Todoist workspace with you.
           </p>
+          </div>
         </div>
         <OnboardingSkip />
       </header>

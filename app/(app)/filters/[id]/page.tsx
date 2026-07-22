@@ -8,6 +8,7 @@ import { withCommentCounts, withLabels } from "@/lib/db/task-labels";
 import { todayInTimezone } from "@/lib/dates";
 import { parseFilter, evaluateFilter, type FilterableTask } from "@/lib/filter";
 import { TaskDateList } from "@/components/tasks/task-date-list";
+import { MobilePageHeader } from "@/components/projects/mobile-sidebar-trigger";
 
 export default async function FilterPage({
   params,
@@ -116,7 +117,9 @@ export default async function FilterPage({
 function Header({ name, query }: { name: string; query: string }) {
   return (
     <div className="mb-6">
-      <h1 className="text-xl font-semibold">{name}</h1>
+      <MobilePageHeader>
+        <h1 className="text-xl font-semibold">{name}</h1>
+      </MobilePageHeader>
       <p className="mt-1 font-mono text-xs text-muted-foreground">{query}</p>
     </div>
   );

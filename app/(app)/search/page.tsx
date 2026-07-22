@@ -2,6 +2,7 @@ import Link from "next/link";
 import { and, asc, desc, eq, ilike, inArray, or } from "drizzle-orm";
 
 import { DueChip } from "@/components/tasks/task-row";
+import { MobilePageHeader } from "@/components/projects/mobile-sidebar-trigger";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { accessibleProjectIds } from "@/lib/db/access";
@@ -25,7 +26,9 @@ export default async function SearchPage({
   if (!query) {
     return (
       <div className="mx-auto w-full max-w-4xl px-3 py-2 sm:p-6">
-        <h1 className="mb-2 text-xl font-semibold">Search</h1>
+        <MobilePageHeader className="mb-2">
+          <h1 className="text-xl font-semibold">Search</h1>
+        </MobilePageHeader>
         <p className="text-sm text-muted-foreground">
           Enter a search term in the sidebar to find tasks, projects and comments.
         </p>
@@ -97,10 +100,14 @@ export default async function SearchPage({
 
   return (
     <div className="mx-auto w-full max-w-4xl px-3 py-2 sm:p-6">
-      <h1 className="text-xl font-semibold">Search</h1>
-      <p className="mb-6 mt-1 text-sm text-muted-foreground">
-        Results for <span className="font-medium text-foreground">{query}</span>
-      </p>
+      <div className="mb-6">
+        <MobilePageHeader>
+          <h1 className="text-xl font-semibold">Search</h1>
+        </MobilePageHeader>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Results for <span className="font-medium text-foreground">{query}</span>
+        </p>
+      </div>
 
       {!hasResults && (
         <p className="text-sm text-muted-foreground">No results found.</p>

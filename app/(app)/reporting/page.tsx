@@ -7,6 +7,7 @@ import { activityEvents, projects, tasks, users } from "@/lib/db/schema";
 import { pastDateLabel, todayInTimezone } from "@/lib/dates";
 import { ActivityList } from "@/components/activity/activity-list";
 import { CompletedTaskList } from "@/components/tasks/completed-task-list";
+import { MobilePageHeader } from "@/components/projects/mobile-sidebar-trigger";
 
 const LIMIT = 200;
 
@@ -55,7 +56,9 @@ export default async function ReportingPage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl px-3 py-6 sm:p-6">
-      <h1 className="mb-8 text-xl font-semibold">Reporting</h1>
+      <MobilePageHeader className="mb-8">
+        <h1 className="text-xl font-semibold">Reporting</h1>
+      </MobilePageHeader>
       <div className="space-y-10">
         <section>
           <h2 className="mb-4 text-base font-semibold">Completed</h2>

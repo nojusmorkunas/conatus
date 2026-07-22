@@ -8,6 +8,7 @@ import { withCommentCounts, withLabels } from "@/lib/db/task-labels";
 import { todayInTimezone } from "@/lib/dates";
 import { TaskDateList } from "@/components/tasks/task-date-list";
 import { EmptyState } from "@/components/ui/empty-state";
+import { MobilePageHeader } from "@/components/projects/mobile-sidebar-trigger";
 import { CheckCircle2 } from "lucide-react";
 
 export default async function TodayPage() {
@@ -56,7 +57,9 @@ export default async function TodayPage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl px-3 py-6 sm:p-6">
-      <h1 className="mb-6 text-xl font-semibold">Today</h1>
+      <MobilePageHeader className="mb-6">
+        <h1 className="text-xl font-semibold">Today</h1>
+      </MobilePageHeader>
       <TaskDateList
         initialGroups={groups}
         labels={userLabels}

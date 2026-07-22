@@ -9,6 +9,7 @@ import { dueLabel, formatDate, todayInTimezone } from "@/lib/dates";
 import { TaskDateList } from "@/components/tasks/task-date-list";
 import type { TaskDateGroup } from "@/components/tasks/task-date-list";
 import { EmptyState } from "@/components/ui/empty-state";
+import { MobilePageHeader } from "@/components/projects/mobile-sidebar-trigger";
 import { CalendarDays } from "lucide-react";
 
 export default async function UpcomingPage() {
@@ -58,7 +59,9 @@ export default async function UpcomingPage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl px-3 py-6 sm:p-6">
-      <h1 className="mb-6 text-xl font-semibold">Upcoming</h1>
+      <MobilePageHeader className="mb-6">
+        <h1 className="text-xl font-semibold">Upcoming</h1>
+      </MobilePageHeader>
       <TaskDateList
         initialGroups={groups}
         labels={userLabels}

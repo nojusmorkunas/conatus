@@ -7,7 +7,6 @@ import type {
   projects,
   sections as sectionsTable,
 } from "@/lib/db/schema";
-import { cn } from "@/lib/utils";
 import { Board } from "@/components/board/board";
 import { TaskList, type TaskWithLabels } from "@/components/tasks/task-list";
 import type { SortBy } from "@/lib/task-sort";
@@ -73,12 +72,7 @@ export function ProjectView({
   }
 
   return (
-    <div
-      className={cn(
-        "w-full px-3 pb-10 sm:px-6 md:px-8 lg:pl-10",
-        view === "list" && "mx-auto max-w-4xl",
-      )}
-    >
+    <div className="mx-auto w-full max-w-4xl px-3 pb-10 sm:px-6 md:px-8 lg:pl-10">
       <ProjectHeader
         project={project}
         role={role}

@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { activityEvents, users } from "@/lib/db/schema";
 import { dateInTimezone, todayInTimezone } from "@/lib/dates";
 import { computeStats } from "@/lib/stats";
+import { MobilePageHeader } from "@/components/projects/mobile-sidebar-trigger";
 
 export default async function StatsPage() {
   const user = await requireUser();
@@ -38,7 +39,9 @@ export default async function StatsPage() {
 
   return (
     <div className="mx-auto w-full max-w-2xl p-6">
-      <h1 className="mb-6 text-xl font-semibold">Stats</h1>
+      <MobilePageHeader className="mb-6">
+        <h1 className="text-xl font-semibold">Stats</h1>
+      </MobilePageHeader>
 
       <div className="space-y-4">
         <section className="rounded-lg border border-border p-4">

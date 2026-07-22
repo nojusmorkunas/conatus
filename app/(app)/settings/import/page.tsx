@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 
 import { TodoistImporter } from "@/components/import/todoist-importer";
+import { MobileSidebarTrigger } from "@/components/projects/mobile-sidebar-trigger";
 import { requireSessionUser } from "@/lib/auth/session";
 
 export default async function TodoistImportPage() {
@@ -11,10 +12,13 @@ export default async function TodoistImportPage() {
 
   return (
     <main className="mx-auto w-full max-w-4xl p-6 pb-16">
-      <Link href="/settings#data" className="mb-5 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-        <ChevronLeft className="size-4" />
-        Back to settings
-      </Link>
+      <div className="mb-5 flex items-center gap-2">
+        <MobileSidebarTrigger />
+        <Link href="/settings#data" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+          <ChevronLeft className="size-4" />
+          Back to settings
+        </Link>
+      </div>
       <div className="mb-7">
         <p className="text-sm font-medium text-muted-foreground">Data migration</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Import from Todoist</h1>

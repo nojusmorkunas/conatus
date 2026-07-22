@@ -81,14 +81,16 @@ export function LabelRow({
   return (
     <div
       className={cn(
-        "group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted focus-within:bg-muted",
+        "group flex h-9 shrink-0 items-center gap-2 rounded-lg border border-transparent py-1 pr-1.5 pl-2 text-sm transition-all hover:bg-background/65 focus-within:bg-background/65",
       )}
     >
       <Link
         href={`/labels/${label.id}`}
-        className="flex min-w-0 flex-1 items-center gap-2 truncate"
+        className="flex !min-h-0 min-w-0 flex-1 self-stretch items-center gap-2 truncate"
       >
-        <ProjectColorDot color={label.color} />
+        <span className="flex size-7 shrink-0 items-center justify-center">
+          <ProjectColorDot color={label.color} />
+        </span>
         <span className="truncate">{label.name}</span>
       </Link>
       <DropdownMenu>

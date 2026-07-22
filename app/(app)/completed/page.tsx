@@ -6,6 +6,7 @@ import { accessibleProjectIds } from "@/lib/db/access";
 import { projects, tasks, users } from "@/lib/db/schema";
 import { pastDateLabel, todayInTimezone } from "@/lib/dates";
 import { CompletedTaskList } from "@/components/tasks/completed-task-list";
+import { MobilePageHeader } from "@/components/projects/mobile-sidebar-trigger";
 
 const LIMIT = 200;
 
@@ -53,7 +54,9 @@ export default async function CompletedPage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl px-3 py-6 sm:p-6">
-      <h1 className="mb-6 text-xl font-semibold">Completed</h1>
+      <MobilePageHeader className="mb-6">
+        <h1 className="text-xl font-semibold">Completed</h1>
+      </MobilePageHeader>
       <CompletedTaskList
         initialGroups={groups}
         timezone={settings.timezone}
