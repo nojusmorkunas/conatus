@@ -2,11 +2,9 @@
   <img src="./public/conatus-logo.png" alt="Conatus laurel logo" width="150">
 </p>
 
-<p align="center"><strong><font size="6">Conatus</font></strong></p>
+<h1 align="center">Conatus</h1>
 
 <p align="center"><em>Every goal starts with a next step.</em></p>
-
----
 
 Conatus is a self-hosted task manager for projects, recurring work, reminders and collaboration inspired by Todoist.
 
