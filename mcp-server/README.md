@@ -14,6 +14,16 @@ It exposes agent-safe tools for projects, sections, tasks, labels, comments and 
 
 The local mode is the recommended default. The AI host starts one MCP process for the configured task-manager account.
 
+### One-command setup
+
+Run the interactive installer to validate your Conatus URL and scoped API token, then register the server with Claude Desktop, Cursor, or another JSON MCP configuration file:
+
+```bash
+npx -y @conatus/mcp-server setup
+```
+
+The installer never echoes the token, verifies it before changing a config file, and restricts the written configuration file to owner-only permissions where the operating system supports them. Restart the chosen client when it finishes. The direct configuration below remains the non-interactive fallback.
+
 ```json
 {
   "mcpServers": {
@@ -143,7 +153,7 @@ Test the built stdio server with MCP Inspector:
 ```bash
 TASKS_BASE_URL=http://localhost:3000 \
 TASKS_API_TOKEN=tdm_replace_me \
-npx @modelcontextprotocol/inspector node dist/stdio.js
+npx @modelcontextprotocol/inspector node dist/cli.js
 ```
 
 ## Publishing

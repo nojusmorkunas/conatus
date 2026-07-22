@@ -51,6 +51,8 @@ export type TodoistProjectImport = {
   sourceId: string;
   parentSourceId: string | null;
   name: string;
+  /** Todoist marks this separately in its Sync API; CSV backups use the name. */
+  isInbox?: boolean;
   sections: TodoistSectionImport[];
   tasks: TodoistTaskImport[];
   comments: TodoistCommentImport[];

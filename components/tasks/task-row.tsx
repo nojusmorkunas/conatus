@@ -267,21 +267,6 @@ export function TaskRow({
             style={{ left: depth * 28 + (directChildren.length > 0 ? 4 : 20) }}
           />
         )}
-        {directChildren.length > 0 && (
-          <button
-            type="button"
-            aria-label={collapsed ? "Expand subtasks" : "Collapse subtasks"}
-            className="task-row-collapse absolute top-2 flex size-5 items-center justify-center text-muted-foreground after:absolute after:-inset-3"
-            style={{ left: depth * 28 + 24 }}
-            onClick={(event) => {
-              event.stopPropagation();
-              onToggleCollapsed?.(task.id);
-            }}
-          >
-            <ChevronRight className={cn("size-3 transition-transform", !collapsed && "rotate-90")} />
-          </button>
-        )}
-
         {selecting ? (
           <input
             type="checkbox"
@@ -300,12 +285,7 @@ export function TaskRow({
           />
         )}
 
-        <div
-          className={cn(
-            "min-w-0 flex-1 sm:pr-40",
-            directChildren.length > 0 ? "pr-20" : "pr-14",
-          )}
-        >
+        <div className="min-w-0 flex-1">
           <TaskContent task={task} />
 
           {task.description?.trim() && (
@@ -345,8 +325,26 @@ export function TaskRow({
           )}
         </div>
 
-        {!selecting && (
-          <div className="absolute top-1.5 right-1.5 flex items-center gap-0.5 rounded-md bg-muted px-0.5 py-0.5 opacity-100 shadow-sm ring-1 ring-border/80 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
+        <div
+          className={cn(
+            "absolute top-1.5 right-1.5 flex items-center gap-0.5",
+            !selecting && "rounded-md bg-muted px-0.5 py-0.5 opacity-100 shadow-sm ring-1 ring-border/80 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100",
+          )}
+        >
+          {directChildren.length > 0 && (
+            <button
+              type="button"
+              aria-label={collapsed ? "Expand subtasks" : "Collapse subtasks"}
+              className="flex size-5 items-center justify-center text-muted-foreground after:absolute after:-inset-3"
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleCollapsed?.(task.id);
+              }}
+            >
+              <ChevronRight className={cn("size-3 transition-transform", !collapsed && "rotate-90")} />
+            </button>
+          )}
+          {!selecting && (
             <TaskContextMenu
               task={task}
               today={today}
@@ -368,8 +366,8 @@ export function TaskRow({
               onDuplicate={() => onDuplicate?.(task)}
               onDelete={() => onDelete(task)}
             />
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {addingTask === "below" && (
@@ -533,10 +531,11 @@ export function DueChip({
               : "text-muted-foreground",
       )}
     >
-      {task.recurrence && <Repeat aria-label={task.recurrence} className="size-3.5" />}
+      {task.recurrence && <Repeat aria-label={`Repeats ${task.recurrence}`} className="size-3.5" />}
       <CalendarDays className="size-3.5" />
       {dueLabel(task.dueDate, today, dateFormat)}
       {task.dueTime && ` ${task.dueTime}`}
+      {task.recurrence && <span className="sr-only">, repeats {task.recurrence}</span>}
     </span>
   );
 }

@@ -9,6 +9,7 @@ import {
   History,
   LayoutGrid,
   ListTodo,
+  Menu,
   MessageSquare,
   Star,
   Users,
@@ -33,7 +34,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ProjectCommentsPanel } from "./project-comments-panel";
-import { ProjectColorDot } from "./project-color-dot";
+import { projectColorTextClass } from "./project-color-dot";
 import { ProjectIcon } from "./project-icons";
 
 type Project = typeof projects.$inferSelect;
@@ -45,8 +46,6 @@ export function ProjectHeader({
   members,
   currentUserId,
   projectCommentCount,
-  openTaskCount,
-  sectionCount,
   view,
   sortBy,
   onViewChange,
@@ -57,8 +56,6 @@ export function ProjectHeader({
   members: Member[];
   currentUserId: string;
   projectCommentCount: number;
-  openTaskCount: number;
-  sectionCount: number;
   view: "list" | "board";
   sortBy: SortBy;
   onViewChange: (view: "list" | "board") => void;
@@ -70,6 +67,8 @@ export function ProjectHeader({
   const [parentId, setParentId] = useState(project.parentId ?? "none");
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [commentCount, setCommentCount] = useState(projectCommentCount);
+  const [editingName, setEditingName] = useState(false);
+  const [name, setName] = useState(project.name);
   const isOwner = role === "owner";
 
   useEffect(() => {
@@ -118,25 +117,65 @@ export function ProjectHeader({
     router.refresh();
   }
 
+  async function saveName() {
+    const nextName = name.trim();
+    setEditingName(false);
+    if (!nextName || nextName === project.name) {
+      setName(project.name);
+      return;
+    }
+    const response = await fetch(`/api/projects/${project.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: nextName }),
+    });
+    if (!response.ok) setName(project.name);
+    router.refresh();
+  }
+
   return (
-    <div className="mb-8 border-b border-border/70 pb-5">
+    <div className="sticky top-0 z-30 -mx-3 mb-8 border-b border-border/70 bg-background/95 px-3 pt-3 pb-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:-mx-8 md:px-8 md:pb-5 lg:-ml-10 lg:pl-10">
       <div className="flex items-start justify-between gap-1 sm:gap-5">
-        <div className="flex min-w-0 flex-1 items-start gap-2 sm:gap-3.5">
-          <div className="relative mt-0.5 flex size-11 shrink-0 items-center justify-center rounded-xl border border-border bg-muted/45 text-muted-foreground shadow-sm">
-            <ProjectIcon icon={project.icon} className="size-5" />
-            <ProjectColorDot
-              color={project.color}
-              className="absolute -right-0.5 -bottom-0.5 size-3 ring-2 ring-background"
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3.5">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="-ml-1 shrink-0 md:hidden"
+            aria-label="Open menu"
+            onClick={() => window.dispatchEvent(new Event("sidebar:open"))}
+          >
+            <Menu />
+          </Button>
+          <div className="flex size-7 shrink-0 items-center justify-center rounded-md md:size-11 md:rounded-xl md:border md:border-border md:bg-muted/45 md:shadow-sm">
+            <ProjectIcon
+              icon={project.icon}
+              className={`size-4 md:size-5 ${projectColorTextClass[project.color as keyof typeof projectColorTextClass] ?? projectColorTextClass.gray}`}
             />
           </div>
           <div className="min-w-0">
-            <h1 className="truncate text-2xl leading-8 font-bold tracking-tight sm:text-[28px]">
-              {project.name}
-            </h1>
-            <p className="mt-1 truncate text-xs text-muted-foreground">
-              {openTaskCount} open {openTaskCount === 1 ? "task" : "tasks"}
-              {sectionCount > 0 && ` · ${sectionCount} ${sectionCount === 1 ? "section" : "sections"}`}
-            </p>
+            {editingName ? (
+              <Input
+                autoFocus
+                aria-label="Project name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                onBlur={() => void saveName()}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void saveName();
+                  if (event.key === "Escape") { setName(project.name); setEditingName(false); }
+                }}
+                className="h-8 text-2xl font-bold sm:text-[28px]"
+              />
+            ) : (
+              <button
+                type="button"
+                className="block max-w-full cursor-text select-text truncate text-left text-2xl leading-8 font-bold tracking-tight hover:text-primary sm:text-[28px]"
+                onClick={() => { if (!window.getSelection()?.toString()) setEditingName(true); }}
+                title="Rename project"
+              >
+                {project.name}
+              </button>
+            )}
           </div>
         </div>
 

@@ -6,7 +6,7 @@ import { TaskApiClient } from "./api-client.js";
 import { loadConfig } from "./config.js";
 import { createTaskManagerServer } from "./server.js";
 
-async function main() {
+export async function runStdio() {
   const config = loadConfig();
   const api = new TaskApiClient({
     baseUrl: config.baseUrl,
@@ -27,8 +27,3 @@ async function main() {
 
   await server.connect(transport);
 }
-
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exit(1);
-});

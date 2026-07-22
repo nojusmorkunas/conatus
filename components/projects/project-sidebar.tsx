@@ -16,7 +16,6 @@ import {
   Inbox,
   LayoutGrid,
   LogOut,
-  Menu,
   PanelLeft,
   Plus,
   Search,
@@ -77,6 +76,7 @@ import {
   projectTaskDepth,
   TASK_INDENT_WIDTH,
 } from "@/lib/task-tree";
+import { projectColorTextClass } from "./project-color-dot";
 import { ProjectColorPicker } from "./project-color-picker";
 import { ProjectIcon, projectIconPresets } from "./project-icons";
 import { TaskAddForm } from "@/components/tasks/task-add-form";
@@ -211,6 +211,14 @@ export function ProjectSidebar({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [quickAddOpen]);
+
+  useEffect(() => {
+    function openMobileSidebar() {
+      setMobileOpen(true);
+    }
+    window.addEventListener("sidebar:open", openMobileSidebar);
+    return () => window.removeEventListener("sidebar:open", openMobileSidebar);
+  }, []);
 
   async function refresh() {
     const response = await fetch("/api/projects");
@@ -381,12 +389,6 @@ export function ProjectSidebar({
 
   return (
     <>
-      <div className="flex h-12 shrink-0 items-center border-b border-border px-2 md:hidden">
-        <Button variant="ghost" size="icon-sm" onClick={() => setMobileOpen(true)} aria-label="Open menu">
-          <Menu />
-        </Button>
-      </div>
-
       {mobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/40 md:hidden"
@@ -478,15 +480,13 @@ export function ProjectSidebar({
             </div>
           </div>
 
-          <div className="mb-4">
-            <SidebarGroupHeader expanded={favoritesExpanded} onClick={() => toggleGroup("favorites")}>
-              Pinned
-            </SidebarGroupHeader>
-            {favoritesExpanded && (
+          {hasFavorites && (
+            <div className="mb-4">
+              <SidebarGroupHeader expanded={favoritesExpanded} onClick={() => toggleGroup("favorites")}>
+                Pinned
+              </SidebarGroupHeader>
+              {favoritesExpanded && (
               <div className="relative flex flex-col gap-0.5">
-                {!hasFavorites && (
-                  <p className="px-2 py-1 text-xs text-muted-foreground">Use an item&apos;s three-dot menu to pin it here.</p>
-                )}
                   <DndContext
                     id="favorite-project-sidebar"
                     sensors={projectSensors}
@@ -526,7 +526,7 @@ export function ProjectSidebar({
                     >
                       {activeFavorite ? (
                         <div className="flex cursor-grabbing items-center gap-2 rounded-lg border border-border bg-background px-2 py-1.5 text-sm shadow-xl ring-1 ring-black/5">
-                          <ProjectTile icon={activeFavorite.icon} />
+                          <ProjectTile icon={activeFavorite.icon} color={activeFavorite.color} />
                           <span className="truncate">{activeFavorite.name}</span>
                         </div>
                       ) : null}
@@ -544,8 +544,9 @@ export function ProjectSidebar({
                     <FilterRow key={filter.id} filter={filter} onChanged={refreshFavorites} />
                   ))}
               </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
           <div className="flex-1">
             <SidebarGroupHeader
@@ -614,7 +615,7 @@ export function ProjectSidebar({
                   >
                     {activeProject ? (
                       <div className="flex cursor-grabbing items-center gap-2 rounded-lg border border-border bg-background px-2 py-1.5 text-sm shadow-xl ring-1 ring-black/5">
-                        <ProjectTile icon={activeProject.icon} />
+                        <ProjectTile icon={activeProject.icon} color={activeProject.color} />
                         <span className="truncate">{activeProject.name}</span>
                       </div>
                     ) : null}
@@ -825,21 +826,28 @@ function ViewLink({
   );
 }
 
-function ProjectTile({ icon }: { icon: string | null }) {
+function ProjectTile({ icon, color }: { icon: string | null; color: string }) {
   return (
     <span className="flex size-7 shrink-0 items-center justify-center" aria-hidden>
-      <ProjectIcon icon={icon} className="text-muted-foreground" />
+      <ProjectIcon
+        icon={icon}
+        className={projectColorTextClass[color as keyof typeof projectColorTextClass] ?? projectColorTextClass.gray}
+      />
     </span>
   );
 }
 
 function ProjectIconPicker({
   value,
+  color,
   onChange,
 }: {
   value: string | null;
+  color: string;
   onChange: (icon: string | null) => void;
 }) {
+  const colorClass = projectColorTextClass[color as keyof typeof projectColorTextClass] ?? projectColorTextClass.gray;
+
   return (
     <div className="grid grid-cols-6 gap-1" aria-label="Project icon">
       <button
@@ -851,7 +859,7 @@ function ProjectIconPicker({
         )}
         onClick={() => onChange(null)}
       >
-        <Folder className="size-4 text-muted-foreground" />
+        <Folder className={cn("size-4", colorClass)} />
       </button>
       {projectIconPresets.map(({ value: icon, label, Icon }) => (
         <button
@@ -865,7 +873,7 @@ function ProjectIconPicker({
           )}
           onClick={() => onChange(icon)}
         >
-          <Icon className="size-4" />
+          <Icon className={cn("size-4", colorClass)} />
         </button>
       ))}
     </div>
@@ -952,7 +960,7 @@ function CreateProjectForm({
         value={name}
         onChange={(event) => setName(event.target.value)}
       />
-      <ProjectIconPicker value={icon} onChange={setIcon} />
+      <ProjectIconPicker value={icon} color={color} onChange={setIcon} />
       <ProjectColorPicker value={color} onChange={setColor} />
       <label className="flex flex-col gap-1 text-xs text-muted-foreground">
         Parent (optional)
@@ -1024,6 +1032,7 @@ function ProjectRow({
   const router = useRouter();
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(project.name);
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const active = pathname === `/projects/${project.id}`;
   const draggable = (treeRow || favoriteRow) && !project.shared && !project.isInbox;
   const {
@@ -1146,7 +1155,7 @@ function ProjectRow({
       )}
       {draggable ? (
         <span className="flex flex-1 items-center gap-2 truncate">
-          <ProjectTile icon={project.icon} />
+          <ProjectTile icon={project.icon} color={project.color} />
           <span className="truncate">{project.name}</span>
         </span>
       ) : (
@@ -1154,35 +1163,46 @@ function ProjectRow({
           href={`/projects/${project.id}`}
           className="flex flex-1 items-center gap-2 truncate"
         >
-          <ProjectTile icon={project.icon} />
+          <ProjectTile icon={project.icon} color={project.color} />
           <span className="truncate">{project.name}</span>
         </Link>
       )}
       {project.shared && <Users className="size-3.5 text-muted-foreground" />}
-      {treeRow && hasChildren && (
-        <button
-          type="button"
-          className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-100 transition-opacity hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:opacity-0 md:group-hover/project:opacity-100 md:group-focus-within/project:opacity-100 dark:hover:bg-background"
-          aria-label={collapsed ? `Expand ${project.name}` : `Collapse ${project.name}`}
-          onClick={onCollapse}
-        >
-          {collapsed ? <ChevronRight className="size-3.5" /> : <ChevronDown className="size-3.5" />}
-        </button>
-      )}
-      {/* Shared projects belong to someone else: rename/favorite/delete are
-          the owner's; leaving happens from the project header. */}
-      {!project.isInbox && !project.shared ? (
-        <span className="flex size-6 shrink-0 items-center justify-center">
-          <DropdownMenu>
+      <div className="flex shrink-0 items-center gap-0.5">
+        {treeRow && hasChildren && (
+          <button
+            type="button"
+            className="hidden size-6 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:flex md:group-hover/project:opacity-100 md:group-focus-within/project:opacity-100 dark:hover:bg-background"
+            aria-label={collapsed ? `Expand ${project.name}` : `Collapse ${project.name}`}
+            onClick={onCollapse}
+          >
+            {collapsed ? <ChevronRight className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+          </button>
+        )}
+        {/* Shared projects belong to someone else: rename/favorite/delete are
+            the owner's; leaving happens from the project header. */}
+        {!project.isInbox && !project.shared ? (
+        <span className="relative flex size-6 shrink-0 items-center justify-center">
+          {count !== undefined && count > 0 && (
+            <span className="project-task-count absolute inset-0 hidden items-center justify-center text-center text-xs tabular-nums text-muted-foreground transition-opacity md:flex md:group-hover/project:opacity-0 md:group-focus-within/project:opacity-0">
+              {count}
+            </span>
+          )}
+          <DropdownMenu onOpenChange={setOptionsOpen}>
           <DropdownMenuTrigger
             render={
               <Button
                 variant="ghost"
                 size="icon-xs"
-                className="opacity-100 hover:bg-background md:opacity-0 md:group-hover/project:opacity-100 md:group-focus-within/project:opacity-100 dark:hover:bg-background"
+                className="absolute inset-0 !min-h-0 hover:bg-background md:opacity-0 md:group-hover/project:opacity-100 md:group-focus-within/project:opacity-100 dark:hover:bg-background"
                 aria-label={`More options for ${project.name}`}
               >
-                <MoreHorizontal />
+                <MoreHorizontal className={cn("hidden md:block", optionsOpen && "max-md:block")} />
+                {count !== undefined && count > 0 && (
+                  <span className={cn("text-xs tabular-nums text-muted-foreground md:hidden", optionsOpen && "hidden")}>
+                    {count}
+                  </span>
+                )}
               </Button>
             }
           />
@@ -1197,6 +1217,7 @@ function ProjectRow({
               <DropdownMenuSubContent className="w-64 p-2">
                 <ProjectIconPicker
                   value={project.icon}
+                  color={project.color}
                   onChange={(icon) => void patch({ icon })}
                 />
               </DropdownMenuSubContent>
@@ -1204,7 +1225,7 @@ function ProjectRow({
             <DropdownMenuItem
               onClick={() => patch({ isFavorite: !project.isFavorite })}
             >
-              {project.isFavorite ? "Remove from favorites" : "Add to favorites"}
+              {project.isFavorite ? "Unpin it" : "Pin it!"}
             </DropdownMenuItem>
             <DropdownMenuItem variant="destructive" onClick={remove}>
               Delete
@@ -1212,10 +1233,10 @@ function ProjectRow({
           </DropdownMenuContent>
           </DropdownMenu>
         </span>
-      ) : null}
-      {(!project.isInbox && !project.shared) || count !== undefined ? (
-        <span className="min-w-6 text-center text-xs tabular-nums text-muted-foreground">{count ?? 0}</span>
-      ) : null}
+        ) : count !== undefined && count > 0 ? (
+        <span className="project-task-count min-w-6 text-center text-xs tabular-nums text-muted-foreground transition-opacity md:group-hover/project:opacity-0 md:group-focus-within/project:opacity-0">{count}</span>
+        ) : null}
+      </div>
     </div>
   );
 }

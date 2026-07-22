@@ -4,7 +4,7 @@
   "description": "MCP server for the self-hosted Conatus task manager",
   "type": "module",
   "bin": {
-    "conatus-mcp": "dist/stdio.js",
+    "conatus-mcp": "dist/cli.js",
     "conatus-mcp-http": "dist/http.js"
   },
   "files": [
@@ -14,9 +14,9 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "tsx src/stdio.ts",
+    "dev": "tsx src/cli.ts",
     "dev:http": "tsx src/http.ts",
-    "start": "node dist/stdio.js",
+    "start": "node dist/cli.js",
     "start:http": "node dist/http.js",
     "test": "vitest run",
     "lint": "tsc -p tsconfig.json --noEmit"

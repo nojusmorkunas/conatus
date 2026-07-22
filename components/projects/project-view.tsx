@@ -57,7 +57,7 @@ export function ProjectView({
       ? stored
       : "manual";
   });
-  const [openTaskCount, setOpenTaskCount] = useState(
+  const [, setOpenTaskCount] = useState(
     () => tasks.filter((task) => !task.isCompleted).length,
   );
   const taskMembers = members.map(({ userId: id, username }) => ({ id, username }));
@@ -75,7 +75,7 @@ export function ProjectView({
   return (
     <div
       className={cn(
-        "w-full px-3 pt-3 pb-10 sm:px-6 md:px-8 lg:pl-10",
+        "w-full px-3 pb-10 sm:px-6 md:px-8 lg:pl-10",
         view === "list" && "max-w-4xl",
       )}
     >
@@ -85,8 +85,6 @@ export function ProjectView({
         members={members}
         currentUserId={currentUserId}
         projectCommentCount={projectCommentCount}
-        openTaskCount={openTaskCount}
-        sectionCount={sections.length}
         view={view}
         sortBy={sortBy}
         onViewChange={switchView}

@@ -130,7 +130,9 @@ export function TaskAddForm({
     setPriority("4");
     setDueDate("");
     setDueTime("");
-    setExpanded(false);
+    // Keep the composer ready for the next item. This makes Enter a fast
+    // capture flow instead of forcing people to reopen the form each time.
+    setExpanded(true);
     onCreated();
   }
 

@@ -73,7 +73,7 @@ export function FilterRow({
     >
       <Link
         href={`/filters/${filter.id}`}
-        className="flex flex-1 items-center gap-2 truncate"
+        className="flex !min-h-0 flex-1 items-center gap-2 truncate"
       >
         <FilterIcon className="size-3.5 shrink-0 text-muted-foreground" />
         <span className="truncate">{filter.name}</span>
@@ -84,7 +84,7 @@ export function FilterRow({
             <Button
               variant="ghost"
               size="icon-xs"
-              className="opacity-0 hover:bg-background group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-background"
+              className="!min-h-0 opacity-0 hover:bg-background group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-background"
               aria-label={`More options for ${filter.name}`}
             >
               <MoreHorizontal />
@@ -96,7 +96,7 @@ export function FilterRow({
             Rename
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => patch({ isFavorite: !filter.isFavorite })}>
-            {filter.isFavorite ? "Remove from favorites" : "Add to favorites"}
+            {filter.isFavorite ? "Unpin it!" : "Pin it!"}
           </DropdownMenuItem>
           <DropdownMenuItem variant="destructive" onClick={remove}>
             Delete

@@ -22,7 +22,7 @@ export function TaskCheckbox({
       aria-label={checked ? "Mark incomplete" : "Mark complete"}
       onClick={onToggle}
       className={cn(
-        "group/checkbox relative mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-[6px] border-2 transition-all after:absolute after:-inset-3 hover:scale-[1.04]",
+        "group/checkbox relative mt-0.5 flex size-5 shrink-0 self-start items-center justify-center rounded-[6px] border-2 transition-all after:absolute after:-inset-3 hover:scale-[1.04]",
         celebrating && "task-checkbox-completing",
         checked
           ? priorityFill[priority]

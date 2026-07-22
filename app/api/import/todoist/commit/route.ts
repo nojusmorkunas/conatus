@@ -106,10 +106,12 @@ export async function POST(request: Request) {
     }
     const result = await db.transaction(async (tx) => {
       const existing = await tx
-        .select({ name: projects.name })
+        .select({ id: projects.id, name: projects.name, isInbox: projects.isInbox })
         .from(projects)
         .where(eq(projects.userId, user.id));
       const usedNames = new Set(existing.map((project) => project.name.toLowerCase()));
+      const inboxProject = existing.find((project) => project.isInbox);
+      if (!inboxProject) throw new Error("Your Conatus Inbox could not be found.");
       const [lastProject] = await tx
         .select({ order: projects.order })
         .from(projects)
@@ -150,40 +152,50 @@ export async function POST(request: Request) {
       }
 
       for (const sourceProject of orderedProjects) {
-        const conflict = usedNames.has(sourceProject.name.toLowerCase());
-        if (conflict && conflictPolicy === "skip") {
+        // Todoist's Inbox is a system project, not a user-created project.
+        // Preserve that meaning by merging it into the user's Conatus Inbox.
+        const isTodoistInbox = sourceProject.isInbox || sourceProject.name.toLowerCase() === "inbox";
+        if (isTodoistInbox) {
+          createdProjectIds.set(sourceProject.sourceId, { id: inboxProject.id, depth: 1 });
+        }
+        const conflict = !isTodoistInbox && usedNames.has(sourceProject.name.toLowerCase());
+        if (!isTodoistInbox && conflict && conflictPolicy === "skip") {
           counts.skipped++;
           continue;
         }
         const name = conflict ? uniqueName(sourceProject.name, usedNames) : sourceProject.name;
-        if (name !== sourceProject.name) counts.renamed++;
-        usedNames.add(name.toLowerCase());
-        const projectOrder = generateKeyBetween(previousProjectOrder, null);
-        previousProjectOrder = projectOrder;
-        const [createdProject] = await tx
-          .insert(projects)
-          .values({
-            userId: user.id,
-            name,
-            color: "gray",
-            order: projectOrder,
-            parentId: sourceProject.parentSourceId
-              ? createdProjectIds.get(sourceProject.parentSourceId)?.depth !== 3
-                ? createdProjectIds.get(sourceProject.parentSourceId)?.id ?? null
-                : null
-              : null,
-            isFavorite: false,
-            isArchived: false,
-          })
-          .returning({ id: projects.id });
-        counts.projects++;
-        const importedParent = sourceProject.parentSourceId
-          ? createdProjectIds.get(sourceProject.parentSourceId)
-          : undefined;
-        createdProjectIds.set(sourceProject.sourceId, {
-          id: createdProject.id,
-          depth: importedParent && importedParent.depth < 3 ? importedParent.depth + 1 : 1,
-        });
+        if (!isTodoistInbox && name !== sourceProject.name) counts.renamed++;
+        let destinationProjectId = inboxProject.id;
+        if (!isTodoistInbox) {
+          usedNames.add(name.toLowerCase());
+          const projectOrder = generateKeyBetween(previousProjectOrder, null);
+          previousProjectOrder = projectOrder;
+          const [createdProject] = await tx
+            .insert(projects)
+            .values({
+              userId: user.id,
+              name,
+              color: "gray",
+              order: projectOrder,
+              parentId: sourceProject.parentSourceId
+                ? createdProjectIds.get(sourceProject.parentSourceId)?.depth !== 3
+                  ? createdProjectIds.get(sourceProject.parentSourceId)?.id ?? null
+                  : null
+                : null,
+              isFavorite: false,
+              isArchived: false,
+            })
+            .returning({ id: projects.id });
+          destinationProjectId = createdProject.id;
+          counts.projects++;
+          const importedParent = sourceProject.parentSourceId
+            ? createdProjectIds.get(sourceProject.parentSourceId)
+            : undefined;
+          createdProjectIds.set(sourceProject.sourceId, {
+            id: destinationProjectId,
+            depth: importedParent && importedParent.depth < 3 ? importedParent.depth + 1 : 1,
+          });
+        }
 
         const sectionIds = new Map<string, string>();
         let previousSectionOrder: string | null = null;
@@ -193,7 +205,7 @@ export async function POST(request: Request) {
           const [createdSection] = await tx
             .insert(sections)
             .values({
-              projectId: createdProject.id,
+              projectId: destinationProjectId,
               name: sourceSection.name,
               order: sectionOrder,
             })
@@ -214,7 +226,7 @@ export async function POST(request: Request) {
             .insert(tasks)
             .values({
               userId: user.id,
-              projectId: createdProject.id,
+              projectId: destinationProjectId,
               sectionId,
               parentId,
               content: sourceTask.content,
@@ -262,7 +274,7 @@ export async function POST(request: Request) {
 
         const commentValues = sourceProject.comments.map((comment) => ({
           userId: user.id,
-          projectId: comment.taskKey ? null : createdProject.id,
+          projectId: comment.taskKey ? null : destinationProjectId,
           taskId: comment.taskKey ? taskIds.get(comment.taskKey) ?? null : null,
           content: comment.content,
         })).filter((comment) => Boolean(comment.projectId) !== Boolean(comment.taskId));

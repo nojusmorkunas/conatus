@@ -1018,7 +1018,7 @@ function SectionHeading({
       id={`section-${section.id}`}
       ref={setNodeRef}
       className={cn(
-        "group relative mb-2 flex items-center gap-2 py-1.5 pr-1 pl-7",
+        "group sticky top-0 z-20 mb-2 flex items-center gap-2 bg-background/95 py-1.5 pr-1 pl-7 backdrop-blur supports-[backdrop-filter]:bg-background/80",
         isDragging && "z-0 opacity-40",
       )}
       style={{ transform: CSS.Transform.toString(transform), transition }}
@@ -1036,9 +1036,9 @@ function SectionHeading({
       <h2 className="min-w-0">
         <button
           type="button"
-          onClick={beginEditing}
+          onClick={() => { if (!window.getSelection()?.toString()) beginEditing(); }}
           disabled={selecting}
-          className="block max-w-64 cursor-text truncate text-left text-sm font-bold text-foreground disabled:cursor-default"
+          className="block max-w-64 cursor-text select-text truncate text-left text-sm font-bold text-foreground disabled:cursor-default"
         >
           {section.name}
         </button>

@@ -1,13 +1,18 @@
 import {
   BookOpen,
   BriefcaseBusiness,
+  Dumbbell,
   Folder,
+  Gamepad2,
+  GraduationCap,
   HeartPulse,
   House,
   Lightbulb,
+  Music,
   Palette,
   Plane,
   Rocket,
+  ShoppingCart,
   Sprout,
   Target,
   WalletCards,
@@ -29,6 +34,11 @@ export const projectIconPresets = [
   { value: "tools", label: "Tools", Icon: Wrench },
   { value: "health", label: "Health", Icon: HeartPulse },
   { value: "travel", label: "Travel", Icon: Plane },
+  { value: "study", label: "Study", Icon: GraduationCap },
+  { value: "fitness", label: "Fitness", Icon: Dumbbell },
+  { value: "music", label: "Music", Icon: Music },
+  { value: "shopping", label: "Shopping", Icon: ShoppingCart },
+  { value: "gaming", label: "Gaming", Icon: Gamepad2 },
 ] as const;
 
 export function ProjectIcon({

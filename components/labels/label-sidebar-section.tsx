@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { MoreHorizontal } from "lucide-react";
 
 import type { labels as labelsTable } from "@/lib/db/schema";
@@ -83,15 +84,20 @@ export function LabelRow({
         "group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted focus-within:bg-muted",
       )}
     >
-      <ProjectColorDot color={label.color} />
-      <span className="flex-1 truncate">{label.name}</span>
+      <Link
+        href={`/labels/${label.id}`}
+        className="flex min-w-0 flex-1 items-center gap-2 truncate"
+      >
+        <ProjectColorDot color={label.color} />
+        <span className="truncate">{label.name}</span>
+      </Link>
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
             <Button
               variant="ghost"
               size="icon-xs"
-              className="opacity-0 hover:bg-background group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-background"
+              className="!min-h-0 opacity-100 hover:bg-background md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 dark:hover:bg-background"
               aria-label={`More options for ${label.name}`}
             >
               <MoreHorizontal />
@@ -108,7 +114,7 @@ export function LabelRow({
           <DropdownMenuItem
             onClick={() => patch({ isFavorite: !label.isFavorite })}
           >
-            {label.isFavorite ? "Remove from favorites" : "Add to favorites"}
+            {label.isFavorite ? "Unpin it!" : "Pin it!"}
           </DropdownMenuItem>
           <DropdownMenuItem variant="destructive" onClick={remove}>
             Delete

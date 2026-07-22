@@ -152,6 +152,7 @@ export function parseTodoistSync(data: TodoistSyncResponse): TodoistProjectImpor
         sourceId: project.id,
         parentSourceId: project.parent_id ?? null,
         name: cleanTodoistProjectName(project.name),
+        isInbox: Boolean(project.inbox_project),
         sections: projectSections,
         tasks: projectTasks,
         comments,
