@@ -2,9 +2,11 @@
   <img src="./public/conatus-logo.png" alt="Conatus laurel logo" width="150">
 </p>
 
-<h1 align="center">Conatus</h1>
+<p align="center"><strong><font size="5">Conatus</font></strong></p>
 
 <p align="center"><em>Every goal starts with a next step.</em></p>
+
+---
 
 Conatus is a self-hosted task manager for projects, recurring work, reminders and collaboration inspired by Todoist.
 
@@ -13,6 +15,14 @@ Conatus is a self-hosted task manager for projects, recurring work, reminders an
 - Collaborate through comments, file attachments and shared projects
 - Import Todoist tasks and work from calendar, list or board views
 - Connect through API tokens and webhooks
+
+<p align="center">
+  <img src="./public/project_view.png" alt="Conatus project view" width="100%">
+</p>
+
+<p align="center">
+  <img src="./public/task_view.png" alt="Conatus task details view" width="100%">
+</p>
 
 ## Deploy Conatus
 

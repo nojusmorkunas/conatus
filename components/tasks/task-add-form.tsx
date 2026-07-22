@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { parseQuickAdd } from "@/lib/parser/quick-add";
+import { cn } from "@/lib/utils";
 import { priorityLabels } from "./priority";
 
 export function TaskAddForm({
@@ -26,6 +27,7 @@ export function TaskAddForm({
   onCreated,
   onError,
   initiallyExpanded = false,
+  alignWithTask = false,
 }: {
   projectId: string;
   sectionId: string | null;
@@ -36,6 +38,8 @@ export function TaskAddForm({
   onCreated: () => void;
   onError: () => void;
   initiallyExpanded?: boolean;
+  /** Align the trigger and task-name input with a task row's title column. */
+  alignWithTask?: boolean;
 }) {
   const [expanded, setExpanded] = useState(initiallyExpanded);
   const [content, setContent] = useState("");
@@ -142,10 +146,16 @@ export function TaskAddForm({
         ref={rootRef as React.Ref<HTMLButtonElement>}
         type="button"
         data-quick-add
-        className="group/add-task flex w-full items-center gap-2 rounded-lg border border-dashed border-transparent px-2 py-2 text-left text-sm text-muted-foreground transition-colors hover:border-border hover:bg-muted/35 hover:text-foreground"
+        className={cn(
+          "group/add-task flex w-full items-center gap-2 rounded-lg border border-dashed border-transparent py-2 text-left text-sm text-muted-foreground transition-colors hover:border-border hover:bg-muted/35 hover:text-foreground",
+          alignWithTask ? "relative pr-2 pl-9 md:pl-[72px]" : "px-2",
+        )}
         onClick={() => setExpanded(true)}
       >
-        <span className="flex size-5 items-center justify-center rounded-md bg-muted text-muted-foreground transition-colors group-hover/add-task:bg-foreground group-hover/add-task:text-background">
+        <span className={cn(
+          "flex size-5 items-center justify-center rounded-md bg-muted text-muted-foreground transition-colors group-hover/add-task:bg-foreground group-hover/add-task:text-background",
+          alignWithTask && "absolute left-2 md:left-11",
+        )}>
           <Plus className="size-3.5" />
         </span>
         New task
@@ -161,7 +171,10 @@ export function TaskAddForm({
       onKeyDown={(event) => {
         if (event.key === "Escape") setExpanded(false);
       }}
-      className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3 shadow-sm"
+      className={cn(
+        "flex flex-col gap-2 rounded-xl border border-border bg-card shadow-sm",
+        alignWithTask ? "py-3 pr-3 pl-9 md:pl-[72px]" : "p-3",
+      )}
     >
       <Input
         autoFocus

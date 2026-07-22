@@ -921,6 +921,7 @@ function TaskGroup({
             sectionId={id}
             today={today}
             labels={labels}
+            alignWithTask
             onCreated={onSubtaskAdded}
             onError={onError}
           />
