@@ -2,7 +2,7 @@
   <img src="./public/conatus-logo.png" alt="Conatus laurel logo" width="150">
 </p>
 
-<p align="center"><strong><font size="5">Conatus</font></strong></p>
+<p align="center"><strong><font size="6">Conatus</font></strong></p>
 
 <p align="center"><em>Every goal starts with a next step.</em></p>
 
