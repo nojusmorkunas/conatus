@@ -76,7 +76,7 @@ export function ProjectView({
     <div
       className={cn(
         "w-full px-3 pb-10 sm:px-6 md:px-8 lg:pl-10",
-        view === "list" && "max-w-4xl",
+        view === "list" && "mx-auto max-w-4xl",
       )}
     >
       <ProjectHeader
