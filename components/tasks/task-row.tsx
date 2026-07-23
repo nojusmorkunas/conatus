@@ -272,7 +272,7 @@ export function TaskRow({
             type="checkbox"
             aria-label={selected ? "Deselect task" : "Select task"}
             checked={selected}
-            className="mt-0.5 size-5 shrink-0 accent-primary"
+            className="mt-0.5 size-5 shrink-0 accent-primary sm:mt-0"
             onClick={(event) => event.stopPropagation()}
             onChange={() => onSelectionToggle?.(task)}
           />
