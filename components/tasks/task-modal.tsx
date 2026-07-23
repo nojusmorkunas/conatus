@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight, ChevronUp, Ellipsis, Flag, Paperclip, Pencil, Plus, Repeat, Trash2, X } from "lucide-react";
 
 import type { attachments as attachmentsTable, comments as commentsTable, labels as labelsTable, reminders as remindersTable } from "@/lib/db/schema";
@@ -50,6 +51,7 @@ export function TaskModal({ task, labels, members = [], currentUserId, today, da
   onPrev?: () => void;
   onNext?: () => void;
 }) {
+  const router = useRouter();
   const [comments, setComments] = useState<Comment[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
@@ -92,6 +94,12 @@ export function TaskModal({ task, labels, members = [], currentUserId, today, da
     const response = await withError(() => fetch(`/api/tasks/${task.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }));
     if (response) onChanged();
     return response;
+  }
+  async function changeProject(projectId: string | null) {
+    if (!projectId || projectId === task.projectId) return;
+    const response = await patch({ projectId });
+    // Re-run the server layout so the sidebar's per-project counts update.
+    if (response) router.refresh();
   }
   async function fetchProjectTasks() {
     const response = await fetch(`/api/tasks?projectId=${task.projectId}`);
@@ -185,7 +193,7 @@ export function TaskModal({ task, labels, members = [], currentUserId, today, da
           {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
         </div>
         <div className="w-full shrink-0 border-t bg-muted/20 px-3 py-2 sm:px-4 md:w-64 md:overflow-y-auto md:border-t-0 md:border-l">
-          <RailRow label="Project"><Select value={task.projectId} onValueChange={(value) => void patch({ projectId: value })}><SelectTrigger size="sm" aria-label="Project"><SelectValue>{projectName}</SelectValue></SelectTrigger><SelectContent>{projects.map((project) => <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>)}</SelectContent></Select></RailRow>
+          <RailRow label="Project"><Select value={task.projectId} onValueChange={(value) => void changeProject(value)}><SelectTrigger size="sm" aria-label="Project"><SelectValue>{projectName}</SelectValue></SelectTrigger><SelectContent>{projects.map((project) => <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>)}</SelectContent></Select></RailRow>
           <RailRow label="Date">{editingDate ? <div className="flex flex-wrap gap-1"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /><Input type="time" value={time} onChange={(e) => setTime(e.target.value)} /><Button size="sm" onClick={() => { void patch({ dueDate: date || null, dueTime: date && time ? time : null }); setEditingDate(false); }}>Save</Button><Button variant="ghost" size="sm" onClick={() => { void patch({ dueDate: null, dueTime: null }); setEditingDate(false); }}>Clear</Button></div> : <button type="button" className={cn("flex items-center gap-1 text-sm", task.dueDate ? task.dueDate < today ? "text-red-600" : task.dueDate === today ? "text-green-600" : "text-muted-foreground" : "text-muted-foreground")} onClick={() => setEditingDate(true)}>{task.recurrence && <Repeat className="size-3.5" />}{task.dueDate ? `${dueLabel(task.dueDate, today, dateFormat)}${task.dueTime ? ` ${task.dueTime}` : ""}` : "Add date"}</button>}</RailRow>
           {task.recurrence && <RailRow label="Repeats"><div className="flex items-center gap-1 text-sm text-muted-foreground"><Repeat className="size-3.5" />{task.recurrence}</div>{editingRecurrenceEnd ? <div className="mt-2 flex flex-wrap gap-1"><Input aria-label="Repeat end date" type="date" min={task.dueDate ?? undefined} value={recurrenceEnd} onChange={(e) => setRecurrenceEnd(e.target.value)} /><Button size="sm" onClick={() => { void patch({ recurrenceEndDate: recurrenceEnd || null }); setEditingRecurrenceEnd(false); }}>Save</Button><Button variant="ghost" size="sm" onClick={() => { setRecurrenceEnd(""); void patch({ recurrenceEndDate: null }); setEditingRecurrenceEnd(false); }}>No end</Button></div> : <button type="button" className="mt-1 flex items-center gap-1 text-sm text-muted-foreground" onClick={() => setEditingRecurrenceEnd(true)}>{task.recurrenceEndDate ? `Ends ${dueLabel(task.recurrenceEndDate, today, dateFormat)}` : "No end date"}</button>}</RailRow>}
           <RailRow label="Deadline">{editingDeadline ? <div className="flex flex-wrap gap-1"><Input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} /><Button size="sm" onClick={() => { void patch({ deadlineDate: deadline || null }); setEditingDeadline(false); }}>Save</Button><Button variant="ghost" size="sm" onClick={() => { void patch({ deadlineDate: null }); setEditingDeadline(false); }}>Clear</Button></div> : <button type="button" className={cn("flex items-center gap-1 text-sm", task.deadlineDate ? task.deadlineDate < today ? "text-red-600" : task.deadlineDate === today ? "text-amber-600" : "text-muted-foreground" : "text-muted-foreground")} onClick={() => setEditingDeadline(true)}><Flag className="size-3.5" />{task.deadlineDate ? (task.deadlineDate < today ? pastDateLabel(task.deadlineDate, today, dateFormat) : dueLabel(task.deadlineDate, today, dateFormat)) : "Add deadline"}</button>}</RailRow>

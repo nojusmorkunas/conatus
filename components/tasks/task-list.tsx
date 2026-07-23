@@ -305,7 +305,12 @@ export function TaskList({
   async function moveTask(task: TaskWithLabels, targetProjectId: string) {
     if (targetProjectId === task.projectId) return;
     const ok = await withError(() => patchTask(task.id, { projectId: targetProjectId }));
-    if (ok) await refresh();
+    if (ok) {
+      await refresh();
+      // Re-run the server layout so the sidebar's per-project counts reflect
+      // the task leaving one project and joining another.
+      router.refresh();
+    }
   }
 
   async function duplicateTask(task: TaskWithLabels) {
@@ -712,7 +717,7 @@ export function TaskList({
           onMove={(targetProjectId) =>
             void bulkAction(selectedTasks(), (task) =>
               patchTask(task.id, { projectId: targetProjectId }),
-            )
+            ).then(() => router.refresh())
           }
           onPriority={(priority) =>
             void bulkAction(selectedTasks(), (task) => patchTask(task.id, { priority }))
