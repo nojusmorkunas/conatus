@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { Archive, ChevronDown, ChevronRight, Copy, Ellipsis, FolderInput, GripVertical, Link as LinkIcon, Pencil, Plus, Trash2 } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -63,6 +63,7 @@ import {
   flattenTaskGroup,
   projectTaskDepth,
   subtreeIds,
+  taskDepth,
   visibleFlatRows,
 } from "@/lib/task-tree";
 
@@ -73,11 +74,6 @@ export type TaskWithLabels = typeof tasksTable.$inferSelect & {
   commentCount: number;
 };
 export type ProjectMember = { id: string; username: string };
-export type DropIndicator = {
-  anchorId: string | null;
-  depth: number;
-  sectionId: string | null;
-} | null;
 type Section = typeof sectionsTable.$inferSelect;
 
 export function TaskList({
@@ -447,14 +443,15 @@ export function TaskList({
   const flatOrder = groups.flatMap((group) => roots(group.id).map((task) => task.id));
   const detailIndex = detailTaskId ? flatOrder.indexOf(detailTaskId) : -1;
   const activeTask = tasks.find((task) => task.id === activeId) ?? null;
+  // The ghost keeps the depth the task had when it was picked up so it never
+  // shifts sideways mid-drag; the placeholder row carries the projected depth.
+  const activeDepth = activeTask ? taskDepth(tasks, activeTask.id) : 0;
   const activeSection = orderedSections.find((section) => section.id === activeId) ?? null;
-  const dropIndicator: DropIndicator = projection
-    ? {
-        anchorId: projection.afterId ?? projection.parentId,
-        depth: projection.depth,
-        sectionId: projection.sectionId,
-      }
-    : null;
+  // The dragged row itself is the drop indicator: dnd-kit slides it into the
+  // target slot, and we render it indented to the projected depth so it shows
+  // exactly where — and at what nesting level — it will land. A single source
+  // of truth, so nothing can disagree.
+  const activeProjectedDepth = projection?.depth ?? null;
 
   function toggleTaskCollapsed(taskId: string) {
     setCollapsedTaskIds((current) => {
@@ -595,6 +592,10 @@ export function TaskList({
             : closestCorners(args)
         }
         measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+        // Only auto-scroll within a narrow band right at the top/bottom edge,
+        // and gently. The default 20%-of-viewport band with fast acceleration
+        // made a barely-there drag run the drop target far down the list.
+        autoScroll={{ threshold: { x: 0, y: 0.05 }, acceleration: 6 }}
         onDragStart={(event: DragStartEvent) => {
           setActiveId(String(event.active.id));
           updateProjection(null);
@@ -639,7 +640,7 @@ export function TaskList({
                 selecting={selecting}
                 draggable={!selecting && sortBy === "manual"}
                 activeTaskId={activeTask?.id ?? null}
-                dropIndicator={dropIndicator}
+                activeProjectedDepth={activeProjectedDepth}
                 collapsedTaskIds={collapsedTaskIds}
                 selectedTaskIds={selectedTaskIds}
                 onToggle={toggleComplete}
@@ -684,11 +685,8 @@ export function TaskList({
         >
           {activeTask ? (
             <div
-              className="flex cursor-grabbing items-start gap-2 rounded-lg border border-border bg-card py-2.5 pr-3 pl-4 shadow-xl ring-1 ring-black/5"
-              style={{
-                marginLeft: (projection?.depth ?? 0) * 28,
-                width: `calc(100% - ${(projection?.depth ?? 0) * 28}px)`,
-              }}
+              className="task-drag-ghost flex cursor-grabbing items-start gap-2 rounded-lg border border-border bg-card py-2.5 pr-3 shadow-xl ring-1 ring-black/5"
+              style={{ "--ghost-depth": activeDepth } as CSSProperties}
             >
               <TaskCheckbox
                 priority={activeTask.priority}
@@ -781,7 +779,7 @@ function TaskGroup({
   selecting,
   draggable,
   activeTaskId,
-  dropIndicator,
+  activeProjectedDepth,
   collapsedTaskIds,
   selectedTaskIds,
   onToggle,
@@ -814,7 +812,7 @@ function TaskGroup({
   selecting: boolean;
   draggable: boolean;
   activeTaskId: string | null;
-  dropIndicator: DropIndicator;
+  activeProjectedDepth: number | null;
   collapsedTaskIds: ReadonlySet<string>;
   selectedTaskIds: string[];
   onToggle: (task: TaskWithLabels) => void;
@@ -850,10 +848,15 @@ function TaskGroup({
     window.dispatchEvent(new Event("section-collapse"));
   }
 
-  const rows = visibleFlatRows(tasks, id, {
-    collapsedIds: collapsedTaskIds,
-    hiddenSubtreeOf: activeTaskId,
-  });
+  // Flattening the group is pure over inputs that don't change mid-drag, so
+  // memoize it — otherwise every projection tick re-walks the whole group.
+  const rows = useMemo(
+    () => visibleFlatRows(tasks, id, {
+      collapsedIds: collapsedTaskIds,
+      hiddenSubtreeOf: activeTaskId,
+    }),
+    [tasks, id, collapsedTaskIds, activeTaskId],
+  );
 
   return (
     <div
@@ -874,13 +877,6 @@ function TaskGroup({
 
       {!collapsed && <>
         <div className="relative">
-          {dropIndicator?.anchorId === null && dropIndicator.sectionId === id && (
-            <span
-              aria-hidden
-              className="absolute top-0 right-2 h-0.5 rounded-full bg-primary"
-              style={{ left: 20 + dropIndicator.depth * 28 }}
-            />
-          )}
           <SortableContext
             items={rows.map((task) => task.id)}
             strategy={verticalListSortingStrategy}
@@ -911,7 +907,9 @@ function TaskGroup({
                 selected={selectedTaskIds.includes(task.id)}
                 onSelectionToggle={onSelectionToggle}
                 draggable={draggable}
-                dropIndicator={dropIndicator}
+                // Only the dragged row cares about the projected depth; giving
+                // the rest a stable null lets them skip re-rendering as it moves.
+                activeProjectedDepth={task.id === activeTaskId ? activeProjectedDepth : null}
                 collapsed={collapsedTaskIds.has(task.id)}
                 onToggleCollapsed={onToggleTaskCollapsed}
                 onError={onError}

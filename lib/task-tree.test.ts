@@ -129,7 +129,9 @@ describe("task tree", () => {
     })).toMatchObject({ depth: 1, parentId: "Build", afterId: null });
   });
 
-  test("promotes the last child when dragged above its parent row", () => {
+  test("promotes a child dragged above its parent to a top-level task", () => {
+    // A child dragged above its parent row can't render as a child there, so it
+    // becomes a top-level task above the parent.
     expect(projectTaskDepth({
       items: reorderItems, activeId: "Prepare", overId: "Build", offsetX: 0,
     })).toEqual({

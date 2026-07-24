@@ -203,11 +203,78 @@
   }
 }
 
-@media (max-width: 639px) {
-  .task-row {
-    padding-left: calc(0.5rem + var(--task-mobile-indent)) !important;
-  }
+/* Drag-and-drop geometry tokens. One source of truth so the row, its
+   highlight, the drop-line and the drag ghost all indent by the same amount:
+   - base: the checkbox column (where a task's content starts).
+   - step: how far one nesting level shifts everything right.
+   - card-inset: the left gutter reserved for the drag handle. The task's
+     highlight, the drop-line and the drag ghost all begin here, so the handle
+     lives in the gutter and is never painted as part of the task itself. */
+:root {
+  --task-indent-base: 44px;
+  --task-indent-step: 28px;
+  --task-card-inset: 28px;
+}
 
+@media (max-width: 639px) {
+  :root {
+    --task-indent-base: 8px;
+    --task-indent-step: 20px;
+    /* No drag handle on touch, so the card sits almost flush left. */
+    --task-card-inset: 2px;
+  }
+}
+
+/* Indent the whole row to its nesting depth via the shared tokens (replaces
+   what used to be an inline desktop value plus a mobile !important override). */
+.task-row {
+  isolation: isolate;
+  padding-left: calc(var(--task-indent-base) + var(--row-depth, 0) * var(--task-indent-step));
+}
+
+/* The hover/active highlight is a pseudo-element inset to the card edge, so
+   the drag handle in the gutter is never highlighted. Its left edge matches
+   the drop-line and drag ghost exactly, giving one consistent card width. */
+.task-row::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset-block: 0;
+  right: 0;
+  left: calc(var(--task-card-inset) + var(--row-depth, 0) * var(--task-indent-step));
+  border-radius: 0.5rem;
+  background-color: transparent;
+  transition: background-color 150ms ease;
+}
+
+.task-row:not(.is-dragging):hover::before {
+  background-color: color-mix(in oklch, var(--muted) 55%, transparent);
+}
+
+/* The dragged task IS the drop indicator: dnd-kit slides this row into the
+   target slot and it indents live to the projected depth, so it shows exactly
+   where and at what nesting level the task will land — a single source of
+   truth. Its own content is hidden and it reads as a hollow placeholder slot
+   (muted card, dashed edge); the full-detail copy rides the cursor overlay. */
+.task-row.is-dragging > * {
+  opacity: 0;
+}
+
+.task-row.is-dragging::before {
+  background-color: color-mix(in oklch, var(--muted) 40%, transparent);
+  border: 1px dashed color-mix(in oklch, var(--muted-foreground) 45%, transparent);
+}
+
+/* The floating drag ghost mirrors the highlighted card: it begins at the card
+   edge for the depth the task was picked up at (never the gutter), so lifting
+   a task lands the ghost exactly over where the row was and nesting never
+   nudges it sideways. */
+.task-drag-ghost {
+  margin-left: calc(var(--task-card-inset) + var(--ghost-depth, 0) * var(--task-indent-step));
+  padding-left: calc(var(--task-indent-base) - var(--task-card-inset));
+}
+
+@media (max-width: 639px) {
   .task-row .task-row-drag-handle {
     display: none;
   }

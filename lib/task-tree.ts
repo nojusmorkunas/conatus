@@ -93,14 +93,26 @@ export function visibleFlatRows<T extends TreeTask>(
 }
 
 export function subtreeIds(tasks: TreeTask[], rootId: string) {
+  // Group children once (O(n)) then walk down from the root, instead of the
+  // fixed-point scan that re-swept the whole list per depth level (O(n²)).
+  // Runs on every drag move via projectTaskDepth, so the difference shows on
+  // large lists. Same result for any input order; the visited set stops cycles.
+  const childrenByParent = new Map<string, string[]>();
+  for (const task of tasks) {
+    if (!task.parentId) continue;
+    const siblings = childrenByParent.get(task.parentId);
+    if (siblings) siblings.push(task.id);
+    else childrenByParent.set(task.parentId, [task.id]);
+  }
+
   const ids = new Set([rootId]);
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const task of tasks) {
-      if (!ids.has(task.id) && task.parentId && ids.has(task.parentId)) {
-        ids.add(task.id);
-        changed = true;
+  const stack = [rootId];
+  while (stack.length) {
+    const current = stack.pop()!;
+    for (const childId of childrenByParent.get(current) ?? []) {
+      if (!ids.has(childId)) {
+        ids.add(childId);
+        stack.push(childId);
       }
     }
   }
@@ -169,7 +181,11 @@ export function projectTaskDepth({
     ? newItems[projectedIndex + 1]
     : undefined;
   const crossesSectionBoundary = active.sectionId !== targetSectionId;
-  const dragDepthDelta = Math.round(offsetX / TASK_INDENT_WIDTH);
+  // Depth follows deliberate horizontal movement only. It takes about a
+  // three-quarter indent of sideways travel to shift one level (vs. the naive
+  // half-indent of Math.round), so a little drift while dragging vertically
+  // never accidentally nests a task — or outdents a subtask into a root.
+  const dragDepthDelta = Math.trunc(offsetX / TASK_INDENT_WIDTH + Math.sign(offsetX) * 0.25);
   // Canonical sortable-tree projection: depth comes from the drop slot's
   // section-confined neighbours and the horizontal offset, never pinned to the
   // active row's original depth. This lets a subtask dropped ABOVE its own

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { memo, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -53,11 +53,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { TaskCheckbox } from "./task-checkbox";
 import { TaskAddForm } from "./task-add-form";
-import type { DropIndicator, ProjectMember, TaskWithLabels } from "./task-list";
+import type { ProjectMember, TaskWithLabels } from "./task-list";
 
 type Label = typeof labelsTable.$inferSelect;
 
-export function TaskRow({
+function TaskRowComponent({
   task,
   allTasks,
   labels,
@@ -81,7 +81,7 @@ export function TaskRow({
   selected = false,
   onSelectionToggle,
   draggable = false,
-  dropIndicator = null,
+  activeProjectedDepth = null,
   collapsed = false,
   onToggleCollapsed,
   onError = () => {},
@@ -115,7 +115,7 @@ export function TaskRow({
   selected?: boolean;
   onSelectionToggle?: (task: TaskWithLabels) => void;
   draggable?: boolean;
-  dropIndicator?: DropIndicator;
+  activeProjectedDepth?: number | null;
   collapsed?: boolean;
   onToggleCollapsed?: (taskId: string) => void;
   onError?: () => void;
@@ -142,10 +142,15 @@ export function TaskRow({
     Boolean(task.dueDate || task.deadlineDate || task.durationMinutes || task.commentCount) ||
     (members.length > 1 && Boolean(task.assigneeId)) ||
     task.labels.length > 0;
-  const siblings = allTasks
-    .filter((candidate) => candidate.parentId === task.parentId && candidate.sectionId === task.sectionId)
-    .sort((a, b) => (a.order < b.order ? -1 : 1));
-  const previousSibling = siblings[siblings.findIndex((candidate) => candidate.id === task.id) - 1];
+  // Only needed when the "add task above" form is open, so compute it on demand
+  // rather than scanning the whole list on every render.
+  function previousSiblingId(): string | null {
+    const siblings = allTasks
+      .filter((candidate) => candidate.parentId === task.parentId && candidate.sectionId === task.sectionId)
+      .sort((a, b) => (a.order < b.order ? -1 : 1));
+    const index = siblings.findIndex((candidate) => candidate.id === task.id);
+    return index > 0 ? siblings[index - 1].id : null;
+  }
 
   useEffect(() => () => {
     if (completionTimer.current) clearTimeout(completionTimer.current);
@@ -186,7 +191,7 @@ export function TaskRow({
             projectId={task.projectId}
             sectionId={task.sectionId}
             parentId={task.parentId ?? undefined}
-            afterId={previousSibling?.id ?? null}
+            afterId={previousSiblingId()}
             today={today}
             labels={labels}
             initiallyExpanded
@@ -222,14 +227,15 @@ export function TaskRow({
           listeners?.onTouchStart?.(event);
         }}
         className={cn(
-          "task-row group relative mb-0.5 flex items-start gap-2 rounded-lg py-2.5 pr-2 transition-colors hover:bg-muted/55",
+          "task-row group relative mb-0.5 flex items-start gap-2 py-2.5 pr-2",
           selecting && "cursor-pointer",
           draggable && "touch-pan-y select-none cursor-pointer",
-          isDragging && "z-0 cursor-grabbing opacity-40 hover:bg-transparent",
+          isDragging && "is-dragging z-0 cursor-grabbing",
         )}
         style={{
-          "--task-mobile-indent": `${depth * 20}px`,
-          paddingLeft: 44 + depth * 28,
+          // While dragging, the row indents live to the projected drop depth
+          // so it previews exactly where — and at what nesting level — it lands.
+          "--row-depth": isDragging && activeProjectedDepth !== null ? activeProjectedDepth : depth,
         } as CSSProperties}
         onClick={(event) => {
           if (selecting) {
@@ -253,18 +259,11 @@ export function TaskRow({
           }
         }}
       >
-        {dropIndicator?.anchorId === task.id && dropIndicator.sectionId === task.sectionId && (
-          <span
-            aria-hidden
-            className="absolute right-2 -bottom-px h-0.5 rounded-full bg-primary"
-            style={{ left: 20 + dropIndicator.depth * 28 }}
-          />
-        )}
         {draggable && (
           <GripVertical
             aria-hidden
             className="task-row-drag-handle absolute top-2.5 size-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-            style={{ left: depth * 28 + (directChildren.length > 0 ? 4 : 20) }}
+            style={{ left: "calc(var(--row-depth, 0) * var(--task-indent-step) + 4px)" }}
           />
         )}
         {selecting ? (
@@ -436,6 +435,28 @@ export function TaskRow({
     </div>
   );
 }
+
+// Rows re-render a lot during a drag (the projection updates on every pointer
+// move) and each row does O(n) work deriving its children/siblings. Memoizing
+// on the data props — and treating the event handlers as stable — lets rows
+// that aren't the dragged one, or reflowing, skip the render entirely. The
+// handlers are safe to ignore: any task change flows in through `allTasks`,
+// which forces a re-render, so a memoized row never holds a stale closure.
+export const TaskRow = memo(TaskRowComponent, (prev, next) =>
+  prev.task === next.task &&
+  prev.allTasks === next.allTasks &&
+  prev.labels === next.labels &&
+  prev.members === next.members &&
+  prev.currentUserId === next.currentUserId &&
+  prev.depth === next.depth &&
+  prev.today === next.today &&
+  prev.dateFormat === next.dateFormat &&
+  prev.selecting === next.selecting &&
+  prev.selected === next.selected &&
+  prev.draggable === next.draggable &&
+  prev.collapsed === next.collapsed &&
+  prev.activeProjectedDepth === next.activeProjectedDepth,
+);
 
 export function AssigneeChip({
   assigneeId,
