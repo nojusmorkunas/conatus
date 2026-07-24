@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -71,6 +71,7 @@ export default async function FilterPage({
           durationMinutes: tasks.durationMinutes,
           isCompleted: tasks.isCompleted,
           completedAt: tasks.completedAt,
+          deletedAt: tasks.deletedAt,
           order: tasks.order,
           createdAt: tasks.createdAt,
           updatedAt: tasks.updatedAt,
@@ -78,7 +79,7 @@ export default async function FilterPage({
         })
         .from(tasks)
         .innerJoin(projects, eq(projects.id, tasks.projectId))
-        .where(and(eq(tasks.userId, user.id), eq(tasks.isCompleted, false)))
+        .where(and(eq(tasks.userId, user.id), eq(tasks.isCompleted, false), isNull(tasks.deletedAt), isNull(projects.deletedAt)))
         .orderBy(tasks.dueDate, tasks.order),
       user.id,
     ),

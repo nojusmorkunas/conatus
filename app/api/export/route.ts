@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -15,11 +15,11 @@ export async function GET() {
   const userProjects = await db
     .select()
     .from(projects)
-    .where(eq(projects.userId, user.id));
+    .where(and(eq(projects.userId, user.id), isNull(projects.deletedAt)));
   const projectIds = userProjects.map((project) => project.id);
 
   const userTasks = projectIds.length
-    ? await db.select().from(tasks).where(inArray(tasks.projectId, projectIds))
+    ? await db.select().from(tasks).where(and(inArray(tasks.projectId, projectIds), isNull(tasks.deletedAt)))
     : [];
   const userLabels = await db
     .select()

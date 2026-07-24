@@ -260,7 +260,7 @@ export function TaskList({
     const previousTasks = tasks;
     setTasks((current) => current.filter((existing) => existing.id !== task.id));
     schedule(
-      `Deleted "${task.content}"`,
+      `Moved "${task.content}" to Trash`,
       async () => {
         await withError(() =>
           fetch(`/api/tasks/${task.id}`, { method: "DELETE" }),
@@ -423,7 +423,7 @@ export function TaskList({
     const previousTasks = tasks;
     setTasks((current) => current.filter((task) => !affectedIds.has(task.id)));
     schedule(
-      `Deleted ${affectedTasks.length} tasks`,
+      `Moved ${affectedTasks.length} tasks to Trash`,
       () => bulkAction(affectedTasks, (task) => fetch(`/api/tasks/${task.id}`, { method: "DELETE" })),
       () => setTasks(previousTasks),
     );
@@ -1216,7 +1216,7 @@ function BulkToolbar({
     <div className="fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 z-40 mx-auto flex w-fit max-w-[calc(100vw-2rem)] flex-wrap items-center justify-center gap-2 rounded-lg border bg-background p-2 shadow-lg">
       <span className="px-1 text-sm text-muted-foreground">{count} selected</span>
       <Button size="sm" onClick={onComplete}>Complete</Button>
-      <Button size="sm" variant="destructive" onClick={onDelete}>Delete</Button>
+      <Button size="sm" variant="destructive" onClick={onDelete}>Move to Trash</Button>
       <Select onValueChange={(value) => typeof value === "string" && onMove(value)}>
         <SelectTrigger size="sm"><SelectValue placeholder="Move" /></SelectTrigger>
         <SelectContent>

@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, ilike, inArray, lt, lte, or, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, inArray, isNull, lt, lte, or, type SQL } from "drizzle-orm";
 
 import { POST as createTask } from "@/app/api/tasks/route";
 import { withIdempotency } from "@/lib/api/idempotency";
@@ -50,7 +50,7 @@ export async function GET(request: Request) {
     return Response.json({ items: [], nextCursor: null });
   }
 
-  const conditions: SQL[] = [inArray(tasks.projectId, accessibleIds)];
+  const conditions: SQL[] = [inArray(tasks.projectId, accessibleIds), isNull(tasks.deletedAt)];
   const projectId = url.searchParams.get("projectId");
   const sectionId = url.searchParams.get("sectionId");
   const parentId = url.searchParams.get("parentId");

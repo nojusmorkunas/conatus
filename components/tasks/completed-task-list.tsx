@@ -63,7 +63,7 @@ export function CompletedTaskList({
   }
 
   async function remove(task: CompletedTask) {
-    if (!confirm(`Delete task "${task.content}"?`)) return;
+    if (!confirm(`Move task "${task.content}" to Trash? You can restore it later.`)) return;
     setError(null);
     const response = await fetch(`/api/tasks/${task.id}`, { method: "DELETE" });
     if (!response.ok) {
@@ -120,7 +120,7 @@ export function CompletedTaskList({
                 variant="ghost"
                 size="icon-xs"
                 className="opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
-                aria-label="Delete task"
+                aria-label="Move task to Trash"
                 onClick={() => remove(task)}
               >
                 <Trash2 />

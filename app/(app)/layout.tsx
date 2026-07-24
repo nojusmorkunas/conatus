@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { and, count, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, count, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -56,7 +56,7 @@ export default async function AppLayout({
         todayCount: sql<number>`count(*) filter (where ${lte(tasks.dueDate, today)})`,
       })
       .from(tasks)
-      .where(and(inArray(tasks.projectId, projectIds), eq(tasks.isCompleted, false)))
+      .where(and(inArray(tasks.projectId, projectIds), eq(tasks.isCompleted, false), isNull(tasks.deletedAt)))
       .groupBy(tasks.projectId)
     : [];
   const counts = Object.fromEntries(taskCounts.map(({ projectId, count }) => [projectId, count]));

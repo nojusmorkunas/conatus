@@ -153,6 +153,8 @@ export const projects = pgTable("projects", {
   favoriteOrder: text("favorite_order"),
   isFavorite: boolean("is_favorite").notNull().default(false),
   isArchived: boolean("is_archived").notNull().default(false),
+  // Deleted projects stay recoverable from Trash instead of being cascaded away.
+  deletedAt: timestamp("deleted_at"),
   // The Inbox every user gets at registration; it can't be renamed or deleted.
   isInbox: boolean("is_inbox").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -264,6 +266,8 @@ export const tasks = pgTable("tasks", {
   durationMinutes: integer("duration_minutes"),
   isCompleted: boolean("is_completed").notNull().default(false),
   completedAt: timestamp("completed_at"),
+  // A task (and its subtree) can be restored from Trash.
+  deletedAt: timestamp("deleted_at"),
   order: text("order").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

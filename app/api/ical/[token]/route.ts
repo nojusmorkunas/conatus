@@ -1,4 +1,4 @@
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { tasks, users } from "@/lib/db/schema";
@@ -28,7 +28,7 @@ export async function GET(
     })
     .from(tasks)
     .where(
-      and(eq(tasks.userId, user.id), eq(tasks.isCompleted, false), isNotNull(tasks.dueDate)),
+      and(eq(tasks.userId, user.id), eq(tasks.isCompleted, false), isNull(tasks.deletedAt), isNotNull(tasks.dueDate)),
     )
     .limit(500);
 

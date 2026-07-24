@@ -1,4 +1,4 @@
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { generateKeyBetween } from "fractional-indexing";
 
 import { requireUser } from "@/lib/auth/session";
@@ -188,7 +188,29 @@ export async function DELETE(
     return Response.json({ error: "Inbox can't be deleted" }, { status: 400 });
   }
 
-  await db.delete(projects).where(eq(projects.id, id));
+  // Retain a project and its nested projects so it can be recovered from
+  // Trash. This replaces the old cascading hard delete.
+  const owned = await db
+    .select({ id: projects.id, parentId: projects.parentId })
+    .from(projects)
+    .where(eq(projects.userId, user.id));
+  const children = new Map<string, string[]>();
+  for (const candidate of owned) {
+    if (!candidate.parentId) continue;
+    children.set(candidate.parentId, [...(children.get(candidate.parentId) ?? []), candidate.id]);
+  }
+  const deletedIds = new Set([id]);
+  const queue = [...(children.get(id) ?? [])];
+  while (queue.length) {
+    const childId = queue.shift()!;
+    if (deletedIds.has(childId)) continue;
+    deletedIds.add(childId);
+    queue.push(...(children.get(childId) ?? []));
+  }
+  await db
+    .update(projects)
+    .set({ deletedAt: new Date(), updatedAt: new Date() })
+    .where(inArray(projects.id, [...deletedIds]));
 
   await logActivity({
     userId: user.id,

@@ -20,10 +20,11 @@ type Task = typeof tasks.$inferSelect;
 
 function siblingScope(task: Pick<Task, "parentId" | "projectId" | "sectionId">) {
   return task.parentId
-    ? eq(tasks.parentId, task.parentId)
+    ? and(eq(tasks.parentId, task.parentId), isNull(tasks.deletedAt))
     : and(
         eq(tasks.projectId, task.projectId),
         isNull(tasks.parentId),
+        isNull(tasks.deletedAt),
         task.sectionId ? eq(tasks.sectionId, task.sectionId) : isNull(tasks.sectionId),
       );
 }
@@ -160,7 +161,7 @@ export async function PATCH(
         order: tasks.order,
       })
       .from(tasks)
-      .where(eq(tasks.projectId, task.projectId));
+      .where(and(eq(tasks.projectId, task.projectId), isNull(tasks.deletedAt)));
 
     const descendants = subtreeIds(projectTasks, id);
     if (wouldCreateTaskCycle(projectTasks, id, parentId)) {
@@ -385,7 +386,17 @@ export async function DELETE(
     .from(projects)
     .where(eq(projects.id, task.projectId));
 
-  await db.delete(tasks).where(eq(tasks.id, id));
+  // Keep the whole task tree together in Trash. The database previously
+  // cascaded child rows here, which made a mistaken deletion irreversible.
+  const projectTasks = await db
+    .select({ id: tasks.id, parentId: tasks.parentId, sectionId: tasks.sectionId, order: tasks.order })
+    .from(tasks)
+    .where(eq(tasks.projectId, task.projectId));
+  const deletedIds = [...subtreeIds(projectTasks, id)];
+  await db
+    .update(tasks)
+    .set({ deletedAt: new Date(), updatedAt: new Date() })
+    .where(inArray(tasks.id, deletedIds));
 
   await logActivity({
     userId: user.id,

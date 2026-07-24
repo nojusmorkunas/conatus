@@ -103,7 +103,7 @@ export function TaskDateList({
       tasks: group.tasks.filter((existing) => existing.id !== task.id),
     })));
     schedule(
-      `Deleted "${task.content}"`,
+      `Moved "${task.content}" to Trash`,
       () => withError(() => fetch(`/api/tasks/${task.id}`, { method: "DELETE" })),
       () => setGroups(previousGroups),
     );

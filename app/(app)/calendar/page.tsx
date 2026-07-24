@@ -1,4 +1,4 @@
-import { and, between, eq, inArray } from "drizzle-orm";
+import { and, between, eq, inArray, isNull } from "drizzle-orm";
 
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -43,6 +43,7 @@ export default async function CalendarPage({
       and(
         inArray(tasks.projectId, await accessibleProjectIds(user.id)),
         eq(tasks.isCompleted, false),
+        isNull(tasks.deletedAt),
         between(tasks.dueDate, rangeStart, rangeEnd),
       ),
     )

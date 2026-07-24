@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -34,6 +34,7 @@ export default async function CompletedPage() {
       and(
         inArray(tasks.projectId, await accessibleProjectIds(user.id)),
         eq(tasks.isCompleted, true),
+        isNull(tasks.deletedAt),
       ),
     )
     .orderBy(desc(tasks.completedAt))

@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { projectCollaborators, projects, tasks } from "@/lib/db/schema";
@@ -22,7 +22,7 @@ export async function requireProjectAccess(
         eq(projectCollaborators.userId, userId),
       ),
     )
-    .where(eq(projects.id, projectId));
+    .where(and(eq(projects.id, projectId), isNull(projects.deletedAt)));
   if (!row) return null;
   if (row.project.userId === userId) return { role: "owner", project: row.project };
   return row.collaboratorId ? { role: "editor", project: row.project } : null;
@@ -45,7 +45,7 @@ export async function requireTaskAccess(userId: string, taskId: string) {
         eq(projectCollaborators.userId, userId),
       ),
     )
-    .where(eq(tasks.id, taskId));
+    .where(and(eq(tasks.id, taskId), isNull(tasks.deletedAt), isNull(projects.deletedAt)));
   if (!row || (row.ownerId !== userId && !row.collaboratorId)) return null;
   return row.task;
 }
@@ -58,13 +58,13 @@ export async function accessibleProjects(
   const own = await db
     .select()
     .from(projects)
-    .where(and(eq(projects.userId, userId), eq(projects.isArchived, false)))
+    .where(and(eq(projects.userId, userId), eq(projects.isArchived, false), isNull(projects.deletedAt)))
     .orderBy(projects.order);
   const shared = await db
     .select({ project: projects })
     .from(projectCollaborators)
     .innerJoin(projects, eq(projects.id, projectCollaborators.projectId))
-    .where(and(eq(projectCollaborators.userId, userId), eq(projects.isArchived, false)))
+    .where(and(eq(projectCollaborators.userId, userId), eq(projects.isArchived, false), isNull(projects.deletedAt)))
     .orderBy(projects.order);
   return [...own, ...shared.map((row) => ({ ...row.project, shared: true }))];
 }

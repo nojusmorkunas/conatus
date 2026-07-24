@@ -25,7 +25,7 @@ export async function sendDueReminders() {
     .innerJoin(tasks, eq(reminders.taskId, tasks.id))
     .innerJoin(projects, eq(tasks.projectId, projects.id))
     .innerJoin(users, eq(reminders.userId, users.id))
-    .where(and(lte(reminders.remindAt, new Date()), isNull(reminders.sentAt)));
+    .where(and(lte(reminders.remindAt, new Date()), isNull(reminders.sentAt), isNull(tasks.deletedAt), isNull(projects.deletedAt)));
 
   for (const reminder of due) {
     if (!reminder.userEmail) continue;

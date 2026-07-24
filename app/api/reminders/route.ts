@@ -32,6 +32,7 @@ export async function GET(request: Request) {
           eq(reminders.userId, user.id),
           lte(reminders.remindAt, new Date()),
           isNull(reminders.seenAt),
+          isNull(tasks.deletedAt),
         ),
       )
       .orderBy(reminders.remindAt);

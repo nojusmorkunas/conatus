@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, isNull } from "drizzle-orm";
 
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -50,7 +50,7 @@ export default async function ProjectPage({
   const projectTasks = await db
     .select()
     .from(tasks)
-    .where(eq(tasks.projectId, id))
+    .where(and(eq(tasks.projectId, id), isNull(tasks.deletedAt)))
     .orderBy(tasks.order);
 
   const userLabels = await db

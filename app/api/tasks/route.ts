@@ -27,7 +27,7 @@ export async function GET(request: Request) {
   const projectTasks = await db
     .select()
     .from(tasks)
-    .where(eq(tasks.projectId, projectId))
+    .where(and(eq(tasks.projectId, projectId), isNull(tasks.deletedAt)))
     .orderBy(tasks.order);
 
   return Response.json(
@@ -95,7 +95,7 @@ export async function POST(request: Request) {
     const [parent] = await db
       .select({ id: tasks.id, sectionId: tasks.sectionId })
       .from(tasks)
-      .where(and(eq(tasks.id, parentId), eq(tasks.projectId, projectId)));
+      .where(and(eq(tasks.id, parentId), eq(tasks.projectId, projectId), isNull(tasks.deletedAt)));
     if (!parent) {
       return Response.json({ error: "Not found" }, { status: 404 });
     }
@@ -105,10 +105,11 @@ export async function POST(request: Request) {
   // Order is scoped within siblings: under a parent task for subtasks,
   // otherwise within the section (or project root) they sit in.
   const siblingScope = parentId
-    ? eq(tasks.parentId, parentId)
+    ? and(eq(tasks.parentId, parentId), isNull(tasks.deletedAt))
     : and(
         eq(tasks.projectId, projectId),
         isNull(tasks.parentId),
+        isNull(tasks.deletedAt),
         effectiveSectionId ? eq(tasks.sectionId, effectiveSectionId) : isNull(tasks.sectionId),
       );
 

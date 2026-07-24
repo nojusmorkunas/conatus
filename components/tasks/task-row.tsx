@@ -854,7 +854,7 @@ function TaskContextMenu({
           void navigator.clipboard.writeText(`${location.origin}/projects/${task.projectId}?task=${task.id}`);
         })}><Link />Copy link to task</DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive" onClick={() => run(onDelete)}><Trash2 />Delete</DropdownMenuItem>
+        <DropdownMenuItem variant="destructive" onClick={() => run(onDelete)}><Trash2 />Move to Trash</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

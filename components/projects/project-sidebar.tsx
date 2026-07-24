@@ -20,6 +20,7 @@ import {
   Plus,
   Search,
   Settings,
+  Trash2,
   MoreHorizontal,
   Users,
 } from "lucide-react";
@@ -476,6 +477,9 @@ export function ProjectSidebar({
               </ViewLink>
               <ViewLink href="/filters-labels" icon={<LayoutGrid className="size-4" />}>
                 Organize
+              </ViewLink>
+              <ViewLink href="/trash" icon={<Trash2 className="size-4" />}>
+                Trash
               </ViewLink>
             </div>
           </div>
@@ -1064,9 +1068,9 @@ function ProjectRow({
 
   async function remove() {
     const childMessage = hasSubProjects
-      ? " Its sub-projects will move to the top level."
+      ? " Its sub-projects will move to Trash too."
       : "";
-    if (!confirm(`Delete "${project.name}"? Its sections will be deleted too.${childMessage}`)) {
+    if (!confirm(`Move "${project.name}" to Trash? You can restore it later.${childMessage}`)) {
       return;
     }
     await fetch(`/api/projects/${project.id}`, { method: "DELETE" });
@@ -1228,7 +1232,7 @@ function ProjectRow({
               {project.isFavorite ? "Unpin it" : "Pin it!"}
             </DropdownMenuItem>
             <DropdownMenuItem variant="destructive" onClick={remove}>
-              Delete
+              Move to Trash
             </DropdownMenuItem>
           </DropdownMenuContent>
           </DropdownMenu>

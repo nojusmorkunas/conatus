@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { generateKeyBetween } from "fractional-indexing";
 
 import { requireUser } from "@/lib/auth/session";
@@ -72,7 +72,7 @@ export async function PATCH(
       .where(eq(sections.projectId, section.projectId)).orderBy(sections.order);
     const index = siblings.findIndex((candidate) => candidate.id === id);
     const sourceTasks = await db.select().from(tasks)
-      .where(eq(tasks.sectionId, id)).orderBy(tasks.order);
+      .where(and(eq(tasks.sectionId, id), isNull(tasks.deletedAt))).orderBy(tasks.order);
     const sourceIds = sourceTasks.map((task) => task.id);
     const labels = sourceIds.length
       ? await db.select().from(taskLabels).where(inArray(taskLabels.taskId, sourceIds))

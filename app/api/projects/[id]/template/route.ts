@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -32,7 +32,7 @@ export async function GET(
     db
       .select()
       .from(tasks)
-      .where(and(eq(tasks.projectId, id), eq(tasks.isCompleted, false)))
+      .where(and(eq(tasks.projectId, id), eq(tasks.isCompleted, false), isNull(tasks.deletedAt)))
       .orderBy(tasks.order),
   ]);
   const activeTaskIds = new Set(activeTasks.map((task) => task.id));

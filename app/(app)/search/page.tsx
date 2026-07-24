@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { and, asc, desc, eq, ilike, inArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNull, or } from "drizzle-orm";
 
 import { DueChip } from "@/components/tasks/task-row";
 import { MobilePageHeader } from "@/components/projects/mobile-sidebar-trigger";
@@ -64,6 +64,7 @@ export default async function SearchPage({
       .where(
         and(
           inArray(tasks.projectId, projectIds),
+          isNull(tasks.deletedAt),
           or(ilike(tasks.content, pattern), ilike(tasks.description, pattern)),
         ),
       )
@@ -88,7 +89,7 @@ export default async function SearchPage({
       .innerJoin(tasks, eq(tasks.id, comments.taskId))
       .innerJoin(projects, eq(projects.id, tasks.projectId))
       .where(
-        and(inArray(tasks.projectId, projectIds), ilike(comments.content, pattern)),
+        and(inArray(tasks.projectId, projectIds), isNull(tasks.deletedAt), ilike(comments.content, pattern)),
       )
       .orderBy(desc(comments.createdAt))
       .limit(LIMIT),
