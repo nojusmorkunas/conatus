@@ -46,7 +46,7 @@ jobs:
 
     steps:
       - name: Check out the released commit
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.release.tag_name }}
 
@@ -110,7 +110,7 @@ jobs:
 
     steps:
       - name: Check out the released commit
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.release.tag_name }}
 
