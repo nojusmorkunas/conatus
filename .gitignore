@@ -37,10 +37,13 @@ yarn-error.log*
 .env*
 !.env.example
 
-# Keep public Markdown limited to readmes and contribution instructions.
+# Markdown is deny-by-default so local planning notes cannot leak. Anything a
+# user or contributor of a released version needs must be allowlisted here.
 *.md
 !README.md
 !CONTRIBUTING.md
+!CHANGELOG.md
+!RELEASE.md
 
 # vercel
 .vercel
