@@ -24,6 +24,14 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+// The nonce in proxy.ts's Content-Security-Policy is minted per request, so
+// prerendered HTML can never carry a matching one: its inline hydration
+// scripts would be refused and the page would render but never come alive.
+// Every route that serves a real page is already request-scoped through auth,
+// so forcing dynamic rendering here costs nothing and stops a future
+// statically-prerenderable page from silently shipping broken.
+export const dynamic = "force-dynamic";
+
 export default function RootLayout({
   children,
 }: Readonly<{
