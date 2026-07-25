@@ -40,7 +40,10 @@ test("owner shares a project with a collaborator who gets read access", async ({
     const shareUsernameInput = pageA.getByPlaceholder("Add member by username");
     await shareUsernameInput.fill(usernameB);
     await shareUsernameInput.press("Enter");
-    await expect(pageA.getByText(usernameB)).toBeVisible();
+    // Match the member row exactly: a substring match also catches the
+    // "Added <username>." confirmation, so whichever of the two renders first
+    // decides whether this assertion sees one element or trips strict mode.
+    await expect(pageA.getByText(usernameB, { exact: true })).toBeVisible();
 
     // B sees the shared project in their sidebar and can open it.
     await pageB.reload();
