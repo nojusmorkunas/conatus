@@ -1,3 +1,8 @@
+// Counters live in an in-memory Map scoped to this process, so each `app`
+// container enforces its own independent limit. Scaling the `app` service to
+// multiple replicas therefore multiplies the effective rate limit by the
+// replica count rather than sharing one limit across them.
+
 type RateLimitEntry = {
   count: number;
   resetAt: number;
