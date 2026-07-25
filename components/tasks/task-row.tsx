@@ -16,8 +16,6 @@ import {
   MessageCircle,
   Pencil,
   Plus,
-  Repeat,
-  Timer,
   Trash2,
   UserPlus,
   GripVertical,
@@ -26,19 +24,9 @@ import {
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-import type { labels as labelsTable } from "@/lib/db/schema";
-import { dueLabel, pastDateLabel } from "@/lib/dates";
 import { addDays } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { LabelChip } from "@/components/labels/label-chip";
 import {
   DropdownMenu,
@@ -53,9 +41,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { TaskCheckbox } from "./task-checkbox";
 import { TaskAddForm } from "./task-add-form";
-import type { ProjectMember, TaskWithLabels } from "./task-list";
-
-type Label = typeof labelsTable.$inferSelect;
+import { AssigneeChip, DeadlineChip, DueChip, DurationChip } from "./task-chips";
+import { AssigneeEditor, DueEditor } from "./task-editors";
+import type { Label, ProjectMember, TaskWithLabels } from "./types";
 
 function TaskRowComponent({
   task,
@@ -457,260 +445,6 @@ export const TaskRow = memo(TaskRowComponent, (prev, next) =>
   prev.collapsed === next.collapsed &&
   prev.activeProjectedDepth === next.activeProjectedDepth,
 );
-
-export function AssigneeChip({
-  assigneeId,
-  members,
-  currentUserId,
-}: {
-  assigneeId: string | null;
-  members: ProjectMember[];
-  currentUserId: string;
-}) {
-  const assignee = members.find((member) => member.id === assigneeId);
-  if (!assignee) return null;
-
-  return (
-    <span
-      title={assignee.username}
-      aria-label={`Assigned to ${assignee.username}`}
-      className={cn(
-        "flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground",
-        assignee.id === currentUserId &&
-          "bg-primary/10 text-primary ring-1 ring-primary/50",
-      )}
-    >
-      {assignee.username.charAt(0).toUpperCase()}
-    </span>
-  );
-}
-
-function AssigneeEditor({
-  assigneeId,
-  members,
-  onAssign,
-  onCancel,
-}: {
-  assigneeId: string | null;
-  members: ProjectMember[];
-  onAssign: (assigneeId: string | null) => void;
-  onCancel: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-2 py-1">
-      <Select
-        value={assigneeId ?? undefined}
-        onValueChange={(value) => {
-          if (typeof value === "string") onAssign(value);
-        }}
-      >
-        <SelectTrigger size="sm" aria-label="Assignee">
-          <SelectValue placeholder="Choose member" />
-        </SelectTrigger>
-        <SelectContent>
-          {members.map((member) => (
-            <SelectItem key={member.id} value={member.id}>
-              {member.username}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {assigneeId && (
-        <Button type="button" variant="ghost" size="sm" onClick={() => onAssign(null)}>
-          Unassign
-        </Button>
-      )}
-      <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
-        Cancel
-      </Button>
-    </div>
-  );
-}
-
-export function DueChip({
-  task,
-  today,
-  dateFormat,
-}: {
-  task: Pick<TaskWithLabels, "dueDate" | "dueTime" | "recurrence">;
-  today: string;
-  dateFormat: string;
-}) {
-  if (!task.dueDate) return null;
-  const tomorrow = addDays(today, 1);
-
-  return (
-    <span
-      className={cn(
-        "flex shrink-0 items-center gap-1 text-xs",
-        task.dueDate < today
-          ? "text-red-500"
-          : task.dueDate === today
-            ? "text-green-600"
-            : task.dueDate === tomorrow
-              ? "text-orange-500"
-              : "text-muted-foreground",
-      )}
-    >
-      {task.recurrence && <Repeat aria-label={`Repeats ${task.recurrence}`} className="size-3.5" />}
-      <CalendarDays className="size-3.5" />
-      {dueLabel(task.dueDate, today, dateFormat)}
-      {task.dueTime && ` ${task.dueTime}`}
-      {task.recurrence && <span className="sr-only">, repeats {task.recurrence}</span>}
-    </span>
-  );
-}
-
-// Deadline = must-finish-by, distinct from the due chip above (when to work
-// on it). Flag icon + red past / amber today keeps it visually separate.
-export function DeadlineChip({
-  task,
-  today,
-  dateFormat,
-}: {
-  task: Pick<TaskWithLabels, "deadlineDate">;
-  today: string;
-  dateFormat: string;
-}) {
-  if (!task.deadlineDate) return null;
-  return (
-    <span
-      className={cn(
-        "flex shrink-0 items-center gap-1 text-xs",
-        task.deadlineDate < today
-          ? "text-red-500"
-          : task.deadlineDate === today
-            ? "text-amber-500"
-            : "text-muted-foreground",
-      )}
-    >
-      <Flag className="size-3.5" />
-      {task.deadlineDate < today
-        ? pastDateLabel(task.deadlineDate, today, dateFormat)
-        : dueLabel(task.deadlineDate, today, dateFormat)}
-    </span>
-  );
-}
-
-function humanizeDuration(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (!h) return `${m}m`;
-  if (!m) return `${h}h`;
-  return `${h}h ${m}m`;
-}
-
-export function DurationChip({
-  task,
-}: {
-  task: Pick<TaskWithLabels, "durationMinutes">;
-}) {
-  if (!task.durationMinutes) return null;
-  return (
-    <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-      <Timer className="size-3.5" />
-      {humanizeDuration(task.durationMinutes)}
-    </span>
-  );
-}
-
-function DueEditor({
-  dueDate,
-  dueTime,
-  deadlineDate,
-  durationMinutes,
-  onSave,
-  onCancel,
-}: {
-  dueDate: string | null;
-  dueTime: string | null;
-  deadlineDate: string | null;
-  durationMinutes: number | null;
-  onSave: (
-    dueDate: string | null,
-    dueTime: string | null,
-    deadlineDate: string | null,
-    durationMinutes: number | null,
-  ) => void;
-  onCancel: () => void;
-}) {
-  const [date, setDate] = useState(dueDate ?? "");
-  const [time, setTime] = useState(dueTime ?? "");
-  const [deadline, setDeadline] = useState(deadlineDate ?? "");
-  const [duration, setDuration] = useState(durationMinutes ? String(durationMinutes) : "");
-
-  function submit(event: React.FormEvent) {
-    event.preventDefault();
-    onSave(date || null, date && time ? time : null, deadline || null, duration ? Number(duration) : null);
-  }
-
-  return (
-    <form onSubmit={submit} className="flex flex-wrap items-center gap-2 py-1">
-      <Input
-        type="date"
-        autoFocus
-        className="w-auto"
-        value={date}
-        onChange={(event) => setDate(event.target.value)}
-      />
-      <Input
-        type="time"
-        className="w-auto"
-        value={time}
-        onChange={(event) => setTime(event.target.value)}
-      />
-      <span className="flex items-center gap-1">
-        <Flag className="size-3 text-muted-foreground" aria-hidden />
-        <Input
-          type="date"
-          aria-label="Deadline"
-          className="w-auto"
-          value={deadline}
-          onChange={(event) => setDeadline(event.target.value)}
-        />
-        {deadline && (
-          <Button type="button" variant="ghost" size="sm" onClick={() => setDeadline("")}>
-            Clear
-          </Button>
-        )}
-      </span>
-      <span className="flex items-center gap-1">
-        <Timer className="size-3 text-muted-foreground" aria-hidden />
-        <Input
-          type="number"
-          min={1}
-          max={1440}
-          aria-label="Duration (minutes)"
-          placeholder="min"
-          className="w-20"
-          value={duration}
-          onChange={(event) => setDuration(event.target.value)}
-        />
-        {duration && (
-          <Button type="button" variant="ghost" size="sm" onClick={() => setDuration("")}>
-            Clear
-          </Button>
-        )}
-      </span>
-      <Button type="submit" size="sm">
-        Save
-      </Button>
-      {dueDate && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => onSave(null, null, deadline || null, duration ? Number(duration) : null)}
-        >
-          Clear
-        </Button>
-      )}
-      <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
-        Cancel
-      </Button>
-    </form>
-  );
-}
 
 function TaskContent({ task }: { task: TaskWithLabels }) {
   return <div className="text-base select-none sm:text-sm">{task.content}</div>;

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { and, asc, desc, eq, ilike, inArray, isNull, or } from "drizzle-orm";
 
-import { DueChip } from "@/components/tasks/task-row";
+import { DueChip } from "@/components/tasks/task-chips";
 import { MobilePageHeader } from "@/components/projects/mobile-sidebar-trigger";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
