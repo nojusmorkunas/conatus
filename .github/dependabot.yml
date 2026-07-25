@@ -1,0 +1,53 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Next, React and the ESLint config are released in lockstep; splitting
+      # them across pull requests produces combinations that never build.
+      next:
+        patterns:
+          - next
+          - eslint-config-next
+          - react
+          - react-dom
+          - "@types/react"
+          - "@types/react-dom"
+      dev-dependencies:
+        dependency-type: development
+    ignore:
+      # Held back deliberately: next-auth v5 is still a beta line and each
+      # prerelease carries breaking changes to the session and callback APIs.
+      - dependency-name: next-auth
+        update-types: [version-update:semver-patch]
+
+  - package-ecosystem: npm
+    directory: /mcp-server
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      dev-dependencies:
+        dependency-type: development
+
+  - package-ecosystem: npm
+    directory: /ops
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directories:
+      - /
+      - /mcp-server
+    schedule:
+      interval: weekly
