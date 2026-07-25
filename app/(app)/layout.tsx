@@ -7,6 +7,7 @@ import { accessibleProjects } from "@/lib/db/access";
 import { filters, labels, tasks, users } from "@/lib/db/schema";
 import { ProjectSidebar } from "@/components/projects/project-sidebar";
 import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
+import { Toaster } from "@/components/ui/toast";
 import { todayInTimezone } from "@/lib/dates";
 
 export default async function AppLayout({
@@ -80,6 +81,7 @@ export default async function AppLayout({
         todayCount={todayCount}
       />
       <main className="flex-1 min-w-0 overflow-y-auto">{children}</main>
+      <Toaster />
     </div>
   );
 }
