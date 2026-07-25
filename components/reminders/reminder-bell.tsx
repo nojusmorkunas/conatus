@@ -6,6 +6,8 @@ import Link from "next/link";
 import { Bell, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { toastError } from "@/components/ui/toast";
+import { api } from "@/lib/api-client";
 
 type DueReminder = {
   id: string;
@@ -62,12 +64,12 @@ export function ReminderBell() {
   }, [open, positionPopup]);
 
   async function dismiss(id: string) {
-    await fetch(`/api/reminders/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ seen: true }),
-    });
-    setReminders((current) => current.filter((reminder) => reminder.id !== id));
+    try {
+      await api.patch(`/api/reminders/${id}`, { seen: true });
+      setReminders((current) => current.filter((reminder) => reminder.id !== id));
+    } catch (error) {
+      toastError(error, "Couldn't dismiss the reminder.");
+    }
   }
 
   return (

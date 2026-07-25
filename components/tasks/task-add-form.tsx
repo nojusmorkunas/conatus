@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/select";
 import { parseQuickAdd } from "@/lib/parser/quick-add";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api-client";
+import { toastError } from "@/components/ui/toast";
 import { priorityLabels } from "./priority";
 
 export function TaskAddForm({
@@ -121,11 +123,11 @@ export function TaskAddForm({
 
     if (labelIds.length > 0) {
       const task: { id: string } = await response.json();
-      await fetch(`/api/tasks/${task.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ labelIds }),
-      });
+      try {
+        await api.patch(`/api/tasks/${task.id}`, { labelIds });
+      } catch (error) {
+        toastError(error, "Task added, but the labels couldn't be applied.");
+      }
     }
     setPending(false);
 

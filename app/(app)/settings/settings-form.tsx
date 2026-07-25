@@ -12,10 +12,12 @@ import {
   settingsSchema,
   type SettingsInput,
 } from "@/lib/validation";
+import { api } from "@/lib/api-client";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { toastError } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import {
   Select,
@@ -93,12 +95,12 @@ export function SettingsForm({
 
   const onSubmit = handleSubmit(async (values) => {
     setSaved(false);
-    await fetch("/api/settings", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(values),
-    });
-    setSaved(true);
+    try {
+      await api.patch("/api/settings", values);
+      setSaved(true);
+    } catch (error) {
+      toastError(error, "Couldn't save your settings.");
+    }
   });
 
   const onImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -156,8 +158,12 @@ export function SettingsForm({
   };
 
   const onDisable = async () => {
-    await fetch("/api/settings/ical-token", { method: "DELETE" });
-    setToken(null);
+    try {
+      await api.delete("/api/settings/ical-token");
+      setToken(null);
+    } catch (error) {
+      toastError(error, "Couldn't disable the calendar feed.");
+    }
   };
 
   const onCopy = async () => {

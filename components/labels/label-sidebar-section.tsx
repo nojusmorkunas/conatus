@@ -5,6 +5,7 @@ import Link from "next/link";
 import { MoreHorizontal } from "lucide-react";
 
 import type { labels as labelsTable } from "@/lib/db/schema";
+import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ProjectColorDot } from "@/components/projects/project-color-dot";
 import { ProjectColorPicker } from "@/components/projects/project-color-picker";
+import { toastError } from "@/components/ui/toast";
 
 type Label = typeof labelsTable.$inferSelect;
 
@@ -31,12 +33,13 @@ export function LabelRow({
   const [name, setName] = useState(label.name);
 
   async function patch(body: Record<string, unknown>) {
-    await fetch(`/api/labels/${label.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    onChanged();
+    try {
+      await api.patch(`/api/labels/${label.id}`, body);
+    } catch (error) {
+      toastError(error, "Couldn't update the label.");
+    } finally {
+      onChanged();
+    }
   }
 
   async function submitRename(event: React.FormEvent) {
@@ -47,8 +50,13 @@ export function LabelRow({
 
   async function remove() {
     if (!confirm(`Delete label "${label.name}"?`)) return;
-    await fetch(`/api/labels/${label.id}`, { method: "DELETE" });
-    onChanged();
+    try {
+      await api.delete(`/api/labels/${label.id}`);
+    } catch (error) {
+      toastError(error, "Couldn't delete the label.");
+    } finally {
+      onChanged();
+    }
   }
 
   if (renaming) {

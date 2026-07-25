@@ -18,6 +18,7 @@ import {
 
 import type { projects } from "@/lib/db/schema";
 import type { SortBy } from "@/lib/task-sort";
+import { api } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -33,6 +34,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { toastError } from "@/components/ui/toast";
 import { ProjectCommentsPanel } from "./project-comments-panel";
 import { projectColorTextClass } from "./project-color-dot";
 import { ProjectIcon } from "./project-icons";
@@ -96,12 +98,13 @@ export function ProjectHeader({
   }, [isOwner, project.id, project.isInbox, project.parentId]);
 
   async function toggleFavorite() {
-    await fetch(`/api/projects/${project.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isFavorite: !project.isFavorite }),
-    });
-    router.refresh();
+    try {
+      await api.patch(`/api/projects/${project.id}`, { isFavorite: !project.isFavorite });
+    } catch (error) {
+      toastError(error, "Couldn't update the project.");
+    } finally {
+      router.refresh();
+    }
   }
 
   async function moveProject(value: unknown) {

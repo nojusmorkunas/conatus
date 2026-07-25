@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Filter as FilterIcon, MoreHorizontal } from "lucide-react";
 
 import type { filters as filtersTable } from "@/lib/db/schema";
+import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { toastError } from "@/components/ui/toast";
 
 type Filter = typeof filtersTable.$inferSelect;
 
@@ -31,12 +33,13 @@ export function FilterRow({
   const [name, setName] = useState(filter.name);
 
   async function patch(body: Record<string, unknown>) {
-    await fetch(`/api/filters/${filter.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    onChanged();
+    try {
+      await api.patch(`/api/filters/${filter.id}`, body);
+    } catch (error) {
+      toastError(error, "Couldn't update the filter.");
+    } finally {
+      onChanged();
+    }
   }
 
   async function submitRename(event: React.FormEvent) {
@@ -47,8 +50,13 @@ export function FilterRow({
 
   async function remove() {
     if (!confirm(`Delete filter "${filter.name}"?`)) return;
-    await fetch(`/api/filters/${filter.id}`, { method: "DELETE" });
-    onChanged();
+    try {
+      await api.delete(`/api/filters/${filter.id}`);
+    } catch (error) {
+      toastError(error, "Couldn't delete the filter.");
+    } finally {
+      onChanged();
+    }
   }
 
   if (renaming) {
