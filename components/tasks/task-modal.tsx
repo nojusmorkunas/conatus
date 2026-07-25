@@ -4,8 +4,8 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode, type RefOb
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight, ChevronUp, Ellipsis, Flag, Paperclip, Pencil, Plus, Repeat, Trash2, X } from "lucide-react";
 
-import type { attachments as attachmentsTable, comments as commentsTable, labels as labelsTable, reminders as remindersTable } from "@/lib/db/schema";
-import { dueLabel, pastDateLabel } from "@/lib/dates";
+import type { attachments as attachmentsTable, comments as commentsTable, reminders as remindersTable } from "@/lib/db/schema";
+import { dueLabel, humanizeDuration, pastDateLabel } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,26 +16,16 @@ import { LabelChip } from "@/components/labels/label-chip";
 import { LabelPicker } from "@/components/labels/label-picker";
 import { TaskAddForm } from "./task-add-form";
 import { TaskCheckbox } from "./task-checkbox";
-import type { ProjectMember, TaskWithLabels } from "./task-list";
+import type { Label, Project, ProjectMember, TaskWithLabels } from "./types";
 
-type Label = typeof labelsTable.$inferSelect;
 type Comment = typeof commentsTable.$inferSelect;
 type Attachment = typeof attachmentsTable.$inferSelect;
 type Reminder = typeof remindersTable.$inferSelect;
-type Project = { id: string; name: string };
 
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function humanizeDuration(minutes: number) {
-  const hours = Math.floor(minutes / 60);
-  const remaining = minutes % 60;
-  if (!hours) return `${remaining}m`;
-  if (!remaining) return `${hours}h`;
-  return `${hours}h ${remaining}m`;
 }
 
 export function TaskModal({ task, labels, members = [], currentUserId, today, dateFormat, onClose, onChanged, onDelete, onPrev, onNext }: {

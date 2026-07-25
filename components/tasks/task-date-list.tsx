@@ -4,14 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2 } from "lucide-react";
 
-import type { labels as labelsTable } from "@/lib/db/schema";
 import { TaskModal } from "./task-modal";
 import { TaskRow } from "./task-row";
-import type { TaskWithLabels } from "./task-list";
+import type { Label, TaskWithLabels } from "./types";
 import { usePendingAction } from "@/lib/use-pending-action";
 import { EmptyState } from "@/components/ui/empty-state";
-
-type Label = typeof labelsTable.$inferSelect;
 
 export type TaskDateGroup = { heading: string; tasks: TaskWithLabels[] };
 

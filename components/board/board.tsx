@@ -32,8 +32,8 @@ import {
   DeadlineChip,
   DueChip,
   DurationChip,
-} from "@/components/tasks/task-row";
-import type { ProjectMember, TaskWithLabels } from "@/components/tasks/task-list";
+} from "@/components/tasks/task-chips";
+import type { ProjectMember, TaskWithLabels } from "@/components/tasks/types";
 
 type Label = typeof labelsTable.$inferSelect;
 type Section = typeof sectionsTable.$inferSelect;

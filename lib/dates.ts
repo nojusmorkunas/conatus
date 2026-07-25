@@ -50,6 +50,14 @@ export function weekStartOf(date: string, weekStart: number): string {
   return addDays(date, -back);
 }
 
+export function humanizeDuration(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const remaining = minutes % 60;
+  if (!hours) return `${remaining}m`;
+  if (!remaining) return `${hours}h`;
+  return `${hours}h ${remaining}m`;
+}
+
 export function pastDateLabel(date: string, today: string, dateFormat: string): string {
   if (date === today) return "Today";
   if (date === addDays(today, -1)) return "Yesterday";
