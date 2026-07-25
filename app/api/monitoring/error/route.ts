@@ -1,13 +1,28 @@
 import { reportError } from "@/lib/error-reporter";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 const MESSAGE_LIMIT = 2_000;
 const STACK_LIMIT = 8_000;
+const MONITORING_IP_LIMIT = { limit: 30, windowMs: 5 * 60 * 1000 };
 
 function stringValue(value: unknown, limit: number): string | undefined {
   return typeof value === "string" ? value.slice(0, limit) : undefined;
 }
 
+function rateLimited(retryAfter: number) {
+  return Response.json(
+    { error: "Too many requests. Please try again later." },
+    { status: 429, headers: { "Retry-After": String(retryAfter) } },
+  );
+}
+
 export async function POST(request: Request) {
+  const ipLimit = checkRateLimit(
+    `monitoring:ip:${getClientIp(request)}`,
+    MONITORING_IP_LIMIT,
+  );
+  if (!ipLimit.ok) return rateLimited(ipLimit.retryAfter);
+
   let body: Record<string, unknown> = {};
   const contentLength = Number(request.headers.get("content-length"));
 

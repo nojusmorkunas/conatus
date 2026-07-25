@@ -138,6 +138,14 @@ Manual dump:
 docker compose exec db pg_dump -U app -Fc app > backup.dump
 ```
 
+## Scaling
+
+Rate limits (registration, password reset, the public error-reporting endpoint,
+etc.) are counted in memory inside each `app` container, not shared across
+containers. If you scale the `app` service to more than one replica, each
+replica enforces the limit independently, so the effective limit is the
+configured value multiplied by the replica count.
+
 ## Contributing
 
 See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for local setup and verification
