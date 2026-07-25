@@ -1,9 +1,9 @@
-FROM node:22-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
@@ -17,7 +17,7 @@ RUN DATABASE_URL=postgres://build:build@127.0.0.1:5432/build \
 # The operations image has its own minimal dependency set. It contains the
 # schema and auth code needed for migrations/bootstrap, but none of the Next.js
 # build output or browser-test toolchain.
-FROM node:22-alpine AS ops
+FROM node:26-alpine AS ops
 WORKDIR /app
 ENV NODE_ENV=production
 COPY ops/package.json ops/package-lock.json ./
@@ -34,7 +34,7 @@ CMD ["npm", "run", "migrate"]
 FROM ops AS bootstrap
 CMD ["npm", "run", "bootstrap"]
 
-FROM node:22-alpine AS run
+FROM node:26-alpine AS run
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
