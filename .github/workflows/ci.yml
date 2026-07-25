@@ -48,6 +48,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Check that no route is prerendered against the CSP nonce
+        run: npm run check:prerendered
+
   mcp-server:
     name: MCP server
     runs-on: ubuntu-latest
