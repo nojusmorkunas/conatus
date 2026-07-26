@@ -14,6 +14,13 @@ import { applyTheme, getTheme, type Theme } from "@/lib/theme";
 
 const THEME_CHANGE_EVENT = "theme-change";
 
+// Passed to Select so the trigger shows the label rather than the raw value.
+const themeLabels: Record<Theme, string> = {
+  light: "Light",
+  dark: "Dark",
+  system: "System",
+};
+
 function subscribeToTheme(onStoreChange: () => void) {
   window.addEventListener("storage", onStoreChange);
   window.addEventListener(THEME_CHANGE_EVENT, onStoreChange);
@@ -54,14 +61,20 @@ export function ThemeToggle() {
   }
 
   return (
-    <Select value={theme} onValueChange={(value) => changeTheme(value as Theme)}>
+    <Select
+      items={themeLabels}
+      value={theme}
+      onValueChange={(value) => changeTheme(value as Theme)}
+    >
       <SelectTrigger className="w-full" aria-label="Theme">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="light">Light</SelectItem>
-        <SelectItem value="dark">Dark</SelectItem>
-        <SelectItem value="system">System</SelectItem>
+        {Object.entries(themeLabels).map(([value, label]) => (
+          <SelectItem key={value} value={value}>
+            {label}
+          </SelectItem>
+        ))}
       </SelectContent>
     </Select>
   );

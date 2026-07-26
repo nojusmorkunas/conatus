@@ -59,6 +59,15 @@ export function CreateProjectForm({
     onDone();
   }
 
+  // Doubles as the Select `items` map, so the trigger shows the project name
+  // instead of the raw id.
+  const parentOptions: Record<string, string> = { none: "None" };
+  for (const project of projects) {
+    if (!project.shared && !project.isInbox && projectDepth(project, projects) < 3) {
+      parentOptions[project.id] = project.name;
+    }
+  }
+
   return (
     <form onSubmit={submit} className="flex flex-col gap-2 rounded-lg border border-border p-2">
       <Input
@@ -72,6 +81,7 @@ export function CreateProjectForm({
       <label className="flex flex-col gap-1 text-xs text-muted-foreground">
         Parent (optional)
         <Select
+          items={parentOptions}
           value={parentId}
           onValueChange={(value) =>
             setParentId(typeof value === "string" ? value : "none")
@@ -81,19 +91,11 @@ export function CreateProjectForm({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="none">None</SelectItem>
-            {projects
-              .filter(
-                (project) =>
-                  !project.shared &&
-                  !project.isInbox &&
-                  projectDepth(project, projects) < 3,
-              )
-              .map((project) => (
-                <SelectItem key={project.id} value={project.id}>
-                  {project.name}
-                </SelectItem>
-              ))}
+            {Object.entries(parentOptions).map(([id, label]) => (
+              <SelectItem key={id} value={id}>
+                {label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </label>

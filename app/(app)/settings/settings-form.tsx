@@ -340,6 +340,7 @@ export function SettingsForm({
             name="weekStart"
             render={({ field }) => (
               <Select
+                items={weekStartOptions}
                 value={field.value}
                 onValueChange={(value) => field.onChange(Number(value))}
               >
@@ -382,15 +383,13 @@ export function SettingsForm({
             name="activityGraphSource"
             render={({ field }) => (
               <>
-                <Select value={field.value} onValueChange={field.onChange}>
+                <Select
+                  items={activityGraphSourceOptions}
+                  value={field.value}
+                  onValueChange={field.onChange}
+                >
                   <SelectTrigger className="w-full">
-                    {/* SelectValue shows the raw value unless it is given a
-                        mapping, and these values are not user-facing text. */}
-                    <SelectValue>
-                      {(value: string) =>
-                        activityGraphSourceOptions.find((option) => option.value === value)?.label ?? value
-                      }
-                    </SelectValue>
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {activityGraphSourceOptions.map((option) => (

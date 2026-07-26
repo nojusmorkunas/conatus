@@ -203,6 +203,7 @@ export function TaskAddForm({
           onChange={(event) => setDueTime(event.target.value)}
         />
         <Select
+          items={priorityLabels}
           value={priority}
           onValueChange={(value) => setPriority(value ?? "4")}
         >
