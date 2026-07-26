@@ -12,9 +12,10 @@ import {
   settingsSchema,
   type SettingsInput,
 } from "@/lib/validation";
+import { activityGraphSourceOptions } from "@/lib/activity-sources";
 import { api } from "@/lib/api-client";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { toastError } from "@/components/ui/toast";
@@ -370,6 +371,40 @@ export function SettingsForm({
                 value={field.value}
                 onChange={(event) => field.onChange(event.target.valueAsNumber)}
               />
+            )}
+          />
+        </Field>
+
+        <Field>
+          <FieldLabel>Activity graph</FieldLabel>
+          <Controller
+            control={control}
+            name="activityGraphSource"
+            render={({ field }) => (
+              <>
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger className="w-full">
+                    {/* SelectValue shows the raw value unless it is given a
+                        mapping, and these values are not user-facing text. */}
+                    <SelectValue>
+                      {(value: string) =>
+                        activityGraphSourceOptions.find((option) => option.value === value)?.label ?? value
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activityGraphSourceOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FieldDescription>
+                  What the past-year graph on Stats counts.{" "}
+                  {activityGraphSourceOptions.find((option) => option.value === field.value)?.description}
+                </FieldDescription>
+              </>
             )}
           />
         </Field>

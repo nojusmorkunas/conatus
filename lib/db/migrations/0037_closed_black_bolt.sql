@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "activity_graph_source" text DEFAULT 'completed' NOT NULL;

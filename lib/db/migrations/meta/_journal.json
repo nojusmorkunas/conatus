@@ -260,6 +260,13 @@
       "when": 1784919457798,
       "tag": "0036_secret_microchip",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1785045820225,
+      "tag": "0037_closed_black_bolt",
+      "breakpoints": true
     }
   ]
 }

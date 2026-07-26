@@ -21,6 +21,7 @@ export default async function SettingsPage() {
       dateFormat: users.dateFormat,
       weekStart: users.weekStart,
       dailyGoal: users.dailyGoal,
+      activityGraphSource: users.activityGraphSource,
       icalToken: users.icalToken,
       username: users.username,
       passwordHash: users.passwordHash,
@@ -127,6 +128,8 @@ export default async function SettingsPage() {
               dateFormat: user.dateFormat as SettingsInput["dateFormat"],
               weekStart: user.weekStart,
               dailyGoal: user.dailyGoal,
+              activityGraphSource:
+                user.activityGraphSource as SettingsInput["activityGraphSource"],
             }}
             icalToken={user.icalToken}
             initialApiTokens={tokens.map((token) => ({

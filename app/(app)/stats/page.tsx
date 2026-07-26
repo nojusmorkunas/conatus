@@ -1,10 +1,17 @@
-import { and, eq, gte } from "drizzle-orm";
+import { and, eq, gte, inArray } from "drizzle-orm";
 
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { activityEvents, users } from "@/lib/db/schema";
-import { dateInTimezone, todayInTimezone } from "@/lib/dates";
-import { computeStats } from "@/lib/stats";
+import { dateInTimezone, formatDate, todayInTimezone } from "@/lib/dates";
+import {
+  activityGraphSourceLabel,
+  activityGraphSourceUnit,
+  eventsForSource,
+  type ActivityGraphSource,
+} from "@/lib/activity-sources";
+import { activityGraphStart, computeActivityGraph, computeStats } from "@/lib/stats";
+import { ActivityGraph } from "@/components/stats/activity-graph";
 import { MobilePageHeader } from "@/components/projects/mobile-sidebar-trigger";
 
 export default async function StatsPage() {
@@ -12,33 +19,51 @@ export default async function StatsPage() {
   if (!user) return null;
 
   const [settings] = await db
-    .select({ timezone: users.timezone, dailyGoal: users.dailyGoal })
+    .select({
+      timezone: users.timezone,
+      dateFormat: users.dateFormat,
+      weekStart: users.weekStart,
+      dailyGoal: users.dailyGoal,
+      activityGraphSource: users.activityGraphSource,
+    })
     .from(users)
     .where(eq(users.id, user.id));
 
-  const since = new Date();
-  since.setUTCDate(since.getUTCDate() - 365);
+  const today = todayInTimezone(settings.timezone);
+  const source = settings.activityGraphSource as ActivityGraphSource;
+
+  // One pass over the window covers both the graph and the streaks below it.
+  // The graph reaches further back than 365 days whenever its first column
+  // opens before the anniversary, and a day of slack absorbs the offset
+  // between the UTC timestamps stored here and the user's local dates.
+  const since = new Date(`${activityGraphStart(today, settings.weekStart)}T00:00:00Z`);
+  since.setUTCDate(since.getUTCDate() - 1);
   const events = await db
-    .select({ createdAt: activityEvents.createdAt })
+    .select({ type: activityEvents.type, createdAt: activityEvents.createdAt })
     .from(activityEvents)
     .where(
       and(
         eq(activityEvents.userId, user.id),
-        eq(activityEvents.type, "task.completed"),
+        inArray(activityEvents.type, eventsForSource(source)),
         gte(activityEvents.createdAt, since),
       ),
     );
 
-  const today = todayInTimezone(settings.timezone);
   const stats = computeStats(
-    events.map((event) => dateInTimezone(event.createdAt, settings.timezone)),
+    events
+      .filter((event) => event.type === "task.completed")
+      .map((event) => dateInTimezone(event.createdAt, settings.timezone)),
     { today, dailyGoal: settings.dailyGoal },
+  );
+  const graph = computeActivityGraph(
+    events.map((event) => dateInTimezone(event.createdAt, settings.timezone)),
+    { today, weekStart: settings.weekStart },
   );
   const progress = Math.min((stats.todayCount / settings.dailyGoal) * 100, 100);
   const maxCount = Math.max(...stats.last7.map((day) => day.count), 1);
 
   return (
-    <div className="mx-auto w-full max-w-2xl p-6">
+    <div className="mx-auto w-full max-w-3xl p-6">
       <MobilePageHeader className="mb-6">
         <h1 className="text-xl font-semibold">Stats</h1>
       </MobilePageHeader>
@@ -52,6 +77,31 @@ export default async function StatsPage() {
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
             <div className="h-full rounded-full bg-primary" style={{ width: `${progress}%` }} />
           </div>
+        </section>
+
+        <section className="rounded-lg border border-border p-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h2 className="text-sm font-medium">Past year</h2>
+            <p className="text-xs text-muted-foreground">
+              {graph.total} in the past year &middot; counting {activityGraphSourceLabel(source).toLowerCase()}
+            </p>
+          </div>
+          <div className="mt-4">
+            <ActivityGraph
+              weeks={graph.weeks}
+              months={graph.months}
+              total={graph.total}
+              weekStart={settings.weekStart}
+              dailyGoal={settings.dailyGoal}
+              dateFormat={settings.dateFormat}
+              unit={activityGraphSourceUnit(source)}
+            />
+          </div>
+          {graph.busiestDay ? (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Busiest day: {formatDate(graph.busiestDay.date, settings.dateFormat)} with {graph.busiestDay.count}.
+            </p>
+          ) : null}
         </section>
 
         <section className="rounded-lg border border-border p-4">

@@ -3,6 +3,7 @@ import { z } from "zod";
 // Relative import: vitest has no "@/" alias configured.
 import { parseRecurrence } from "./recurrence";
 import { parseFilter } from "./filter";
+import { activityGraphSources } from "./activity-sources";
 
 export const dateFormats = [
   "yyyy-MM-dd",
@@ -93,6 +94,7 @@ export const settingsSchema = z.object({
   dateFormat: z.enum(dateFormats),
   weekStart: z.number().int().min(0).max(6),
   dailyGoal: z.number().int().min(1).max(100),
+  activityGraphSource: z.enum(activityGraphSources),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;

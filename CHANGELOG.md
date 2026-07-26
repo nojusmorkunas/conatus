@@ -13,6 +13,7 @@ All notable changes are documented here. Versions follow Semantic Versioning.
 - Pointer and keyboard project drag/drop with nesting and unnesting.
 - Versioned scoped API, OpenAPI contract, and independently deployable MCP server.
 - API/MCP contract and integration coverage plus a maintainer release plan.
+- Year-long activity graph on Stats, with a preference for which events it counts.
 
 ### Changed
 

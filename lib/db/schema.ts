@@ -30,6 +30,8 @@ export const users = pgTable(
     dateFormat: text("date_format").notNull().default("yyyy-MM-dd"),
     weekStart: integer("week_start").notNull().default(1),
     dailyGoal: integer("daily_goal").notNull().default(5),
+    // Which events the /stats activity graph counts; see lib/activity-sources.
+    activityGraphSource: text("activity_graph_source").notNull().default("completed"),
     // Null only for a newly-created account. The onboarding completion route
     // records the first-run choice so the flow is never shown on every visit.
     onboardingCompletedAt: timestamp("onboarding_completed_at"),
