@@ -15,7 +15,7 @@ release itself.
 4. Run `npm test`, `npm run lint`, `npm run build`, and `npm run test:e2e`.
 5. Run `npm test --prefix mcp-server`, `npm run lint --prefix mcp-server`, and `npm run build --prefix mcp-server`.
 6. Start from an empty database, apply every migration, and run the core browser flow.
-7. Restore a recent database backup into a disposable database, apply new migrations, and check counts plus representative tasks.
+7. Run `scripts/upgrade-check.sh --all`, or confirm the `Verify upgrades` workflow is green on the release branch. Every published release must upgrade cleanly, not only the previous one.
 8. Exercise Todoist API and ZIP imports using non-production Todoist fixtures.
 9. Build the Docker Compose stack and verify health, login, a scheduled reminder, object upload, backup, and restore.
 

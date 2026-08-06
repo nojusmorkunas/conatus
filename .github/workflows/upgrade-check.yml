@@ -1,0 +1,126 @@
+name: Verify upgrades
+
+on:
+  pull_request:
+    paths:
+      - "lib/db/migrations/**"
+      - "lib/db/schema.ts"
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - "docker-compose.build.yml"
+      - "ops/**"
+      - "scripts/migrate.ts"
+      - "scripts/upgrade-check.sh"
+      - ".github/workflows/upgrade-check.yml"
+  push:
+    branches: ["release/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: upgrade-check-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CANDIDATE_IMAGE: conatus-upgrade-check
+  CANDIDATE_VERSION: candidate
+
+jobs:
+  candidate:
+    name: Build the candidate
+    runs-on: ubuntu-latest
+    outputs:
+      versions: ${{ steps.collect.outputs.versions }}
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      # Tags alone are not proof: images exist only for releases that were
+      # actually published, because that event is what triggers
+      # release-images.yml. Drafts are therefore excluded.
+      - name: Collect published release versions
+        id: collect
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          versions=$(gh release list --limit 100 --json tagName,isDraft \
+            --jq '[.[] | select(.isDraft | not) | .tagName] | sort')
+          echo "versions=$versions" >> "$GITHUB_OUTPUT"
+          echo "Verifying upgrades from: $versions"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      # Both images are built once here and handed to every matrix leg as a
+      # tarball, which is cheaper than rebuilding per source version. The cache
+      # scopes are the ones container-images-ci.yml writes.
+      - name: Build the application image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          target: run
+          platforms: linux/amd64
+          tags: ${{ env.CANDIDATE_IMAGE }}:${{ env.CANDIDATE_VERSION }}
+          outputs: type=docker,dest=/tmp/candidate-app.tar
+          cache-from: type=gha,scope=run
+
+      - name: Build the operations image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          target: ops
+          platforms: linux/amd64
+          tags: ${{ env.CANDIDATE_IMAGE }}:${{ env.CANDIDATE_VERSION }}-ops
+          outputs: type=docker,dest=/tmp/candidate-ops.tar
+          cache-from: type=gha,scope=ops
+
+      - name: Upload the candidate images
+        uses: actions/upload-artifact@v7
+        with:
+          name: candidate-images
+          path: /tmp/candidate-*.tar
+          retention-days: 1
+
+  upgrade:
+    name: Upgrade from ${{ matrix.version }}
+    needs: candidate
+    if: needs.candidate.outputs.versions != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ${{ fromJson(needs.candidate.outputs.versions) }}
+
+    steps:
+      # The check replays the released Compose file from each tag, so it needs
+      # the tags and the history behind them, not just the merge commit.
+      - name: Check out the repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Download the candidate images
+        uses: actions/download-artifact@v7
+        with:
+          name: candidate-images
+          path: /tmp
+
+      - name: Load the candidate images
+        run: |
+          docker load --input /tmp/candidate-app.tar
+          docker load --input /tmp/candidate-ops.tar
+
+      - name: Verify the upgrade
+        run: scripts/upgrade-check.sh --from "${{ matrix.version }}" --to prebuilt
+
+      - name: Collect container logs on failure
+        if: ${{ failure() }}
+        run: |
+          docker ps -a --format '{{.Names}}' \
+            | xargs -r -I{} sh -c 'echo "### {}"; docker logs --tail 200 {} 2>&1'
