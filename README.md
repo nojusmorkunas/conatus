@@ -75,8 +75,9 @@ After the first login, remove `CONATUS_ADMIN_USERNAME` and
 `CONATUS_ADMIN_PASSWORD` from `.env`.
 
 For upgrades, update `CONATUS_VERSION` then run `docker compose up -d` again.
-Back up the database before upgrading because some migrations require a restore
-to roll back safely.
+Migrations run automatically before the application starts, and upgrading from
+any earlier published release is supported. Back up the database first, because
+some migrations require a restore to roll back safely.
 
 ## API and MCP access
 
