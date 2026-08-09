@@ -5,12 +5,9 @@ import { eq } from "drizzle-orm";
 import { normalizeUsername } from "@/lib/auth/registration";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
+import { checkLoginRateLimit } from "@/lib/auth/login-rate-limit";
 import { verifyPassword } from "@/lib/auth/password";
-import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { credentialsSchema } from "@/lib/validation";
-
-const LOGIN_IP_LIMIT = { limit: 20, windowMs: 5 * 60 * 1000 };
-const LOGIN_USERNAME_LIMIT = { limit: 5, windowMs: 5 * 60 * 1000 };
 
 declare module "next-auth" {
   interface Session {
@@ -30,18 +27,9 @@ const providers = [
 
       const { username, password } = parsed.data;
       const normalizedUsername = normalizeUsername(username);
-      if (request?.headers) {
-        const ipLimit = checkRateLimit(
-          `login:ip:${getClientIp(request)}`,
-          LOGIN_IP_LIMIT,
-        );
-        if (!ipLimit.ok) throw new RateLimited();
+      if (!checkLoginRateLimit(normalizedUsername, request as Request | undefined)) {
+        throw new RateLimited();
       }
-      const usernameLimit = checkRateLimit(
-        `login:username:${normalizedUsername}`,
-        LOGIN_USERNAME_LIMIT,
-      );
-      if (!usernameLimit.ok) throw new RateLimited();
 
       const [user] = await db
         .select()

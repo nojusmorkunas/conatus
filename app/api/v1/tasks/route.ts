@@ -36,6 +36,9 @@ export async function GET(request: Request) {
   const actor = await requireApiActor("tasks:read");
   if (!actor) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Read the clock before querying so a write landing mid-request falls inside
+  // the next sync window rather than between two of them.
+  const serverTime = new Date().toISOString();
   const url = new URL(request.url);
   const limitParam = Number(url.searchParams.get("limit") ?? 50);
   const limit = Number.isInteger(limitParam) ? Math.min(Math.max(limitParam, 1), 100) : 50;
@@ -45,12 +48,23 @@ export async function GET(request: Request) {
     return Response.json({ error: "Invalid cursor" }, { status: 400 });
   }
 
+  const updatedSinceParam = url.searchParams.get("updatedSince");
+  const updatedSince = updatedSinceParam ? new Date(updatedSinceParam) : null;
+  if (updatedSince && Number.isNaN(updatedSince.getTime())) {
+    return Response.json({ error: "Invalid updatedSince" }, { status: 400 });
+  }
+  // Soft-deleted tasks are the only record that a deletion happened, so a
+  // syncing client has to be able to ask for them.
+  const includeDeleted = url.searchParams.get("includeDeleted") === "true";
+
   const accessibleIds = await accessibleProjectIds(actor.id);
   if (!accessibleIds.length) {
-    return Response.json({ items: [], nextCursor: null });
+    return Response.json({ items: [], nextCursor: null, serverTime });
   }
 
-  const conditions: SQL[] = [inArray(tasks.projectId, accessibleIds), isNull(tasks.deletedAt)];
+  const conditions: SQL[] = [inArray(tasks.projectId, accessibleIds)];
+  if (!includeDeleted) conditions.push(isNull(tasks.deletedAt));
+  if (updatedSince) conditions.push(gte(tasks.updatedAt, updatedSince));
   const projectId = url.searchParams.get("projectId");
   const sectionId = url.searchParams.get("sectionId");
   const parentId = url.searchParams.get("parentId");
@@ -87,7 +101,7 @@ export async function GET(request: Request) {
       .select({ taskId: taskLabels.taskId })
       .from(taskLabels)
       .where(eq(taskLabels.labelId, labelId));
-    if (!matchingLinks.length) return Response.json({ items: [], nextCursor: null });
+    if (!matchingLinks.length) return Response.json({ items: [], nextCursor: null, serverTime });
     conditions.push(inArray(tasks.id, matchingLinks.map((link) => link.taskId)));
   }
   if (cursor) {
@@ -117,6 +131,7 @@ export async function GET(request: Request) {
       hasMore && last
         ? encodeCursor({ updatedAt: last.updatedAt.toISOString(), id: last.id })
         : null,
+    serverTime,
   });
 }
 

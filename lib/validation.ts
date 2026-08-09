@@ -17,6 +17,10 @@ export const credentialsSchema = z.object({
   password: z.string().min(1),
 });
 
+export const deviceTokenSchema = credentialsSchema.extend({
+  deviceName: z.string().trim().min(1).max(100),
+});
+
 export const registerSchema = z.object({
   username: z
     .string()

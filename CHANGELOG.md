@@ -14,6 +14,9 @@ All notable changes are documented here. Versions follow Semantic Versioning.
 - Versioned scoped API, OpenAPI contract, and independently deployable MCP server.
 - API/MCP contract and integration coverage plus a maintainer release plan.
 - Year-long activity graph on Stats, with a preference for which events it counts.
+- Task delta sync through `updatedSince` and `includeDeleted`, with a `serverTime` watermark for the next pull.
+- Device token endpoint that exchanges a password for a scoped token, so native clients do not need a browser session.
+- Section listing on the versioned API, filterable by project.
 
 ### Changed
 
@@ -25,5 +28,6 @@ All notable changes are documented here. Versions follow Semantic Versioning.
 
 ### Fixed
 
+- The OpenAPI description advertised `GET /sections` with no handler behind it, so generated clients got a 405.
 - Reminder popup is viewport-positioned and no longer clipped by surrounding layouts.
 - The recurring-date import path no longer asks for manual dates when using the Todoist API.
