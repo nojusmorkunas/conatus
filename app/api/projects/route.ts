@@ -9,6 +9,9 @@ import { validateProjectParent } from "@/lib/db/project-parent";
 import { projects } from "@/lib/db/schema";
 import { projectCreateSchema } from "@/lib/validation";
 
+// Deliberately has no updatedSince or includeDeleted, unlike /api/v1/tasks:
+// see accessibleProjects for why a delta here would miss revoked access.
+// Clients replace their whole project list from this response.
 export async function GET() {
   const user = await requireUser("projects:read");
   if (!user) {

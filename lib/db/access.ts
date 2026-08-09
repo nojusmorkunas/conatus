@@ -52,6 +52,12 @@ export async function requireTaskAccess(userId: string, taskId: string) {
 
 // Own projects first (their sidebar order), then shared ones flagged for the
 // people icon. Archived projects are out for everyone.
+//
+// Always the complete accessible set, never a delta. Revoking a collaborator
+// deletes the project_collaborators row without touching projects.updatedAt,
+// so an updatedSince filter cannot see the revocation and a syncing client
+// would keep the project and its tasks cached after losing access. Absence
+// from the full list is the only signal that catches it.
 export async function accessibleProjects(
   userId: string,
 ): Promise<(typeof projects.$inferSelect & { shared?: boolean })[]> {
