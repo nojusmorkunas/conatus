@@ -17,6 +17,7 @@ All notable changes are documented here. Versions follow Semantic Versioning.
 
 ### Changed
 
+- License is offered as AGPL-3.0-or-later for the app and the MCP server.
 - Project hierarchy is explicitly limited to three levels.
 - Pinned projects remain visible in the Projects tree.
 - Project task counts share their slot with the row action menu.

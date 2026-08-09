@@ -154,4 +154,4 @@ steps.
 
 ## License
 
-AGPL-3.0. See `LICENSE`.
+AGPL-3.0-or-later. See `LICENSE`.

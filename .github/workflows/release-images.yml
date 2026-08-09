@@ -75,7 +75,7 @@ jobs:
           labels: |
             org.opencontainers.image.title=Conatus ${{ matrix.name }}
             org.opencontainers.image.description=Conatus self-hosted task manager
-            org.opencontainers.image.licenses=AGPL-3.0-only
+            org.opencontainers.image.licenses=AGPL-3.0-or-later
 
       - name: Build and push image
         id: push
