@@ -15,6 +15,13 @@ export async function GET() {
     servers: [{ url: serverUrl }],
     security,
     paths: {
+      "/auth/device-token": {
+        post: {
+          operationId: "createDeviceToken",
+          security: [],
+          responses: { "201": { description: "Device token, returned once" }, "401": { description: "Invalid credentials" }, "429": { description: "Too many attempts" } },
+        },
+      },
       "/context": { get: { operationId: "getWorkspaceContext", responses: { "200": { description: "Workspace context" } } } },
       "/projects": {
         get: { operationId: "listProjects", responses: { "200": { description: "Projects" } } },
@@ -28,8 +35,8 @@ export async function GET() {
       "/tasks": {
         get: {
           operationId: "listTasks",
-          parameters: ["projectId", "sectionId", "parentId", "labelId", "completed", "priority", "dueBefore", "dueAfter", "query", "cursor", "limit"].map((name) => ({ name, in: "query", schema: { type: "string" } })),
-          responses: { "200": { description: "Cursor-paginated tasks" } },
+          parameters: ["projectId", "sectionId", "parentId", "labelId", "completed", "priority", "dueBefore", "dueAfter", "query", "cursor", "limit", "updatedSince", "includeDeleted"].map((name) => ({ name, in: "query", schema: { type: "string" } })),
+          responses: { "200": { description: "Cursor-paginated tasks with a serverTime sync watermark" } },
         },
         post: {
           operationId: "createTask",
@@ -49,7 +56,7 @@ export async function GET() {
         delete: { operationId: "deleteLabel", parameters: [{ $ref: "#/components/parameters/id" }], responses: { "200": { description: "Deleted label" } } },
       },
       "/sections": {
-        get: { operationId: "listSections", responses: { "200": { description: "Sections" } } },
+        get: { operationId: "listSections", parameters: [{ name: "projectId", in: "query", schema: { type: "string", format: "uuid" } }], responses: { "200": { description: "Sections" } } },
         post: { operationId: "createSection", responses: { "201": { description: "Created section" } } },
       },
       "/sections/{id}": {

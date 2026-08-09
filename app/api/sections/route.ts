@@ -1,11 +1,40 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { generateKeyBetween } from "fractional-indexing";
 
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { requireProjectAccess } from "@/lib/db/access";
+import { accessibleProjectIds, requireProjectAccess } from "@/lib/db/access";
 import { sections } from "@/lib/db/schema";
 import { sectionCreateSchema } from "@/lib/validation";
+
+export async function GET(request: Request) {
+  const user = await requireUser("projects:read");
+  if (!user) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const accessibleIds = await accessibleProjectIds(user.id);
+  if (!accessibleIds.length) return Response.json([]);
+
+  // Filtering by an inaccessible project is a probe for its existence, so it
+  // gets the same 404 as a project that is not there at all.
+  const projectId = new URL(request.url).searchParams.get("projectId");
+  if (projectId && !accessibleIds.includes(projectId)) {
+    return Response.json({ error: "Not found" }, { status: 404 });
+  }
+
+  return Response.json(
+    await db
+      .select()
+      .from(sections)
+      .where(
+        projectId
+          ? eq(sections.projectId, projectId)
+          : inArray(sections.projectId, accessibleIds),
+      )
+      .orderBy(sections.order),
+  );
+}
 
 export async function POST(request: Request) {
   const user = await requireUser("projects:write");
