@@ -29,10 +29,6 @@ jobs:
             context: .
             file: ./Dockerfile
             target: ops
-          - name: MCP server
-            context: ./mcp-server
-            file: ./mcp-server/Dockerfile
-            target: runtime
 
     steps:
       - name: Check out the repository
