@@ -8,6 +8,6 @@ export default defineConfig({
   test: {
     // .claude/worktrees holds concurrent agent checkouts; sweeping them
     // double-runs their suites against in-progress code.
-    exclude: ["**/node_modules/**", "e2e/**", ".claude/**", "mcp-server/**"],
+    exclude: ["**/node_modules/**", "e2e/**", ".claude/**"],
   },
 });

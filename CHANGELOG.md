@@ -20,6 +20,13 @@ All notable changes are documented here. Versions follow Semantic Versioning.
 
 ### Changed
 
+- **Breaking for `mcp` profile deployments.** The MCP server moved to
+  [nojusmorkunas/conatus-mcp](https://github.com/nojusmorkunas/conatus-mcp) and is
+  released on its own schedule, so the sidecar is now tagged with
+  `CONATUS_MCP_VERSION` instead of `CONATUS_VERSION`. It defaults to `latest`. If
+  you pinned `CONATUS_VERSION`, set `CONATUS_MCP_VERSION` in `.env` as well or the
+  sidecar will silently move to `latest` on your next upgrade. The image name is
+  unchanged, so unpinned deployments need no action.
 - License is offered as AGPL-3.0-or-later for the app and the MCP server.
 - Project hierarchy is explicitly limited to three levels.
 - Pinned projects remain visible in the Projects tree.
