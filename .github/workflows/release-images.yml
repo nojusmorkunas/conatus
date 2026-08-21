@@ -37,12 +37,6 @@ jobs:
             file: ./Dockerfile
             target: ops
             tag_suffix: -ops
-          - name: MCP server
-            image: ${{ github.repository }}-mcp
-            context: ./mcp-server
-            file: ./mcp-server/Dockerfile
-            target: runtime
-            tag_suffix: ""
 
     steps:
       - name: Check out the released commit

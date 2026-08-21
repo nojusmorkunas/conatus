@@ -11,13 +11,12 @@ release itself.
 
 1. Create a release branch from the intended commit.
 2. Confirm `TODO.md` and the 0.2.0 section of `CHANGELOG.md` match the diff.
-3. Install from the lockfiles with `npm ci` and `npm ci --prefix mcp-server`.
+3. Install from the lockfile with `npm ci`.
 4. Run `npm test`, `npm run lint`, `npm run build`, and `npm run test:e2e`.
-5. Run `npm test --prefix mcp-server`, `npm run lint --prefix mcp-server`, and `npm run build --prefix mcp-server`.
-6. Start from an empty database, apply every migration, and run the core browser flow.
-7. Run `scripts/upgrade-check.sh --all`, or confirm the `Verify upgrades` workflow is green on the release branch. Every published release must upgrade cleanly, not only the previous one.
-8. Exercise Todoist API and ZIP imports using non-production Todoist fixtures.
-9. Build the Docker Compose stack and verify health, login, a scheduled reminder, object upload, backup, and restore.
+5. Start from an empty database, apply every migration, and run the core browser flow.
+6. Run `scripts/upgrade-check.sh --all`, or confirm the `Verify upgrades` workflow is green on the release branch. Every published release must upgrade cleanly, not only the previous one.
+7. Exercise Todoist API and ZIP imports using non-production Todoist fixtures.
+8. Build the Docker Compose stack and verify health, login, a scheduled reminder, object upload, backup, and restore.
 
 ### 2. Security and operations check
 

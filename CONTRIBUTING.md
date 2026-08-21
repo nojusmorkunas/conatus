@@ -37,14 +37,9 @@ npm run build
 npm run test:e2e
 ```
 
-Run the MCP server checks:
-
-```bash
-npm --prefix mcp-server ci
-npm --prefix mcp-server test
-npm --prefix mcp-server run lint
-npm --prefix mcp-server run build
-```
+The MCP server lives in
+[conatus-mcp](https://github.com/nojusmorkunas/conatus-mcp) and is developed and
+released from there.
 
 Validate the container deployment:
 

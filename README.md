@@ -95,13 +95,15 @@ The OpenAPI 3.1 description is served at `/api/v1/openapi.json`. Mutating task
 creation endpoints accept `Idempotency-Key` while list endpoints use opaque cursor
 pagination.
 
-The independently installable MCP package lives in [`mcp-server`](./mcp-server).
-It provides local stdio and remote Streamable HTTP transports so MCP-compatible
-AI agents can manage tasks without direct database access. Remote mode supports
-OAuth discovery, dynamic client registration, browser approval, S256 PKCE,
-refresh-token rotation plus a static bearer fallback. A typical deployment uses
+The independently installable MCP package lives in its own repository,
+[conatus-mcp](https://github.com/nojusmorkunas/conatus-mcp), and is published as the
+`conatus-mcp` npm package and the `ghcr.io/nojusmorkunas/conatus-mcp` image. It
+provides local stdio and remote Streamable HTTP transports so MCP-compatible AI
+agents can manage tasks without direct database access. Remote mode supports OAuth
+discovery, dynamic client registration, browser approval, S256 PKCE, refresh-token
+rotation plus a static bearer fallback. A typical deployment uses
 `tasks.example.com` for this app and `mcp.example.com/mcp` for the MCP sidecar. See
-[`mcp-server/README.md`](./mcp-server/README.md) for client configuration.
+that repository's README for client configuration.
 
 ## Webhooks
 
