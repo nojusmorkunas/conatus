@@ -116,7 +116,7 @@ services:
   # Create a scoped tdm_ token in Settings before enabling this profile.
   mcp:
     profiles: ["mcp"]
-    image: ${CONATUS_MCP_IMAGE:-ghcr.io/nojusmorkunas/conatus-mcp}:${CONATUS_VERSION:-latest}
+    image: ${CONATUS_MCP_IMAGE:-ghcr.io/nojusmorkunas/conatus-mcp}:${CONATUS_MCP_VERSION:-latest}
     restart: unless-stopped
     depends_on:
       app:
