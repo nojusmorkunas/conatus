@@ -1,39 +1,44 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// Runs against the demo seed rather than a disposable user: an overdue
-// recurring task is a state you would have to wait days to reach naturally,
-// so the seed is the only place one reliably exists.
-const username = process.env.SEED_USERNAME ?? "admin";
-const password = process.env.SEED_PASSWORD ?? "admin12345";
+import { registerAndLogin } from "./helpers";
 
-// "every 3 days", seeded four days overdue in Personal.
+// An overdue recurring task is a state you would have to wait days to reach,
+// so the fixture is built through the API on a disposable account. The demo
+// seed has one too, but CI never runs the seed, so reading it from there ties
+// this spec to a script that is not part of the pipeline.
 const taskContent = "Water the plants";
 
-async function login(page: Page) {
-  await page.goto("/login");
-  await page.getByLabel("Username").fill(username);
-  await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Log in" }).click();
-  await expect(page).toHaveURL(/\/today/);
-}
+// Four days late against a three-day repeat: completing it has to skip ahead
+// to a future date rather than add one interval to a date already past.
+const overdueDate = () => new Date(Date.now() - 4 * 86_400_000).toISOString().slice(0, 10);
 
 function taskRow(page: Page) {
   return page.locator(`[data-task-content="${taskContent}"]`);
 }
 
-async function openPersonal(page: Page): Promise<string> {
+async function createOverdueTask(page: Page): Promise<string> {
   const response = await page.request.get("/api/projects");
   expect(response.ok()).toBeTruthy();
-  const projects: { id: string; name: string }[] = await response.json();
-  const personal = projects.find((project) => project.name === "Personal");
-  expect(personal, "the demo seed must have run").toBeTruthy();
+  const projects: { id: string; isInbox: boolean }[] = await response.json();
+  const inbox = projects.find((project) => project.isInbox);
+  expect(inbox, "registration creates an inbox").toBeTruthy();
 
-  await page.goto(`/projects/${personal!.id}`);
+  const created = await page.request.post("/api/tasks", {
+    data: {
+      projectId: inbox!.id,
+      content: taskContent,
+      dueDate: overdueDate(),
+      recurrence: "every 3 days",
+    },
+  });
+  expect(created.ok()).toBeTruthy();
+
+  await page.goto(`/projects/${inbox!.id}`);
   await expect(taskRow(page)).toBeVisible();
-  return personal!.id;
+  return inbox!.id;
 }
 
-async function seededTask(page: Page, projectId: string) {
+async function fixtureTask(page: Page, projectId: string) {
   const response = await page.request.get(`/api/tasks?projectId=${projectId}`);
   expect(response.ok()).toBeTruthy();
   const tasks: { id: string; content: string; dueDate: string }[] = await response.json();
@@ -41,16 +46,15 @@ async function seededTask(page: Page, projectId: string) {
 }
 
 async function dueDateOf(page: Page, projectId: string): Promise<string> {
-  return (await seededTask(page, projectId)).dueDate;
+  return (await fixtureTask(page, projectId)).dueDate;
 }
 
 // Each test completes the task, which advances it out of the overdue state the
 // next test needs. Put it back rather than depending on execution order.
 async function resetToOverdue(page: Page, projectId: string) {
-  const task = await seededTask(page, projectId);
-  const overdue = new Date(Date.now() - 4 * 86_400_000).toISOString().slice(0, 10);
+  const task = await fixtureTask(page, projectId);
   const response = await page.request.patch(`/api/tasks/${task.id}`, {
-    data: { dueDate: overdue },
+    data: { dueDate: overdueDate() },
   });
   expect(response.ok()).toBeTruthy();
   await page.reload();
@@ -76,9 +80,8 @@ async function completeAndMeasure(page: Page): Promise<number> {
 
 const UNDO_WINDOW_MS = 5_000;
 
-// Sign in once for the whole file. Login allows five attempts per username
-// per five minutes, and every test here uses the same seeded account, so a
-// login per test locks the account out partway through the run.
+// One account and one task for the whole file: every test mutates the same
+// fixture and resets it, so they cannot run in parallel against each other.
 test.describe.configure({ mode: "serial" });
 
 test.describe("completing an overdue recurring task", () => {
@@ -87,8 +90,8 @@ test.describe("completing an overdue recurring task", () => {
 
   test.beforeAll(async ({ browser }) => {
     page = await browser.newPage();
-    await login(page);
-    projectId = await openPersonal(page);
+    await registerAndLogin(page, `e2e-${Date.now()}-recurring`);
+    projectId = await createOverdueTask(page);
   });
 
   test.afterAll(async () => {
