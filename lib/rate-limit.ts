@@ -1,3 +1,5 @@
+import { devModeEnabled } from "@/lib/dev-mode";
+
 // Counters live in an in-memory Map scoped to this process, so each `app`
 // container enforces its own independent limit. Scaling the `app` service to
 // multiple replicas therefore multiplies the effective rate limit by the
@@ -44,6 +46,10 @@ export function checkRateLimit(
   key: string,
   { limit, windowMs }: RateLimitOptions,
 ): RateLimitResult {
+  // Every limit in the app is counted here, so dev mode only has to opt out
+  // once instead of at each of the six call sites.
+  if (devModeEnabled()) return { ok: true, remaining: limit, retryAfter: 0 };
+
   const now = Date.now();
   prune(now);
 

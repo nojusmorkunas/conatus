@@ -1,9 +1,16 @@
+import { devModeEnabled } from "./lib/dev-mode";
 import { reportError } from "./lib/error-reporter";
 
 export async function register() {
   // Guard against edge runtime and `next build` (which also evaluates this
   // file but must not open a DB connection or start polling).
   if (process.env.NEXT_RUNTIME === "nodejs" && !process.env.NEXT_PHASE?.startsWith("phase-production-build")) {
+    if (devModeEnabled()) {
+      console.warn(
+        "CONATUS_DEV_MODE is on: rate limiting is disabled and anyone can register. Never run this on a reachable server.",
+      );
+    }
+
     const { startReminderWorker } = await import("./lib/jobs");
     await startReminderWorker();
   }

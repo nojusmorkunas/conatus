@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:local": "bash scripts/dev-local.sh",
+    "dev:reset": "bash scripts/dev-reset.sh",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -16,6 +17,7 @@
     "bootstrap-admin": "tsx scripts/bootstrap-admin.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:seed": "tsx --env-file=.env scripts/seed-demo.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {

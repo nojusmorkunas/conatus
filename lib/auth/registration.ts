@@ -8,6 +8,7 @@ import {
 } from "@/lib/auth/create-user";
 import { db } from "@/lib/db";
 import { registrationInvites, users } from "@/lib/db/schema";
+import { devModeEnabled } from "@/lib/dev-mode";
 
 // Serializes enrollment decisions so two requests cannot both observe an
 // empty users table and become bootstrap administrators.
@@ -40,6 +41,7 @@ export function normalizeEmail(email: string) {
 }
 
 export function isOpenRegistrationEnabled() {
+  if (devModeEnabled()) return true;
   return process.env.REGISTRATION_MODE?.trim().toLowerCase() === "open";
 }
 

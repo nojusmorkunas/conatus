@@ -25,6 +25,14 @@ the instance administrator. No email address or SMTP configuration is required.
 After signing in, that administrator can create single-use, seven-day signup
 links under **Settings → Registration**.
 
+To work against a populated workspace, `npm run db:seed` fills the database
+with demo projects, labels, filters and tasks, creating the `admin` and `bob`
+accounts (password `admin12345`) if they do not exist yet. `npm run dev:reset`
+deletes the local database container and rebuilds it from that seed. Setting
+`CONATUS_DEV_MODE=1` disables rate limiting and opens registration to anyone,
+which keeps repeated sign-ins and test accounts from locking you out. It is not
+gated on `NODE_ENV`, so never set it on a machine others can reach.
+
 ## Required checks
 
 Run the application checks:

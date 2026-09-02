@@ -100,6 +100,8 @@ services:
       AUTH_URL: ${AUTH_URL:-}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
       REGISTRATION_MODE: ${REGISTRATION_MODE:-invite-only}
+      # Local development only: disables rate limiting and opens registration.
+      CONATUS_DEV_MODE: ${CONATUS_DEV_MODE:-0}
       S3_ENDPOINT: minio
       S3_PORT: 9000
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in .env}

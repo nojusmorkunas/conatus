@@ -1,6 +1,8 @@
 import { and, eq, ne } from "drizzle-orm";
 import { generateKeyBetween } from "fractional-indexing";
 
+import { createUserWithInboxUsing } from "../lib/auth/create-user";
+import { hashPassword } from "../lib/auth/password";
 import { db } from "../lib/db";
 import {
   comments,
@@ -23,7 +25,11 @@ type TaskInput = Omit<typeof tasks.$inferInsert, "userId" | "order"> & {
   labels?: string[];
 };
 
-const username = process.env.SEED_USERNAME ?? "alice";
+const username = process.env.SEED_USERNAME ?? "admin";
+const password = process.env.SEED_PASSWORD ?? "admin12345";
+// A non-UTC default keeps the seed honest: "today" is resolved in the user's
+// zone everywhere, so a UTC-only fixture hides off-by-one-day bugs.
+const timezone = process.env.SEED_TIMEZONE ?? "Europe/Amsterdam";
 
 function dateInTimezone(timezone: string, offsetDays = 0): string {
   const instant = new Date(Date.now() + offsetDays * 86_400_000);
@@ -63,37 +69,70 @@ function validFilter(query: string): string {
 }
 
 async function seed(tx: Tx) {
-  const [alice] = await tx.select().from(users).where(eq(users.username, username)).limit(1);
-  if (!alice) throw new Error(`No user found for ${username}. Create the account before seeding demo data.`);
+  let [owner] = await tx.select().from(users).where(eq(users.username, username)).limit(1);
+  const createdOwner = !owner;
+  if (!owner) {
+    const created = await createUserWithInboxUsing(tx, {
+      username,
+      passwordHash: await hashPassword(password),
+      timezone,
+      instanceRole: "admin",
+    });
+    // A seeded workspace is already set up, so skip the first-run wizard that
+    // would otherwise intercept every route until it is completed.
+    [owner] = await tx
+      .update(users)
+      .set({ onboardingCompletedAt: new Date() })
+      .where(eq(users.id, created.id))
+      .returning();
+  }
 
-  const [bob] = await tx.select().from(users).where(eq(users.username, "bob")).limit(1);
-  const owned = await tx.select().from(projects).where(eq(projects.userId, alice.id));
+  // A second account so the shared project, its collaborator comment and the
+  // assigned tasks below are actually reachable. Without one, every
+  // collaboration path in this seed quietly degrades to a solo workspace.
+  let [bob] = await tx.select().from(users).where(eq(users.username, "bob")).limit(1);
+  if (!bob) {
+    const created = await createUserWithInboxUsing(tx, {
+      username: "bob",
+      passwordHash: await hashPassword(password),
+      timezone,
+    });
+    [bob] = await tx
+      .update(users)
+      .set({ onboardingCompletedAt: new Date() })
+      .where(eq(users.id, created.id))
+      .returning();
+  }
+  const owned = await tx.select().from(projects).where(eq(projects.userId, owner.id));
   const inbox = owned.find((project) => project.isInbox);
   if (!inbox) throw new Error(`User ${username} has no inbox project.`);
 
   let roadmap = owned.find((project) => project.name === "Team Roadmap" && !project.isInbox);
   const preservedIds = [inbox.id, ...(roadmap ? [roadmap.id] : [])];
 
-  await tx.delete(comments).where(and(eq(comments.userId, alice.id), eq(comments.projectId, inbox.id)));
-  await tx.delete(tasks).where(and(eq(tasks.userId, alice.id), eq(tasks.projectId, inbox.id)));
+  await tx.delete(comments).where(and(eq(comments.userId, owner.id), eq(comments.projectId, inbox.id)));
+  await tx.delete(tasks).where(and(eq(tasks.userId, owner.id), eq(tasks.projectId, inbox.id)));
   if (roadmap) {
     await tx.delete(comments).where(eq(comments.projectId, roadmap.id));
     await tx.delete(tasks).where(eq(tasks.projectId, roadmap.id));
     await tx.delete(sections).where(eq(sections.projectId, roadmap.id));
   }
   await tx.delete(projects).where(
-    and(eq(projects.userId, alice.id), ne(projects.id, inbox.id), ...(roadmap ? [ne(projects.id, roadmap.id)] : [])),
+    and(eq(projects.userId, owner.id), ne(projects.id, inbox.id), ...(roadmap ? [ne(projects.id, roadmap.id)] : [])),
   );
-  await tx.delete(labels).where(eq(labels.userId, alice.id));
-  await tx.delete(filters).where(eq(filters.userId, alice.id));
+  await tx.delete(labels).where(eq(labels.userId, owner.id));
+  await tx.delete(filters).where(eq(filters.userId, owner.id));
 
   const projectOrder = increasingKeys();
   // Advance past the preserved inbox; every newly generated key is strictly increasing.
   projectOrder();
   const createdProjects: Project[] = [];
-  async function addProject(values: Pick<Project, "name" | "icon" | "color" | "isFavorite"> & { parentId?: string }) {
+  async function addProject(
+    values: Pick<Project, "name" | "icon" | "color" | "isFavorite"> &
+      Partial<Pick<Project, "isArchived" | "deletedAt">> & { parentId?: string },
+  ) {
     const [project] = await tx.insert(projects).values({
-      userId: alice.id,
+      userId: owner.id,
       order: projectOrder(),
       ...values,
     }).returning();
@@ -107,6 +146,10 @@ async function seed(tx: Tx) {
   const personal = await addProject({ name: "Personal", icon: "health", color: "green", isFavorite: true });
   const home = await addProject({ name: "Home", icon: "home", color: "orange", isFavorite: false });
   const reading = await addProject({ name: "Reading List", icon: "learning", color: "amber", isFavorite: false });
+  // Archived and trashed projects: neither shows in the sidebar, and both have
+  // their own recovery path, so seeding them keeps those screens non-empty.
+  const retro = await addProject({ name: "2025 Retrospective", icon: "goals", color: "gray", isFavorite: false, isArchived: true });
+  await addProject({ name: "Scrapped Campaign", icon: "creative", color: "gray", isFavorite: false, deletedAt: atOffset(-48) });
 
   if (!roadmap) {
     roadmap = await addProject({ name: "Team Roadmap", icon: "launch", color: "red", isFavorite: true });
@@ -140,16 +183,16 @@ async function seed(tx: Tx) {
 
   const labelOrder = increasingKeys();
   const labelRows = await tx.insert(labels).values([
-    { userId: alice.id, name: "urgent", color: "red", isFavorite: true, order: labelOrder() },
-    { userId: alice.id, name: "deep-work", color: "purple", isFavorite: true, order: labelOrder() },
-    { userId: alice.id, name: "quick-win", color: "green", isFavorite: false, order: labelOrder() },
-    { userId: alice.id, name: "waiting", color: "amber", isFavorite: false, order: labelOrder() },
-    { userId: alice.id, name: "meeting", color: "blue", isFavorite: false, order: labelOrder() },
-    { userId: alice.id, name: "errands", color: "orange", isFavorite: false, order: labelOrder() },
+    { userId: owner.id, name: "urgent", color: "red", isFavorite: true, order: labelOrder() },
+    { userId: owner.id, name: "deep-work", color: "purple", isFavorite: true, order: labelOrder() },
+    { userId: owner.id, name: "quick-win", color: "green", isFavorite: false, order: labelOrder() },
+    { userId: owner.id, name: "waiting", color: "amber", isFavorite: false, order: labelOrder() },
+    { userId: owner.id, name: "meeting", color: "blue", isFavorite: false, order: labelOrder() },
+    { userId: owner.id, name: "errands", color: "orange", isFavorite: false, order: labelOrder() },
   ]).returning();
   const labelIds = new Map(labelRows.map((label) => [label.name, label.id]));
 
-  const d = (offset: number) => dateInTimezone(alice.timezone || "UTC", offset);
+  const d = (offset: number) => dateInTimezone(owner.timezone || "UTC", offset);
   const taskOrders = new Map<string, ReturnType<typeof increasingKeys>>();
   const taskRows = new Map<string, typeof tasks.$inferSelect>();
   let taskLabelCount = 0;
@@ -164,7 +207,7 @@ async function seed(tx: Tx) {
     const sibling = `${taskValues.projectId}:${taskValues.sectionId ?? "none"}:${taskValues.parentId ?? "root"}`;
     const nextOrder = taskOrders.get(sibling) ?? increasingKeys();
     taskOrders.set(sibling, nextOrder);
-    const [task] = await tx.insert(tasks).values({ userId: alice.id, order: nextOrder(), ...taskValues }).returning();
+    const [task] = await tx.insert(tasks).values({ userId: owner.id, order: nextOrder(), ...taskValues }).returning();
     taskRows.set(task.content, task);
     if (names.length) {
       await tx.insert(taskLabels).values(names.map((name) => ({
@@ -217,39 +260,72 @@ async function seed(tx: Tx) {
   await addTask({ projectId: personal.id, content: "Sort travel photos", priority: 4, dueDate: d(-13), ...done(13) });
   await addTask({ projectId: inbox.id, content: "Return library books", priority: 3, dueDate: d(-4), labels: ["errands"], ...done(4) });
 
+  // Overdue recurring tasks. Completing one advances it to a future date
+  // rather than ticking it off, which is the branch that only appears once a
+  // repeat has been missed — every other recurring row above is due today or
+  // later and never reaches it.
+  await addTask({ projectId: personal.id, content: "Water the plants", priority: 3, dueDate: d(-4), recurrence: validRecurrence("every 3 days"), durationMinutes: 10, labels: ["quick-win"] });
+  await addTask({ projectId: home.id, content: "Take the bins to the kerb", priority: 2, dueDate: d(-2), dueTime: "07:00", recurrence: validRecurrence("every monday"), labels: ["errands"] });
+  // "every!" restarts the interval from the completion day instead of stepping
+  // from the old due date, so an overdue one lands on a different date than
+  // the plain rule above would.
+  await addTask({ projectId: personal.id, content: "Descale the coffee machine", priority: 4, dueDate: d(-6), recurrence: validRecurrence("every! 3 days"), durationMinutes: 20 });
+  // Monthly rules clamp to short months instead of drifting off the anchor day.
+  await addTask({ projectId: work.id, content: "Submit the monthly timesheet", priority: 1, dueDate: d(0), recurrence: validRecurrence("every last day"), durationMinutes: 20, labels: ["urgent"] });
+  await addTask({ projectId: work.id, content: "Reconcile the office invoice", priority: 2, dueDate: d(3), recurrence: validRecurrence("every 15th"), durationMinutes: 30 });
+  // Repeat end dates. The standup's next step falls past its end date, so
+  // completing it completes the task for real; the checkpoint still has room
+  // to advance.
+  await addTask({ projectId: planning.id, sectionId: sec(planning, "Approved"), content: "Daily standup until launch", priority: 2, dueDate: d(0), dueTime: "09:15", recurrence: validRecurrence("every day"), recurrenceEndDate: d(0), durationMinutes: 15, labels: ["meeting"] });
+  await addTask({ projectId: planning.id, sectionId: sec(planning, "Approved"), content: "Weekly launch checkpoint", priority: 2, dueDate: d(1), recurrence: validRecurrence("every week"), recurrenceEndDate: d(28), durationMinutes: 30, labels: ["meeting"] });
+
+  // Archived projects keep their tasks; unarchiving has to bring them back.
+  await addTask({ projectId: retro.id, content: "Summarise 2025 delivery highlights", priority: 3, dueDate: d(-40), ...done(38) });
+  await addTask({ projectId: retro.id, content: "Archive the old roadmap board", priority: 4, dueDate: d(-35), ...done(34) });
+
+  // Soft-deleted tasks so Trash and the restore endpoints have something to
+  // act on. The subtask goes with its parent, which is what the delete route
+  // does rather than letting the database cascade it away.
+  const cancelled = await addTask({ projectId: home.id, sectionId: sec(home, "Someday"), content: "Cancel the old storage unit", priority: 3, dueDate: d(-3), labels: ["errands"], deletedAt: atOffset(-6) });
+  await addTask({ projectId: home.id, sectionId: sec(home, "Someday"), parentId: cancelled.id, content: "Photograph what is still in there", priority: 4, deletedAt: atOffset(-6) });
+  await addTask({ projectId: reading.id, content: "Skim the abandoned newsletter draft", priority: 4, deletedAt: atOffset(-30) });
+
   const filterOrder = increasingKeys();
   const filterRows = await tx.insert(filters).values([
-    { userId: alice.id, name: "Priority 1", query: validFilter("p1"), order: filterOrder(), isFavorite: true },
-    { userId: alice.id, name: "Overdue", query: validFilter("overdue"), order: filterOrder(), isFavorite: true },
-    { userId: alice.id, name: "Urgent work", query: validFilter("@urgent & p1"), order: filterOrder(), isFavorite: true },
-    { userId: alice.id, name: "Next 7 days", query: validFilter("7 days"), order: filterOrder(), isFavorite: false },
+    { userId: owner.id, name: "Priority 1", query: validFilter("p1"), order: filterOrder(), isFavorite: true },
+    { userId: owner.id, name: "Overdue", query: validFilter("overdue"), order: filterOrder(), isFavorite: true },
+    { userId: owner.id, name: "Urgent work", query: validFilter("@urgent & p1"), order: filterOrder(), isFavorite: true },
+    { userId: owner.id, name: "Next 7 days", query: validFilter("7 days"), order: filterOrder(), isFavorite: false },
   ]).returning();
 
   const audit = taskRows.get("Audit current navigation")!;
   const review = taskRows.get("Review homepage copy with marketing")!;
   await tx.insert(comments).values([
-    { taskId: prototype.id, userId: alice.id, content: "The first responsive pass is ready. Please focus on the menu transition." },
-    { taskId: kickoff.id, userId: alice.id, content: "Agenda draft is in the description; add any platform-specific risks." },
-    { taskId: audit.id, userId: alice.id, content: "Found three duplicate destinations and two dead-end mobile flows." },
-    { taskId: review.id, userId: bob?.id ?? alice.id, content: "I can review this before lunch tomorrow." },
-    { projectId: roadmap.id, userId: alice.id, content: "Use this project for cross-platform launch decisions and weekly updates." },
+    { taskId: prototype.id, userId: owner.id, content: "The first responsive pass is ready. Please focus on the menu transition." },
+    { taskId: kickoff.id, userId: owner.id, content: "Agenda draft is in the description; add any platform-specific risks." },
+    { taskId: audit.id, userId: owner.id, content: "Found three duplicate destinations and two dead-end mobile flows." },
+    { taskId: review.id, userId: bob?.id ?? owner.id, content: "I can review this before lunch tomorrow." },
+    { projectId: roadmap.id, userId: owner.id, content: "Use this project for cross-platform launch decisions and weekly updates." },
     ...(bob ? [{ projectId: roadmap.id, userId: bob.id, content: "I added the Android beta risks to the kickoff checklist." }] : []),
   ]);
 
   await tx.insert(reminders).values([
-    { userId: alice.id, taskId: prototype.id, remindAt: atOffset(-1) },
-    { userId: alice.id, taskId: kickoff.id, remindAt: atOffset(4) },
-    { userId: alice.id, taskId: shelves.id, remindAt: atOffset(30), seenAt: atOffset(-2) },
+    { userId: owner.id, taskId: prototype.id, remindAt: atOffset(-1) },
+    { userId: owner.id, taskId: kickoff.id, remindAt: atOffset(4) },
+    { userId: owner.id, taskId: shelves.id, remindAt: atOffset(30), seenAt: atOffset(-2) },
   ]);
 
   // Attachments are intentionally not seeded because they require real S3/MinIO objects.
   return {
-    user: alice.username,
-    collaborator: bob ? bob.username : "not found (collaboration data used Alice only)",
+    user: owner.username,
+    password: createdOwner ? password : "unchanged (the account already existed)",
+    collaborator: bob ? bob.username : `not found (collaboration data used ${owner.username} only)`,
     projects: createdProjects.length + preservedIds.length,
     sections: sectionCount,
     tasks: taskRows.size,
     completedTasks: [...taskRows.values()].filter((task) => task.isCompleted).length,
+    trashedTasks: [...taskRows.values()].filter((task) => task.deletedAt).length,
+    recurringTasks: [...taskRows.values()].filter((task) => task.recurrence).length,
     labels: labelRows.length,
     taskLabels: taskLabelCount,
     filters: filterRows.length,
