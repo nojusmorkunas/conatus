@@ -24,6 +24,7 @@ import type {
   sections as sectionsTable,
 } from "@/lib/db/schema";
 import { cn } from "@/lib/utils";
+import { completeRecurring } from "@/lib/recurring-complete";
 import { LabelChip } from "@/components/labels/label-chip";
 import { TaskAddForm } from "@/components/tasks/task-add-form";
 import { TaskCheckbox } from "@/components/tasks/task-checkbox";
@@ -96,6 +97,23 @@ export function Board({
   }
 
   async function toggleComplete(task: TaskWithLabels) {
+    // A recurring task stays on the board with a new due date, so it never gets
+    // the optimistic `isCompleted` that would card-flicker it out and back.
+    if (task.recurrence && task.dueDate) {
+      setError(null);
+      const result = await completeRecurring(task);
+      if (!result) {
+        setError("That didn't work. Try again.");
+        return;
+      }
+      setTasks((current) =>
+        current.map((existing) =>
+          existing.id === task.id ? { ...existing, ...result.updated } : existing,
+        ),
+      );
+      return;
+    }
+
     setTasks((current) =>
       current.map((existing) =>
         existing.id === task.id ? { ...existing, isCompleted: true } : existing,
@@ -108,9 +126,7 @@ export function Board({
         body: JSON.stringify({ completed: true }),
       }),
     );
-    // Completing a recurring task advances its due date server-side
-    // instead of completing it; re-sync so it reappears with the new date.
-    if (!ok || (task.recurrence && task.dueDate)) await refresh();
+    if (!ok) await refresh();
   }
 
   const roots = (sectionId: string | null) =>

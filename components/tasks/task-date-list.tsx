@@ -8,6 +8,7 @@ import { TaskModal } from "./task-modal";
 import { TaskRow } from "./task-row";
 import type { Label, TaskWithLabels } from "./types";
 import { usePendingAction } from "@/lib/use-pending-action";
+import { completeRecurring } from "@/lib/recurring-complete";
 import { EmptyState } from "@/components/ui/empty-state";
 
 export type TaskDateGroup = { heading: string; tasks: TaskWithLabels[] };
@@ -76,6 +77,29 @@ export function TaskDateList({
     }
 
     const previousGroups = groups;
+
+    if (task.recurrence && task.dueDate) {
+      setError(null);
+      const result = await completeRecurring(task);
+      if (!result) {
+        setError("That didn't work. Try again.");
+        return;
+      }
+      // Regroup on the server: an advanced due date usually moves the task out
+      // of these date groups entirely, which local state cannot work out.
+      router.refresh();
+      schedule(
+        `Completed "${task.content}"`,
+        // Already written, so the toast only has an inverse left to offer.
+        () => {},
+        () => {
+          setGroups(previousGroups);
+          void patch(task.id, result.undo);
+        },
+      );
+      return;
+    }
+
     setGroups((current) =>
       current.map((group) => ({
         ...group,

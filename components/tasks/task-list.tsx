@@ -30,6 +30,7 @@ import { TaskGroup } from "./task-group";
 import { CreateSectionForm } from "./create-section-form";
 import { BulkToolbar } from "./bulk-toolbar";
 import { usePendingAction } from "@/lib/use-pending-action";
+import { completeRecurring } from "@/lib/recurring-complete";
 import { compareTasks, type SortBy } from "@/lib/task-sort";
 import {
   flattenTaskGroup,
@@ -196,6 +197,36 @@ export function TaskList({
       return;
     }
 
+    if (task.recurrence && task.dueDate) {
+      setError(null);
+      const result = await completeRecurring(task);
+      if (!result) {
+        setError("That didn't work. Try again.");
+        return;
+      }
+      // The advanced row carries no labels, so spreading it over the existing
+      // task keeps the ones already on screen.
+      setTasks((current) =>
+        current.map((existing) =>
+          existing.id === task.id ? { ...existing, ...result.updated } : existing,
+        ),
+      );
+      schedule(
+        `Completed "${task.content}"`,
+        // Already written, so the toast only has an inverse left to offer.
+        () => {},
+        () => {
+          setTasks((current) =>
+            current.map((existing) => (existing.id === task.id ? task : existing)),
+          );
+          void withError(() => patchTask(task.id, result.undo)).then((ok) => {
+            if (!ok) void refresh();
+          });
+        },
+      );
+      return;
+    }
+
     const previousTasks = tasks;
     setTasks((current) =>
       current.map((existing) =>
@@ -214,8 +245,7 @@ export function TaskList({
             body: JSON.stringify({ completed: true }),
           }),
         );
-        // Recurring tasks reappear with their server-advanced due date after the delay.
-        if (!ok || (task.recurrence && task.dueDate)) await refresh();
+        if (!ok) await refresh();
       },
       () => setTasks(previousTasks),
     );

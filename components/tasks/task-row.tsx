@@ -82,7 +82,7 @@ function TaskRowComponent({
   depth: number;
   today: string;
   dateFormat: string;
-  onToggle: (task: TaskWithLabels) => void;
+  onToggle: (task: TaskWithLabels) => void | Promise<unknown>;
   onDelete: (task: TaskWithLabels) => void;
   onLabelsChange: (task: TaskWithLabels, labelIds: string[]) => void;
   onAssigneeChange?: (task: TaskWithLabels, assigneeId: string | null) => void;
@@ -144,6 +144,11 @@ function TaskRowComponent({
     if (completionTimer.current) clearTimeout(completionTimer.current);
   }, []);
 
+  // A repeating task is not leaving the list: completing it moves it to its
+  // next due date. The row's collapse animation would play it out and then
+  // snap it back, so it only gets the checkbox celebration.
+  const repeats = Boolean(task.recurrence && task.dueDate);
+
   function handleToggle() {
     if (task.isCompleted) {
       onToggle(task);
@@ -151,10 +156,15 @@ function TaskRowComponent({
     }
     if (isCompleting) return;
 
-    setCompletionHeight(shellRef.current?.scrollHeight ?? null);
+    if (!repeats) setCompletionHeight(shellRef.current?.scrollHeight ?? null);
     setIsCompleting(true);
     const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-    completionTimer.current = setTimeout(() => onToggle(task), reduceMotion ? 0 : 480);
+    // Clear the celebration once the toggle settles. A recurring task stays on
+    // screen with a new due date instead of unmounting, so leaving this set
+    // would strand its checkbox ticked on a task that is not complete.
+    completionTimer.current = setTimeout(() => {
+      void Promise.resolve(onToggle(task)).finally(() => setIsCompleting(false));
+    }, reduceMotion ? 0 : 480);
   }
 
   return (
@@ -165,7 +175,7 @@ function TaskRowComponent({
       }}
       className={cn(
         "task-row-shell flex flex-col",
-        isCompleting && "task-row-shell-completing",
+        isCompleting && !repeats && "task-row-shell-completing",
       )}
       style={{
         "--task-row-height": completionHeight ? `${completionHeight}px` : undefined,
