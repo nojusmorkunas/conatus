@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -10,8 +10,7 @@ import {
   MeasuringStrategy,
   MouseSensor,
   TouchSensor,
-  closestCenter,
-  closestCorners,
+  KeyboardSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -24,7 +23,9 @@ import {
 } from "@dnd-kit/sortable";
 import { generateKeyBetween } from "fractional-indexing";
 
-import { TaskCheckbox } from "./task-checkbox";
+import { TaskDragPreview } from "./task-row";
+import { taskCollisionDetection, taskDropAnimation, taskKeyboardCoordinates } from "./task-drag";
+import { projectTaskDrop, type TaskDropProjection, type TaskDropTarget } from "@/lib/task-drop";
 import { TaskModal } from "./task-modal";
 import { TaskGroup } from "./task-group";
 import { CreateSectionForm } from "./create-section-form";
@@ -34,7 +35,6 @@ import { completeRecurring } from "@/lib/recurring-complete";
 import { compareTasks, type SortBy } from "@/lib/task-sort";
 import {
   flattenTaskGroup,
-  projectTaskDepth,
   subtreeIds,
   taskDepth,
 } from "@/lib/task-tree";
@@ -70,8 +70,13 @@ export function TaskList({
   const [tasks, setTasks] = useState(initialTasks);
   const [orderedSections, setOrderedSections] = useState(sections);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [projection, setProjection] = useState<ReturnType<typeof projectTaskDepth>>(null);
-  const projectionRef = useRef<ReturnType<typeof projectTaskDepth>>(null);
+  const [projection, setProjection] = useState<TaskDropProjection | null>(null);
+  const projectionRef = useRef<TaskDropProjection | null>(null);
+  const dropContext = useRef<{ target: TaskDropTarget; visibleIds: Set<string> } | null>(null);
+  const indentWidth = useRef(28);
+  const moveQueue = useRef(Promise.resolve());
+  const moveRevision = useRef(0);
+  const moveFailed = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(initialDetailTaskId ?? null);
   const [selecting, setSelecting] = useState(false);
@@ -87,6 +92,7 @@ export function TaskList({
     useSensor(TouchSensor, {
       activationConstraint: { delay: 250, tolerance: 8 },
     }),
+    useSensor(KeyboardSensor, { coordinateGetter: taskKeyboardCoordinates, scrollBehavior: "auto" }),
   );
 
   // Re-sync when the server gives us a fresh task list (e.g. a section was
@@ -438,15 +444,16 @@ export function TaskList({
   const flatOrder = groups.flatMap((group) => roots(group.id).map((task) => task.id));
   const detailIndex = detailTaskId ? flatOrder.indexOf(detailTaskId) : -1;
   const activeTask = tasks.find((task) => task.id === activeId) ?? null;
-  // The ghost keeps the depth the task had when it was picked up so it never
-  // shifts sideways mid-drag; the placeholder row carries the projected depth.
   const activeDepth = activeTask ? taskDepth(tasks, activeTask.id) : 0;
   const activeSection = orderedSections.find((section) => section.id === activeId) ?? null;
-  // The dragged row itself is the drop indicator: dnd-kit slides it into the
-  // target slot, and we render it indented to the projected depth so it shows
-  // exactly where — and at what nesting level — it will land. A single source
-  // of truth, so nothing can disagree.
-  const activeProjectedDepth = projection?.depth ?? null;
+  const draggedIds = useMemo(() => activeId ? subtreeIds(tasks, activeId) : new Set<string>(), [tasks, activeId]);
+
+  useEffect(() => {
+    if (!activeId) return;
+    const previous = document.body.style.cursor;
+    document.body.style.cursor = "grabbing";
+    return () => { document.body.style.cursor = previous; };
+  }, [activeId]);
 
   function toggleTaskCollapsed(taskId: string) {
     setCollapsedTaskIds((current) => {
@@ -459,49 +466,57 @@ export function TaskList({
 
   const flatTasks = useMemo(
     () => [null, ...orderedSections.map((section) => section.id)]
-      .flatMap((sectionId) => flattenTaskGroup(visible, sectionId)),
-    [visible, orderedSections],
+      .flatMap((sectionId) => flattenTaskGroup(tasks, sectionId)),
+    [tasks, orderedSections],
   );
 
-  function updateProjection(next: ReturnType<typeof projectTaskDepth>) {
+  function updateProjection(next: TaskDropProjection | null) {
     const current = projectionRef.current;
     if (
       current?.depth === next?.depth &&
       current?.parentId === next?.parentId &&
       current?.sectionId === next?.sectionId &&
-      current?.afterId === next?.afterId
+      current?.afterId === next?.afterId &&
+      current?.beforeId === next?.beforeId
     ) return;
     projectionRef.current = next;
     setProjection(next);
   }
 
   function dragProjection(event: Pick<DragMoveEvent, "active" | "over" | "delta">) {
-    if (!event.over) return null;
-    const overId = String(event.over.id);
-    if (overId.startsWith("task-group:")) {
-      const groupId = overId.slice("task-group:".length);
-      const sectionId = groupId === "none" ? null : groupId;
-      const rootsInGroup = roots(sectionId).filter((candidate) => candidate.id !== event.active.id);
-      return {
-        depth: 0,
-        parentId: null,
-        sectionId,
-        afterId: rootsInGroup.at(-1)?.id ?? null,
-      };
-    }
-    return projectTaskDepth({
+    if (!event.over || !dropContext.current) return null;
+    return projectTaskDrop({
       items: flatTasks,
       activeId: String(event.active.id),
-      overId,
+      ...dropContext.current,
       offsetX: event.delta.x,
+      indentWidth: indentWidth.current,
     });
+  }
+
+  function describeDrop({ active, over }: Pick<DragMoveEvent, "active" | "over">) {
+    if (active.data.current?.type === "section") {
+      const section = orderedSections.find((item) => item.id === over?.id);
+      return section ? `Over section ${section.name}.` : undefined;
+    }
+    const next = projectionRef.current;
+    if (!next) return "Outside the task list. Release to cancel.";
+    const parent = tasks.find((task) => task.id === next.parentId);
+    const before = tasks.find((task) => task.id === next.beforeId);
+    return `${before ? `Before ${before.content}` : "At the end of the section"}${parent ? `, under ${parent.content}` : ", at the top level"}.`;
   }
 
   async function handleTaskDragEnd({ active, over, delta }: DragEndEvent) {
     if (!over) return;
     const task = tasks.find((candidate) => candidate.id === active.id);
-    const target = projectionRef.current ?? dragProjection({ active, over, delta });
+    const target = dragProjection({ active, over, delta });
     if (!task || !target) return;
+
+    const currentSiblings = visible.filter((item) => item.parentId === task.parentId && item.sectionId === task.sectionId)
+      .sort((a, b) => a.order < b.order ? -1 : 1);
+    const currentIndex = currentSiblings.findIndex((item) => item.id === task.id);
+    if (task.parentId === target.parentId && task.sectionId === target.sectionId &&
+      (currentSiblings[currentIndex - 1]?.id ?? null) === target.afterId) return;
 
     const siblings = tasks
       .filter((candidate) =>
@@ -526,19 +541,43 @@ export function TaskList({
             : existing,
       ),
     );
+    if (target.parentId) setCollapsedTaskIds((current) => {
+      if (!current.has(target.parentId!)) return current;
+      const next = new Set(current);
+      next.delete(target.parentId!);
+      return next;
+    });
 
-    const ok = await withError(() =>
-      fetch(`/api/tasks/${task.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sectionId: target.sectionId,
-          parentId: target.parentId,
-          afterId: before?.id ?? null,
-        }),
-      }),
-    );
-    if (!ok) await refresh();
+    // Preserve the order of rapid drops even when requests take different
+    // amounts of time. Recover once the queue drains, without erasing a later
+    // optimistic move with an older response.
+    const revision = ++moveRevision.current;
+    setError(null);
+    moveQueue.current = moveQueue.current.then(async () => {
+      try {
+        const response = await patchTask(task.id, {
+          sectionId: target.sectionId, parentId: target.parentId, afterId: before?.id ?? null,
+        });
+        if (!response.ok) throw new Error("Move failed");
+      } catch {
+        moveFailed.current = true;
+        setError("Couldn't move the task. Restoring the saved order…");
+      }
+      if (revision === moveRevision.current && moveFailed.current) {
+        try {
+          const response = await fetch(`/api/tasks?projectId=${projectId}`);
+          if (!response.ok) throw new Error("Refresh failed");
+          const saved: TaskWithLabels[] = await response.json();
+          if (revision === moveRevision.current) {
+            setTasks(saved);
+            moveFailed.current = false;
+            setError("Couldn't move the task. Your saved task order has been restored. Try again.");
+          }
+        } catch {
+          setError("Couldn't save the task order. Check your connection and reload to see the saved order.");
+        }
+      }
+    });
   }
 
   async function handleSectionDragEnd({ active, over }: DragEndEvent) {
@@ -569,7 +608,7 @@ export function TaskList({
   }
 
   return (
-    <div className="flex flex-col gap-7">
+    <div className="flex flex-col gap-7" data-task-dragging={activeTask ? "true" : undefined}>
       {tasks.length === 0 && orderedSections.length === 0 && (
         <EmptyState
           icon={Plus}
@@ -581,17 +620,25 @@ export function TaskList({
       <DndContext
         id={`task-list-${projectId}`}
         sensors={sensors}
-        collisionDetection={(args) =>
-          tasks.some((task) => task.id === args.active.id)
-            ? closestCenter(args)
-            : closestCorners(args)
-        }
+        collisionDetection={(args) => {
+          const collisions = taskCollisionDetection(args);
+          const target = collisions[0]?.data?.target as TaskDropTarget | undefined;
+          dropContext.current = target ? {
+            target,
+            visibleIds: new Set(args.droppableContainers.filter((item) => item.data.current?.type === "task").map((item) => String(item.id))),
+          } : null;
+          return collisions;
+        }}
         measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
         // Only auto-scroll within a narrow band right at the top/bottom edge,
         // and gently. The default 20%-of-viewport band with fast acceleration
         // made a barely-there drag run the drop target far down the list.
         autoScroll={{ threshold: { x: 0, y: 0.05 }, acceleration: 6 }}
         onDragStart={(event: DragStartEvent) => {
+          const node = event.activatorEvent.target;
+          if (node instanceof Element) {
+            indentWidth.current = parseFloat(getComputedStyle(node).getPropertyValue("--task-indent-step")) || 28;
+          }
           setActiveId(String(event.active.id));
           updateProjection(null);
         }}
@@ -614,6 +661,16 @@ export function TaskList({
           setActiveId(null);
           updateProjection(null);
         }}
+        accessibility={{
+          screenReaderInstructions: { draggable: "Press Space to pick up a task. Use Up and Down to move, Left and Right to change nesting. Press Space to drop or Escape to cancel." },
+          announcements: {
+            onDragStart: ({ active }) => `Picked up ${tasks.find((task) => task.id === active.id)?.content ?? "section"}.`,
+            onDragMove: describeDrop,
+            onDragOver: describeDrop,
+            onDragEnd: ({ over }) => over ? "Dropped." : "Move cancelled. Task order unchanged.",
+            onDragCancel: () => "Move cancelled. Task order unchanged.",
+          },
+        }}
       >
         <SortableContext
           items={orderedSections.map((section) => section.id)}
@@ -635,7 +692,8 @@ export function TaskList({
                 selecting={selecting}
                 draggable={!selecting && sortBy === "manual"}
                 activeTaskId={activeTask?.id ?? null}
-                activeProjectedDepth={activeProjectedDepth}
+                draggedIds={draggedIds}
+                projection={projection}
                 collapsedTaskIds={collapsedTaskIds}
                 selectedTaskIds={selectedTaskIds}
                 onToggle={toggleComplete}
@@ -673,23 +731,12 @@ export function TaskList({
           ))}
         </SortableContext>
         <DragOverlay
-          dropAnimation={{
-            duration: 220,
-            easing: "cubic-bezier(0.18, 0.67, 0.6, 1.22)",
-          }}
+          dropAnimation={taskDropAnimation}
+          zIndex={50}
         >
           {activeTask ? (
-            <div
-              className="task-drag-ghost flex cursor-grabbing items-start gap-2 rounded-lg border border-border bg-card py-2.5 pr-3 shadow-xl ring-1 ring-black/5"
-              style={{ "--ghost-depth": activeDepth } as CSSProperties}
-            >
-              <TaskCheckbox
-                priority={activeTask.priority}
-                checked={activeTask.isCompleted}
-                onToggle={() => {}}
-              />
-              <span className="text-sm select-none">{activeTask.content}</span>
-            </div>
+            <TaskDragPreview task={activeTask} allTasks={tasks} depth={activeDepth}
+              members={members} currentUserId={currentUserId} today={today} dateFormat={dateFormat} />
           ) : activeSection ? (
             <div className="cursor-grabbing rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-bold shadow-xl ring-1 ring-black/5">
               {activeSection.name}
@@ -698,7 +745,7 @@ export function TaskList({
         </DragOverlay>
       </DndContext>
 
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
 
       {selectedTaskIds.length > 0 && (
         <BulkToolbar

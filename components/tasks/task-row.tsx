@@ -21,8 +21,7 @@ import {
   GripVertical,
   Tag,
 } from "lucide-react";
-import { useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
 
 import { addDays } from "@/lib/dates";
 import { cn } from "@/lib/utils";
@@ -69,7 +68,7 @@ function TaskRowComponent({
   selected = false,
   onSelectionToggle,
   draggable = false,
-  activeProjectedDepth = null,
+  draggedDescendant = false,
   collapsed = false,
   onToggleCollapsed,
   onError = () => {},
@@ -103,7 +102,7 @@ function TaskRowComponent({
   selected?: boolean;
   onSelectionToggle?: (task: TaskWithLabels) => void;
   draggable?: boolean;
-  activeProjectedDepth?: number | null;
+  draggedDescendant?: boolean;
   collapsed?: boolean;
   onToggleCollapsed?: (taskId: string) => void;
   onError?: () => void;
@@ -116,20 +115,20 @@ function TaskRowComponent({
   const [completionHeight, setCompletionHeight] = useState<number | null>(null);
   const completionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shellRef = useRef<HTMLDivElement | null>(null);
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useDraggable({
     id: task.id,
     disabled: !draggable,
+    data: { type: "task", sectionId: task.sectionId, depth },
+  });
+  const { setNodeRef: setDropRef } = useDroppable({
+    id: task.id,
+    disabled: !draggable || draggedDescendant,
+    data: { type: "task", sectionId: task.sectionId, depth },
   });
 
   const directChildren = allTasks
     .filter((candidate) => candidate.parentId === task.id)
     .sort((a, b) => (a.order < b.order ? -1 : 1));
-  const completedChildren = directChildren.filter((child) => child.isCompleted).length;
-  const hasMetadata =
-    directChildren.length > 0 ||
-    Boolean(task.dueDate || task.deadlineDate || task.durationMinutes || task.commentCount) ||
-    (members.length > 1 && Boolean(task.assigneeId)) ||
-    task.labels.length > 0;
   // Only needed when the "add task above" form is open, so compute it on demand
   // rather than scanning the whole list on every render.
   function previousSiblingId(): string | null {
@@ -172,6 +171,7 @@ function TaskRowComponent({
       ref={(node) => {
         shellRef.current = node;
         setNodeRef(node);
+        setDropRef(node);
       }}
       className={cn(
         "task-row-shell flex flex-col",
@@ -179,8 +179,6 @@ function TaskRowComponent({
       )}
       style={{
         "--task-row-height": completionHeight ? `${completionHeight}px` : undefined,
-        transform: CSS.Transform.toString(transform),
-        transition,
       } as CSSProperties}
     >
       {addingTask === "above" && (
@@ -202,7 +200,6 @@ function TaskRowComponent({
         data-task-id={task.id}
         data-task-content={task.content}
         data-has-children={directChildren.length > 0}
-        {...attributes}
         {...listeners}
         role="group"
         aria-label={`Task: ${task.content}`}
@@ -228,12 +225,11 @@ function TaskRowComponent({
           "task-row group relative mb-0.5 flex items-start gap-2 py-2.5 pr-2",
           selecting && "cursor-pointer",
           draggable && "touch-pan-y select-none cursor-pointer",
-          isDragging && "is-dragging z-0 cursor-grabbing",
+          isDragging && "is-dragging cursor-grabbing",
+          draggedDescendant && "is-drag-descendant",
         )}
         style={{
-          // While dragging, the row indents live to the projected drop depth
-          // so it previews exactly where — and at what nesting level — it lands.
-          "--row-depth": isDragging && activeProjectedDepth !== null ? activeProjectedDepth : depth,
+          "--row-depth": depth,
         } as CSSProperties}
         onClick={(event) => {
           if (selecting) {
@@ -258,11 +254,17 @@ function TaskRowComponent({
         }}
       >
         {draggable && (
-          <GripVertical
-            aria-hidden
-            className="task-row-drag-handle absolute top-2.5 size-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-            style={{ left: "calc(var(--row-depth, 0) * var(--task-indent-step) + 4px)" }}
-          />
+          <button
+            ref={setActivatorNodeRef}
+            type="button"
+            {...attributes}
+            {...listeners}
+            aria-label={`Move ${task.content}`}
+            className="task-row-drag-handle absolute top-1.5 flex size-7 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring"
+            style={{ left: "calc(var(--row-depth, 0) * var(--task-indent-step))" }}
+          >
+            <GripVertical aria-hidden className="size-4" />
+          </button>
         )}
         {selecting ? (
           <input
@@ -282,49 +284,12 @@ function TaskRowComponent({
           />
         )}
 
-        <div className="min-w-0 flex-1">
-          <TaskContent task={task} />
-
-          {task.description?.trim() && (
-            <p className="mt-0.5 truncate text-[13px] text-muted-foreground sm:text-xs">
-              {task.description}
-            </p>
-          )}
-
-          {hasMetadata && (
-            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-              {directChildren.length > 0 && (
-                <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-                  <ListTree className="size-3.5" />
-                  {completedChildren}/{directChildren.length}
-                </span>
-              )}
-              <DueChip task={task} today={today} dateFormat={dateFormat} />
-              <DeadlineChip task={task} today={today} dateFormat={dateFormat} />
-              <DurationChip task={task} />
-              {task.commentCount > 0 && (
-                <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-                  <MessageCircle className="size-3.5" />
-                  {task.commentCount}
-                </span>
-              )}
-              {members.length > 1 && (
-                <AssigneeChip
-                  assigneeId={task.assigneeId}
-                  members={members}
-                  currentUserId={currentUserId}
-                />
-              )}
-              {task.labels.map((label) => (
-                <LabelChip key={label.id} label={label} subtle />
-              ))}
-            </div>
-          )}
-        </div>
+        <TaskRowDetails task={task} directChildren={directChildren} members={members}
+          currentUserId={currentUserId} today={today} dateFormat={dateFormat} />
 
         <div
           className={cn(
-            "absolute top-1.5 right-1.5 flex items-center gap-0.5",
+            "task-row-actions absolute top-1.5 right-1.5 flex items-center gap-0.5",
             !selecting && "rounded-md bg-muted px-0.5 py-0.5 opacity-100 shadow-sm ring-1 ring-border/80 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100",
           )}
         >
@@ -453,8 +418,84 @@ export const TaskRow = memo(TaskRowComponent, (prev, next) =>
   prev.selected === next.selected &&
   prev.draggable === next.draggable &&
   prev.collapsed === next.collapsed &&
-  prev.activeProjectedDepth === next.activeProjectedDepth,
+  prev.draggedDescendant === next.draggedDescendant,
 );
+
+function TaskRowDetails({ task, directChildren, members, currentUserId, today, dateFormat }: {
+  task: TaskWithLabels;
+  directChildren: TaskWithLabels[];
+  members: ProjectMember[];
+  currentUserId: string;
+  today: string;
+  dateFormat: string;
+}) {
+  const completedChildren = directChildren.filter((child) => child.isCompleted).length;
+  const hasMetadata =
+    directChildren.length > 0 ||
+    Boolean(task.dueDate || task.deadlineDate || task.durationMinutes || task.commentCount) ||
+    (members.length > 1 && Boolean(task.assigneeId)) ||
+    task.labels.length > 0;
+  return (
+        <div className="min-w-0 flex-1">
+          <TaskContent task={task} />
+
+          {task.description?.trim() && (
+            <p className="mt-0.5 truncate text-[13px] text-muted-foreground sm:text-xs">
+              {task.description}
+            </p>
+          )}
+
+          {hasMetadata && (
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+              {directChildren.length > 0 && (
+                <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                  <ListTree className="size-3.5" />
+                  {completedChildren}/{directChildren.length}
+                </span>
+              )}
+              <DueChip task={task} today={today} dateFormat={dateFormat} />
+              <DeadlineChip task={task} today={today} dateFormat={dateFormat} />
+              <DurationChip task={task} />
+              {task.commentCount > 0 && (
+                <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                  <MessageCircle className="size-3.5" />
+                  {task.commentCount}
+                </span>
+              )}
+              {members.length > 1 && (
+                <AssigneeChip
+                  assigneeId={task.assigneeId}
+                  members={members}
+                  currentUserId={currentUserId}
+                />
+              )}
+              {task.labels.map((label) => (
+                <LabelChip key={label.id} label={label} subtle />
+              ))}
+            </div>
+          )}
+        </div>
+  );
+}
+
+export function TaskDragPreview({ task, allTasks, depth, members, currentUserId, today, dateFormat }: {
+  task: TaskWithLabels;
+  allTasks: TaskWithLabels[];
+  depth: number;
+  members: ProjectMember[];
+  currentUserId: string;
+  today: string;
+  dateFormat: string;
+}) {
+  return (
+    <div className="task-row task-drag-ghost relative flex items-start gap-2 py-2.5 pr-2"
+      style={{ "--row-depth": depth } as CSSProperties} aria-hidden inert>
+      <TaskCheckbox priority={task.priority} checked={task.isCompleted} onToggle={() => {}} />
+      <TaskRowDetails task={task} directChildren={allTasks.filter((item) => item.parentId === task.id)}
+        members={members} currentUserId={currentUserId} today={today} dateFormat={dateFormat} />
+    </div>
+  );
+}
 
 function TaskContent({ task }: { task: TaskWithLabels }) {
   return <div className="text-base select-none sm:text-sm">{task.content}</div>;

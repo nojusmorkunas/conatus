@@ -1,11 +1,8 @@
 "use client";
 
-import { useMemo, useSyncExternalStore } from "react";
+import { Fragment, useMemo, useSyncExternalStore, type CSSProperties } from "react";
 import { useDroppable } from "@dnd-kit/core";
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
+import type { TaskDropProjection } from "@/lib/task-drop";
 
 import { visibleFlatRows } from "@/lib/task-tree";
 import { TaskAddForm } from "./task-add-form";
@@ -26,8 +23,9 @@ export function TaskGroup({
   dateFormat,
   selecting,
   draggable,
+  draggedIds,
   activeTaskId,
-  activeProjectedDepth,
+  projection,
   collapsedTaskIds,
   selectedTaskIds,
   onToggle,
@@ -60,7 +58,8 @@ export function TaskGroup({
   selecting: boolean;
   draggable: boolean;
   activeTaskId: string | null;
-  activeProjectedDepth: number | null;
+  draggedIds: ReadonlySet<string>;
+  projection: TaskDropProjection | null;
   collapsedTaskIds: ReadonlySet<string>;
   selectedTaskIds: string[];
   onToggle: (task: TaskWithLabels) => void;
@@ -80,7 +79,6 @@ export function TaskGroup({
   onDeleteSection: (section: Section) => void;
   onError: () => void;
 }) {
-  const { setNodeRef } = useDroppable({ id: `task-group:${id ?? "none"}` });
   const collapsed = useSyncExternalStore(
     (callback) => {
       window.addEventListener("section-collapse", callback);
@@ -101,14 +99,21 @@ export function TaskGroup({
   const rows = useMemo(
     () => visibleFlatRows(tasks, id, {
       collapsedIds: collapsedTaskIds,
-      hiddenSubtreeOf: activeTaskId,
     }),
-    [tasks, id, collapsedTaskIds, activeTaskId],
+    [tasks, id, collapsedTaskIds],
   );
+
+  const { setNodeRef } = useDroppable({
+    id: `task-group:${id ?? "none"}`,
+    disabled: !draggable,
+    data: { type: "task-group", sectionId: id, empty: collapsed || rows.length === 0 },
+  });
+  const drop = projection?.sectionId === id ? projection : null;
 
   return (
     <div
       ref={setNodeRef}
+      data-task-group={id ?? "none"}
       className="flex flex-col"
     >
       {section && (
@@ -125,11 +130,9 @@ export function TaskGroup({
 
       {!collapsed && <>
         <div className="relative">
-          <SortableContext
-            items={rows.map((task) => task.id)}
-            strategy={verticalListSortingStrategy}
-          >
             {rows.map((task) => (
+              <Fragment key={task.id}>
+              {drop?.beforeId === task.id && <TaskDropIndicator projection={drop} />}
               <TaskRow
                 key={task.id}
                 task={task}
@@ -155,15 +158,14 @@ export function TaskGroup({
                 selected={selectedTaskIds.includes(task.id)}
                 onSelectionToggle={onSelectionToggle}
                 draggable={draggable}
-                // Only the dragged row cares about the projected depth; giving
-                // the rest a stable null lets them skip re-rendering as it moves.
-                activeProjectedDepth={task.id === activeTaskId ? activeProjectedDepth : null}
+                draggedDescendant={task.id !== activeTaskId && draggedIds.has(task.id)}
                 collapsed={collapsedTaskIds.has(task.id)}
                 onToggleCollapsed={onToggleTaskCollapsed}
                 onError={onError}
               />
+              </Fragment>
             ))}
-          </SortableContext>
+            {drop && !drop.beforeId && <TaskDropIndicator projection={drop} />}
         </div>
 
         <div className="[&>button]:gap-2.5 [&>button>svg]:text-red-500">
@@ -178,6 +180,16 @@ export function TaskGroup({
           />
         </div>
       </>}
+      {collapsed && drop && <TaskDropIndicator projection={drop} />}
     </div>
   );
+}
+
+function TaskDropIndicator({ projection }: { projection: TaskDropProjection }) {
+  return <div className="relative" aria-hidden>
+    <div className="task-drop-indicator" data-testid="task-drop-indicator"
+      data-depth={projection.depth} data-parent-id={projection.parentId ?? ""}
+      data-after-id={projection.afterId ?? ""} data-before-id={projection.beforeId ?? ""}
+      style={{ "--drop-depth": projection.depth } as CSSProperties} />
+  </div>;
 }

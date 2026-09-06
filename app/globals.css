@@ -251,32 +251,77 @@
   background-color: color-mix(in oklch, var(--muted) 55%, transparent);
 }
 
-/* The dragged task IS the drop indicator: dnd-kit slides this row into the
-   target slot and it indents live to the projected depth, so it shows exactly
-   where and at what nesting level the task will land — a single source of
-   truth. Its own content is hidden and it reads as a hollow placeholder slot
-   (muted card, dashed edge); the full-detail copy rides the cursor overlay. */
-.task-row.is-dragging > * {
+/* Keep source geometry fixed: moving targets make small corrections jitter.
+   A single line marks the actual insertion gap in any section. */
+.task-row.is-dragging > *,
+.task-row.is-drag-descendant > * {
+  opacity: 0.25;
+}
+
+[data-task-dragging] .task-row:not(.task-drag-ghost)::before {
+  background-color: transparent;
+}
+
+[data-task-dragging] .task-row button,
+[data-task-dragging] .task-row {
+  cursor: grabbing;
+}
+
+[data-task-dragging] .task-row .task-row-drag-handle,
+[data-task-dragging] .task-row .task-row-actions {
   opacity: 0;
 }
 
-.task-row.is-dragging::before {
-  background-color: color-mix(in oklch, var(--muted) 40%, transparent);
-  border: 1px dashed color-mix(in oklch, var(--muted-foreground) 45%, transparent);
+.task-drop-indicator {
+  position: absolute;
+  z-index: 25;
+  top: -2px;
+  right: 0;
+  left: calc(var(--task-indent-base) + var(--drop-depth, 0) * var(--task-indent-step));
+  height: 2px;
+  border-radius: 1px;
+  background: var(--foreground);
+  pointer-events: none;
 }
 
-/* The floating drag ghost mirrors the highlighted card: it begins at the card
-   edge for the depth the task was picked up at (never the gutter), so lifting
-   a task lands the ghost exactly over where the row was and nesting never
-   nudges it sideways. */
+.dark .task-drop-indicator {
+  background: oklch(1 0 0);
+}
+
+/* Reuse the row's full presentation and dimensions. Its painted surface starts
+   at the card edge; the transparent gutter keeps the original pickup offset. */
 .task-drag-ghost {
-  margin-left: calc(var(--task-card-inset) + var(--ghost-depth, 0) * var(--task-indent-step));
-  padding-left: calc(var(--task-indent-base) - var(--task-card-inset));
+  pointer-events: none;
+  cursor: grabbing;
+}
+
+.task-drag-ghost::before {
+  background: var(--card);
+  box-shadow: 0 8px 24px oklch(0 0 0 / 18%), 0 2px 6px oklch(0 0 0 / 12%);
+}
+
+.task-drag-ghost[data-settling] {
+  /* Only the isolated overlay reflows on release; list rows stay fixed.
+     Interpolating the indent preserves wrapping when a task changes depth. */
+  transition: padding-left 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.task-drag-ghost[data-settling]::before {
+  transition: left 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-drag-ghost[data-settling],
+  .task-drag-ghost[data-settling]::before,
+  .task-row-drag-handle {
+    transition: none;
+  }
 }
 
 @media (max-width: 639px) {
-  .task-row .task-row-drag-handle {
-    display: none;
+  .task-row .task-row-drag-handle:not(:focus-visible) {
+    opacity: 0;
+    pointer-events: none;
   }
 
   .task-row .task-row-collapse {

@@ -46,6 +46,7 @@ export function SectionHeading({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: section.id,
     disabled: selecting,
+    data: { type: "section" },
   });
 
   function beginEditing() {
