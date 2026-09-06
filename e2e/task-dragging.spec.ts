@@ -205,33 +205,43 @@ test("small pointer corrections keep rows stationary and the insertion line stab
 test("keyboard dragging reorders, nests, outdents and cancels", async ({ page }) => {
   const f = await fixture(page);
   const handle = page.getByRole("button", { name: "Move Gamma", exact: true });
+  const indicator = page.getByTestId("task-drop-indicator");
+
+  async function startDrag(depth: number) {
+    await expect(handle).toBeFocused();
+    // dnd-kit attaches its document listener on a timer after pickup.
+    // A short key hold keeps the next key from arriving before it attaches.
+    await page.keyboard.press("Space", { delay: 50 });
+    await expect(row(page, "Gamma")).toHaveClass(/is-dragging/);
+    await expect(indicator).toHaveAttribute("data-depth", String(depth));
+  }
+
   await handle.focus();
-  await page.keyboard.press("Space");
-  await expect(row(page, "Gamma")).toHaveClass(/is-dragging/);
+  await startDrag(0);
   await page.keyboard.press("ArrowRight");
-  await expect(page.getByTestId("task-drop-indicator")).toHaveAttribute("data-parent-id", f.beta.id);
+  await expect(indicator).toHaveAttribute("data-parent-id", f.beta.id);
   await expect(page.getByRole("status").filter({ hasText: "under Beta" })).toHaveCount(1);
   await page.keyboard.press("Space");
   await expect.poll(async () => (await persisted(page, f.gamma.id)).parentId).toBe(f.beta.id);
   await expect(page.locator(".task-drag-ghost")).toHaveCount(0);
-  await expect(handle).toBeFocused();
-  await page.keyboard.press("Space");
-  await expect(row(page, "Gamma")).toHaveClass(/is-dragging/);
+  await startDrag(1);
   await page.keyboard.press("ArrowLeft");
+  await expect(indicator).toHaveAttribute("data-depth", "0");
+  await expect(indicator).toHaveAttribute("data-parent-id", "");
   await page.keyboard.press("Space");
   await expect.poll(async () => (await persisted(page, f.gamma.id)).parentId).toBeNull();
   await expect(page.locator(".task-drag-ghost")).toHaveCount(0);
-  await page.keyboard.press("Space");
-  await expect(row(page, "Gamma")).toHaveClass(/is-dragging/);
+  await startDrag(0);
   await page.keyboard.press("ArrowUp");
-  await expect(page.getByTestId("task-drop-indicator")).toHaveAttribute("data-before-id", f.beta.id);
+  await expect(indicator).toHaveAttribute("data-before-id", f.beta.id);
   await page.keyboard.press("Space");
   await expect.poll(async () => (await persisted(page, f.gamma.id)).order < (await persisted(page, f.beta.id)).order).toBe(true);
   await expect(page.locator(".task-drag-ghost")).toHaveCount(0);
-  await page.keyboard.press("Space");
-  await expect(row(page, "Gamma")).toHaveClass(/is-dragging/);
+  await startDrag(0);
   await page.keyboard.press("ArrowDown");
+  await expect(indicator).toHaveAttribute("data-after-id", f.beta.id);
   await page.keyboard.press("Escape");
+  await expect(page.locator(".task-drag-ghost")).toHaveCount(0);
   expect((await names(page)).slice(0, 3)).toEqual(["Alpha", "Gamma", "Beta"]);
 });
 
