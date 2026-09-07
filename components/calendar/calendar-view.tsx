@@ -1,7 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { Repeat2 } from "lucide-react";
+import { calendarOccurrences, type CalendarOccurrence } from "@/lib/calendar";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -19,7 +21,8 @@ import { addDays, formatDate, monthGridStart } from "@/lib/dates";
 import { priorityColors } from "@/components/tasks/priority";
 import { cn } from "@/lib/utils";
 
-type Task = typeof tasksTable.$inferSelect;
+type StoredTask = typeof tasksTable.$inferSelect;
+type Task = CalendarOccurrence<StoredTask>;
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const HOUR_HEIGHT = 48;
@@ -42,7 +45,7 @@ export function CalendarView({
   view: "month" | "week";
   month: string;
   week: string;
-  tasks: Task[];
+  tasks: StoredTask[];
   today: string;
   dateFormat: string;
   weekStart: number;
@@ -63,27 +66,42 @@ export function CalendarView({
     setTasks(initialTasks);
   }
 
+  const [moving, setMoving] = useState(false);
+  const rangeStart = view === "week" ? week : monthGridStart(month, weekStart);
+  const rangeEnd = addDays(rangeStart, view === "week" ? 6 : 41);
+  const occurrences = useMemo(
+    () => calendarOccurrences(tasks, rangeStart, rangeEnd), [tasks, rangeStart, rangeEnd],
+  );
+
   async function handleDragEnd({ active, over }: DragEndEvent) {
-    if (!over) return;
-    const taskId = String(active.id);
-    const date = String(over.id);
+    if (!over || moving) return;
+    const taskId = active.data.current?.taskId as string | undefined;
+    const date = over.data.current?.date as string | undefined;
     const task = tasks.find((candidate) => candidate.id === taskId);
-    if (!task || task.dueDate === date) return;
+    if (!task || !date) return;
+    const dueTime = over.data.current?.dueTime === undefined
+      ? task.dueTime : over.data.current.dueTime as string | null;
+    if (task.dueDate === date && task.dueTime === dueTime) return;
 
-    setTasks((current) =>
-      current.map((existing) =>
-        existing.id === taskId ? { ...existing, dueDate: date } : existing,
-      ),
-    );
-
-    const response = await fetch(`/api/tasks/${taskId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dueDate: date }),
-    });
-    if (!response.ok) {
-      setError("That didn't work. Try again.");
+    const previous = tasks;
+    setError(null);
+    setMoving(true);
+    setTasks((current) => current.map((existing) =>
+      existing.id === taskId ? { ...existing, dueDate: date, dueTime } : existing,
+    ));
+    try {
+      const response = await fetch(`/api/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dueDate: date, dueTime }),
+      });
+      if (!response.ok) throw new Error("Move failed");
       router.refresh();
+    } catch {
+      setTasks(previous);
+      setError("Couldn't move the task. Check your connection and try again.");
+    } finally {
+      setMoving(false);
     }
   }
 
@@ -131,13 +149,19 @@ export function CalendarView({
         </div>
       </div>
 
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
 
+      {occurrences.some((task) => task.isProjection) && (
+        <p className="text-xs text-muted-foreground">
+          Repeat icons mark recurring tasks. Future repeats are previews; open one to edit the task.
+          {tasks.some((task) => task.recurrence?.startsWith("every!")) && " Completion-based repeats assume completion on the due date."}
+        </p>
+      )}
       <DndContext id="calendar-view" sensors={sensors} onDragEnd={handleDragEnd}>
         {view === "month" ? (
-          <MonthGrid month={month} tasks={tasks} today={today} weekStart={weekStart} />
+          <MonthGrid month={month} tasks={occurrences} today={today} weekStart={weekStart} />
         ) : (
-          <WeekGrid week={week} tasks={tasks} today={today} />
+          <WeekGrid week={week} tasks={occurrences} today={today} />
         )}
       </DndContext>
     </div>
@@ -190,7 +214,7 @@ function DayCell({
   isToday: boolean;
   tasks: Task[];
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: date });
+  const { setNodeRef, isOver } = useDroppable({ id: `day:${date}`, data: { date } });
   const [expanded, setExpanded] = useState(false);
   const shown = expanded ? tasks : tasks.slice(0, 3);
   const hidden = tasks.length - shown.length;
@@ -214,7 +238,7 @@ function DayCell({
       </span>
       <div className="flex flex-col gap-0.5">
         {shown.map((task) => (
-          <TaskChip key={task.id} task={task} />
+          <TaskChip key={task.occurrenceId} task={task} />
         ))}
         {hidden > 0 && (
           <button type="button" className="min-h-11 px-1 text-left text-xs text-muted-foreground underline-offset-2 hover:underline sm:min-h-6" onClick={() => setExpanded(true)}>
@@ -233,26 +257,33 @@ function DayCell({
 
 function TaskChip({ task }: { task: Task }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: task.id,
+    id: task.occurrenceId,
+    data: { taskId: task.id },
+    disabled: task.isProjection,
   });
 
   return (
     <Link
       href={`/projects/${task.projectId}?task=${task.id}`}
+      title={task.isProjection ? `${task.content} — repeat preview; open to edit task` : task.content}
+      data-occurrence-date={task.dueDate}
+      data-projection={task.isProjection}
       ref={setNodeRef}
-      {...attributes}
-      {...listeners}
+      {...(task.isProjection ? {} : attributes)}
+      {...(task.isProjection ? {} : listeners)}
       role="link"
       style={{
         transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
       }}
       className={cn(
         "flex min-h-11 cursor-grab touch-auto select-none items-center gap-1 truncate rounded border border-border bg-background px-1 py-0.5 text-sm sm:min-h-0 sm:text-xs",
+        task.isProjection && "cursor-pointer border-dashed",
         isDragging && "opacity-50",
       )}
     >
       <span className={cn("size-1.5 shrink-0 rounded-full border-2", priorityColors[task.priority])} />
       <span className="truncate">{task.content}</span>
+      {task.recurrence && <Repeat2 aria-label="Repeating task" className="size-3 shrink-0 text-muted-foreground" />}
       {task.dueTime && <span className="shrink-0 text-muted-foreground">{task.dueTime}</span>}
     </Link>
   );
@@ -316,7 +347,7 @@ function WeekGrid({ week, tasks, today }: { week: string; tasks: Task[]; today: 
 }
 
 function AllDayLane({ date, tasks }: { date: string; tasks: Task[] }) {
-  const { setNodeRef, isOver } = useDroppable({ id: date });
+  const { setNodeRef, isOver } = useDroppable({ id: `all-day:${date}`, data: { date, dueTime: null } });
   return (
     <div
       ref={setNodeRef}
@@ -326,27 +357,26 @@ function AllDayLane({ date, tasks }: { date: string; tasks: Task[] }) {
       )}
     >
       {tasks.map((task) => (
-        <TaskChip key={task.id} task={task} />
+        <TaskChip key={task.occurrenceId} task={task} />
       ))}
     </div>
   );
 }
 
 function HourColumn({ date, tasks }: { date: string; tasks: Task[] }) {
-  const { setNodeRef, isOver } = useDroppable({ id: date });
-
   return (
     <div
-      ref={setNodeRef}
-      className={cn("relative border-r border-border last:border-r-0", isOver && "bg-accent/40")}
+      className="relative border-r border-border last:border-r-0"
       style={{ height: HOUR_HEIGHT * 24 }}
     >
       {Array.from({ length: 24 }, (_, hour) => (
-        <div key={hour} style={{ height: HOUR_HEIGHT }} className="border-b border-border" />
+        <HourSlot key={hour} date={date} hour={hour} />
       ))}
-      {/* ponytail: overlapping blocks stack with a slight offset instead of a side-by-side split; fine at personal-calendar density */}
       {tasks.map((task, index) => (
-        <TimeBlock key={task.id} task={task} offset={index} />
+        <TimeBlock key={task.occurrenceId} task={task} offset={tasks.slice(0, index).filter((previous) => {
+          const minutes = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
+          return minutes(previous.dueTime!) + (previous.durationMinutes ?? 60) > minutes(task.dueTime!);
+        }).length} />
       ))}
     </div>
   );
@@ -354,7 +384,9 @@ function HourColumn({ date, tasks }: { date: string; tasks: Task[] }) {
 
 function TimeBlock({ task, offset }: { task: Task; offset: number }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: task.id,
+    id: task.occurrenceId,
+    data: { taskId: task.id },
+    disabled: task.isProjection,
   });
   const [hour, minute] = task.dueTime!.split(":").map(Number);
   const top = (hour + minute / 60) * HOUR_HEIGHT;
@@ -363,27 +395,40 @@ function TimeBlock({ task, offset }: { task: Task; offset: number }) {
   return (
     <Link
       href={`/projects/${task.projectId}?task=${task.id}`}
+      title={task.isProjection ? `${task.content} — repeat preview; open to edit task` : task.content}
+      data-occurrence-date={task.dueDate}
+      data-projection={task.isProjection}
       ref={setNodeRef}
-      {...attributes}
-      {...listeners}
+      {...(task.isProjection ? {} : attributes)}
+      {...(task.isProjection ? {} : listeners)}
       role="link"
       style={{
         top,
         height,
-        left: 2 + offset * 10,
+        left: 2 + Math.min(offset, 3) * 10,
         right: 2,
         transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
       }}
       className={cn(
         "absolute z-10 flex min-h-11 cursor-grab touch-auto select-none flex-col overflow-hidden rounded border border-border bg-background px-1 py-0.5 text-xs shadow-sm sm:min-h-0",
+        task.isProjection && "cursor-pointer border-dashed",
         isDragging && "opacity-50",
       )}
     >
       <div className="flex items-center gap-1">
         <span className={cn("size-1.5 shrink-0 rounded-full border-2", priorityColors[task.priority])} />
+        {task.recurrence && <Repeat2 aria-label="Repeating task" className="size-3 shrink-0" />}
         <span className="truncate font-medium">{task.content}</span>
       </div>
       <span className="text-muted-foreground">{task.dueTime}</span>
     </Link>
   );
+}
+
+function HourSlot({ date, hour }: { date: string; hour: number }) {
+  const dueTime = `${String(hour).padStart(2, "0")}:00`;
+  const { setNodeRef, isOver } = useDroppable({
+    id: `hour:${date}:${hour}`, data: { date, dueTime },
+  });
+  return <div ref={setNodeRef} style={{ height: HOUR_HEIGHT }} className={cn("border-b border-border", isOver && "bg-accent/40")} />;
 }

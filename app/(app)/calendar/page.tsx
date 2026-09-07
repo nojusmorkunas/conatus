@@ -1,10 +1,11 @@
-import { and, between, eq, inArray, isNull } from "drizzle-orm";
+import { and, between, eq, inArray, isNull, isNotNull, lte, or } from "drizzle-orm";
 
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { accessibleProjectIds } from "@/lib/db/access";
 import { tasks, users } from "@/lib/db/schema";
-import { addDays, monthGridStart, todayInTimezone, weekStartOf } from "@/lib/dates";
+import { todayInTimezone } from "@/lib/dates";
+import { calendarPeriod } from "@/lib/calendar";
 import { CalendarView } from "@/components/calendar/calendar-view";
 import { MobilePageHeader } from "@/components/projects/mobile-sidebar-trigger";
 
@@ -17,7 +18,6 @@ export default async function CalendarPage({
   if (!user) return null;
 
   const params = await searchParams;
-  const view = params.view === "week" ? "week" : "month";
 
   const [settings] = await db
     .select({ timezone: users.timezone, dateFormat: users.dateFormat, weekStart: users.weekStart })
@@ -25,16 +25,7 @@ export default async function CalendarPage({
     .where(eq(users.id, user.id));
   const today = todayInTimezone(settings.timezone);
 
-  const month = params.month && /^\d{4}-\d{2}$/.test(params.month) ? params.month : today.slice(0, 7);
-  const week =
-    params.week && /^\d{4}-\d{2}-\d{2}$/.test(params.week)
-      ? weekStartOf(params.week, settings.weekStart)
-      : weekStartOf(today, settings.weekStart);
-
-  // Visible range only: month grid can show up to 6 weeks (42 days) to
-  // cover leading/trailing days from adjacent months.
-  const rangeStart = view === "week" ? week : monthGridStart(month, settings.weekStart);
-  const rangeEnd = view === "week" ? addDays(week, 6) : addDays(rangeStart, 41);
+  const { view, month, week, rangeStart, rangeEnd } = calendarPeriod(params, today, settings.weekStart);
 
   const visibleTasks = await db
     .select()
@@ -44,7 +35,10 @@ export default async function CalendarPage({
         inArray(tasks.projectId, await accessibleProjectIds(user.id)),
         eq(tasks.isCompleted, false),
         isNull(tasks.deletedAt),
-        between(tasks.dueDate, rangeStart, rangeEnd),
+        or(
+          between(tasks.dueDate, rangeStart, rangeEnd),
+          and(isNotNull(tasks.recurrence), lte(tasks.dueDate, rangeEnd)),
+        ),
       ),
     )
     .orderBy(tasks.dueDate, tasks.dueTime, tasks.order);

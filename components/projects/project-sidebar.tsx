@@ -63,6 +63,7 @@ import { ProjectTile } from "./project-icon-picker";
 import { buildProjectTree, ProjectBranch, ProjectRow } from "./project-tree";
 import type { Filter, Label, Project, ProjectDropIndicator } from "./project-types";
 import { SidebarGroupHeader, SidebarSearch, ViewLink } from "./sidebar-nav";
+import { SidebarResizeHandle } from "./sidebar-resize-handle";
 
 export function ProjectSidebar({
   initialProjects,
@@ -92,6 +93,7 @@ export function ProjectSidebar({
   todayCount: number;
 }) {
   const router = useRouter();
+  const sidebarRef = useRef<HTMLElement>(null);
   const [projects, setProjects] = useState(initialProjects);
   const [favoriteLabels, setFavoriteLabels] = useState(initialLabels);
   const [favoriteFilters, setFavoriteFilters] = useState(initialFilters);
@@ -375,13 +377,16 @@ export function ProjectSidebar({
       )}
 
       <aside
+        id="project-sidebar-panel"
+        ref={sidebarRef}
         className={cn(
-          "project-sidebar invisible fixed inset-y-0 left-0 z-50 flex w-72 shrink-0 -translate-x-full flex-col overflow-hidden border-r border-sidebar-border bg-sidebar p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-transform md:visible md:z-auto md:w-72 md:pb-3",
+          "project-sidebar invisible fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] shrink-0 -translate-x-full flex-col overflow-hidden border-r border-sidebar-border bg-sidebar p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-transform md:visible md:z-auto md:w-[min(var(--sidebar-width,288px),45vw)] md:pb-3",
           mobileOpen && "visible translate-x-0",
           collapsed && "md:absolute md:-translate-x-full",
-          !collapsed && "md:static md:translate-x-0",
+          !collapsed && "md:relative md:translate-x-0",
         )}
       >
+        <SidebarResizeHandle sidebarRef={sidebarRef} />
         <div className="shrink-0" data-testid="sidebar-header">
           <div className="mb-3 flex items-center gap-1">
             <SidebarSearch />

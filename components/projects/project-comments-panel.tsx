@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Dialog } from "@base-ui/react/dialog";
 import { Pencil, Trash2, X } from "lucide-react";
 
 import type { comments as commentsTable } from "@/lib/db/schema";
@@ -25,28 +26,33 @@ export function ProjectCommentsPanel({
   const [comments, setComments] = useState<Comment[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetch(`/api/comments?projectId=${projectId}`)
-      .then((response) => (response.ok ? response.json() : []))
-      .then(setComments);
-  }, [projectId]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+    const controller = new AbortController();
+    fetch(`/api/comments?projectId=${projectId}`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Load failed");
+        const loaded = await response.json();
+        if (!controller.signal.aborted) setComments(loaded);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setError("Couldn't load comments. Close this panel and try again.");
+      })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [projectId]);
 
   async function withError(action: () => Promise<Response>) {
     setError(null);
-    const response = await action();
-    if (!response.ok) {
-      setError("That didn't work. Try again.");
+    try {
+      const response = await action();
+      if (!response.ok) throw new Error("Request failed");
+      return response;
+    } catch {
+      setError("Couldn't save the change. Check your connection and try again.");
       return null;
     }
-    return response;
   }
 
   async function addComment(content: string) {
@@ -57,13 +63,12 @@ export function ProjectCommentsPanel({
         body: JSON.stringify({ projectId, content }),
       }),
     );
-    if (!response) return;
+    if (!response) return false;
     const comment = await response.json();
-    setComments((current) => {
-      const next = [...current, comment];
-      onCommentCountChange(next.length);
-      return next;
-    });
+    const next = [...comments, comment];
+    setComments(next);
+    onCommentCountChange(next.length);
+    return true;
   }
 
   async function editComment(comment: Comment, content: string) {
@@ -74,7 +79,7 @@ export function ProjectCommentsPanel({
         body: JSON.stringify({ content }),
       }),
     );
-    if (!response) return;
+    if (!response) return false;
     const updated = await response.json();
     setComments((current) =>
       current.map((existing) => (existing.id === updated.id ? updated : existing)),
@@ -85,25 +90,28 @@ export function ProjectCommentsPanel({
     const response = await withError(() =>
       fetch(`/api/comments/${comment.id}`, { method: "DELETE" }),
     );
-    if (!response) return;
-    setComments((current) => {
-      const next = current.filter((existing) => existing.id !== comment.id);
-      onCommentCountChange(next.length);
-      return next;
-    });
+    if (!response) return false;
+    const next = comments.filter((existing) => existing.id !== comment.id);
+    setComments(next);
+    onCommentCountChange(next.length);
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/20 md:bg-transparent">
-      <div className="flex h-full w-full flex-col border-l bg-background p-4 md:w-96">
+    <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <Dialog.Portal>
+        <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/20" />
+        <Dialog.Popup className="fixed inset-y-0 right-0 z-50 flex w-full flex-col md:max-w-96 border-l border-border bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+
         <div className="mb-4 flex items-center justify-between gap-2">
-          <h2 className="truncate text-sm font-medium">Comments: {projectName}</h2>
-          <Button variant="ghost" size="icon-xs" aria-label="Close comments" onClick={onClose}>
-            <X className="size-3.5" />
-          </Button>
+          <Dialog.Title className="truncate text-sm font-medium">Comments: {projectName}</Dialog.Title>
+          <Dialog.Close render={<Button variant="ghost" size="icon-sm" aria-label="Close comments" />}>
+            <X className="size-4" />
+          </Dialog.Close>
         </div>
 
-        <div className="flex flex-1 flex-col gap-3 overflow-y-auto">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+          {loading && <p role="status" className="text-sm text-muted-foreground">Loading comments…</p>}
+          {!loading && !error && comments.length === 0 && <p className="text-sm text-muted-foreground">No comments yet.</p>}
           {comments.map((comment) => (
             <CommentRow
               key={comment.id}
@@ -113,11 +121,12 @@ export function ProjectCommentsPanel({
               onDelete={() => deleteComment(comment)}
             />
           ))}
-          <CommentForm onSubmit={addComment} />
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          <CommentForm onSubmit={addComment} disabled={loading} />
+          {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
         </div>
-      </div>
-    </div>
+        </Dialog.Popup>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 
@@ -146,6 +155,7 @@ function CommentRow({
       <form onSubmit={submit} className="flex flex-col gap-1">
         <Textarea
           autoFocus
+          aria-label="Edit comment"
           value={content}
           onChange={(event) => setContent(event.target.value)}
           onBlur={submit}
@@ -157,9 +167,9 @@ function CommentRow({
   return (
     <div className="group flex flex-col gap-1 rounded-md p-2 hover:bg-muted/50">
       <div className="flex items-start justify-between gap-2">
-        <p className="whitespace-pre-wrap text-sm">{comment.content}</p>
+        <p className="min-w-0 whitespace-pre-wrap break-words text-sm">{comment.content}</p>
         {canEdit && (
-          <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          <div className="flex shrink-0 items-center gap-1 opacity-70 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
             <Button variant="ghost" size="icon-xs" aria-label="Edit comment" onClick={() => setEditing(true)}>
               <Pencil className="size-3.5" />
             </Button>
@@ -176,25 +186,32 @@ function CommentRow({
   );
 }
 
-function CommentForm({ onSubmit }: { onSubmit: (content: string) => void }) {
+function CommentForm({ onSubmit, disabled }: { onSubmit: (content: string) => Promise<boolean>; disabled: boolean }) {
   const [content, setContent] = useState("");
+  const [pending, setPending] = useState(false);
 
-  function submit(event: React.FormEvent) {
+  async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (!content.trim()) return;
-    onSubmit(content.trim());
-    setContent("");
+    if (!content.trim() || pending) return;
+    setPending(true);
+    try {
+      if (await onSubmit(content.trim())) setContent("");
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-2">
       <Textarea
+        aria-label="Add a comment"
         placeholder="Add a comment"
         value={content}
+        disabled={disabled || pending}
         onChange={(event) => setContent(event.target.value)}
       />
-      <Button type="submit" size="sm" className="self-end" disabled={!content.trim()}>
-        Add comment
+      <Button type="submit" size="sm" className="self-end" disabled={disabled || pending || !content.trim()}>
+        {pending ? "Adding…" : "Add comment"}
       </Button>
     </form>
   );
