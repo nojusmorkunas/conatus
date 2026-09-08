@@ -37,7 +37,7 @@ function taskDialog(page: Page) {
 // The detail panel stays open across these tests; each one reopens the menu
 // from its Repeat button rather than depending on the menu's own state.
 async function openMenu(page: Page) {
-  await taskDialog(page).getByRole("button", { name: "Repeat" }).click();
+  await taskDialog(page).getByRole("button", { name: "Repeat", exact: true }).click();
   await expect(page.getByRole("menu")).toBeVisible();
 }
 
@@ -49,7 +49,7 @@ test.describe("setting a repeat from the UI", () => {
 
   test.beforeAll(async ({ browser }) => {
     page = await browser.newPage();
-    await registerAndLogin(page, `e2e-${Date.now()}-repeat`);
+    await registerAndLogin(page, `e2e-${Date.now()}-rrule`);
     projectId = await inboxId(page);
     await page.goto(`/projects/${projectId}`);
   });
@@ -63,7 +63,7 @@ test.describe("setting a repeat from the UI", () => {
     await page
       .getByPlaceholder("Task name (try: pay rent tomorrow p2 #Home @bills)")
       .fill(taskContent);
-    await page.getByRole("button", { name: "Repeat" }).click();
+    await page.getByRole("main").getByRole("button", { name: "Repeat", exact: true }).click();
     await page.getByRole("menuitemcheckbox", { name: "Every 2 weeks" }).click();
     await page.getByRole("main").getByRole("button", { name: "Add task" }).click();
 
