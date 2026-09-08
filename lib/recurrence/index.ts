@@ -8,7 +8,7 @@ function weekdayIndex(word: string): number {
   );
 }
 
-function ordinal(n: number): string {
+export function ordinal(n: number): string {
   const suffix =
     n % 10 === 1 && n !== 11 ? "st"
     : n % 10 === 2 && n !== 12 ? "nd"
@@ -18,7 +18,7 @@ function ordinal(n: number): string {
 }
 
 // Rule body after the "every"/"every!" head → canonical body, else null.
-// Bodies: "day|week|month|year", "N days|weeks|months", "<weekday>",
+// Bodies: "day|week|month|year", "N days|weeks|months|years", "<weekday>",
 // "weekday" (Mon–Fri), "last day", "<Nth>" (day of month, 1st–31st),
 // "other <day|week|month|weekday>" ("other week" → "2 weeks").
 function parseRuleBody(words: string[]): string | null {
@@ -42,7 +42,7 @@ function parseRuleBody(words: string[]): string | null {
     }
     if (words[0] === "last" && /^days?$/.test(words[1])) return "last day";
     if (/^[1-9]\d*$/.test(words[0])) {
-      const unit = /^(day|week|month)s?$/.exec(words[1]);
+      const unit = /^(day|week|month|year)s?$/.exec(words[1]);
       if (!unit) return null;
       const n = Number(words[0]);
       return n === 1 ? unit[1] : `${n} ${unit[1]}s`;
@@ -171,4 +171,14 @@ export function nextOccurrenceWithinEnd(
 ): string | null {
   const next = nextOccurrence(rule, from, today);
   return endDate && next > endDate ? null : next;
+}
+
+// The due date a rule starts on when no date was given alongside it.
+// Interval rules ("every 3 days") run from today; anchored rules ("every
+// monday", "every 15th") jump to the next matching day, so a rule picked
+// mid-week doesn't land on a date that doesn't satisfy it.
+export function firstOccurrence(rule: string, today: string): string {
+  return /^every!? (\d+ )?(day|week|month|year)s?$/.test(rule)
+    ? today
+    : nextOccurrence(rule, today, today);
 }

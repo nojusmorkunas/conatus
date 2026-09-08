@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { nextOccurrence, nextOccurrenceWithinEnd, parseRecurrence } from ".";
+import { firstOccurrence, nextOccurrence, nextOccurrenceWithinEnd, parseRecurrence } from ".";
 
 describe("parseRecurrence", () => {
   const cases: [string, string | null][] = [
@@ -16,7 +16,8 @@ describe("parseRecurrence", () => {
     ["every monday", "every monday"],
     ["every Mon", "every monday"],
     ["every sun", "every sunday"],
-    ["every 2 years", null],
+    ["every 2 years", "every 2 years"],
+    ["every 10 Years", "every 10 years"],
     ["every 0 days", null],
     ["every", null],
     ["daily", null],
@@ -269,6 +270,16 @@ describe("nextOccurrence", () => {
   });
 });
 
+describe("multi-year intervals", () => {
+  test("steps whole years and keeps the anchor day", () => {
+    expect(nextOccurrence("every 2 years", "2026-07-14", "2026-07-14")).toBe("2028-07-14");
+  });
+
+  test("catches up past today rather than replaying stale years", () => {
+    expect(nextOccurrence("every 2 years", "2020-02-29", "2026-07-14")).toBe("2028-02-29");
+  });
+});
+
 describe("nextOccurrenceWithinEnd", () => {
   test("allows an occurrence on the inclusive end date", () => {
     expect(
@@ -280,5 +291,23 @@ describe("nextOccurrenceWithinEnd", () => {
     expect(
       nextOccurrenceWithinEnd("every week", "2026-07-21", "2026-07-21", "2026-07-21"),
     ).toBeNull();
+  });
+});
+
+describe("firstOccurrence", () => {
+  // 2026-07-14 is a Tuesday.
+  const today = "2026-07-14";
+
+  test("interval rules start today", () => {
+    expect(firstOccurrence("every day", today)).toBe(today);
+    expect(firstOccurrence("every 3 weeks", today)).toBe(today);
+    expect(firstOccurrence("every! month", today)).toBe(today);
+  });
+
+  test("anchored rules jump to the next matching day", () => {
+    expect(firstOccurrence("every friday", today)).toBe("2026-07-17");
+    expect(firstOccurrence("every tuesday", today)).toBe("2026-07-21");
+    expect(firstOccurrence("every 20th", today)).toBe("2026-07-20");
+    expect(firstOccurrence("every weekday", today)).toBe("2026-07-15");
   });
 });

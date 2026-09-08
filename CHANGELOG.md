@@ -17,6 +17,8 @@ All notable changes are documented here. Versions follow Semantic Versioning.
 - Task delta sync through `updatedSince` and `includeDeleted`, with a `serverTime` watermark for the next pull.
 - Device token endpoint that exchanges a password for a scoped token, so native clients do not need a browser session.
 - Section listing on the versioned API, filterable by project.
+- Repeat picker in the task composer and task detail, with common presets and a custom dialog for any interval, weekday or day of the month, so recurring rules no longer have to be typed into the task name.
+- Repeats measured in years, such as `every 2 years`, in both the parser and the custom repeat dialog.
 
 ### Changed
 

@@ -14,10 +14,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { parseQuickAdd } from "@/lib/parser/quick-add";
+import { firstOccurrence } from "@/lib/recurrence";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api-client";
 import { toastError } from "@/components/ui/toast";
 import { priorityLabels } from "./priority";
+import { RecurrencePicker } from "./recurrence-picker";
 
 export function TaskAddForm({
   projectId,
@@ -49,6 +51,7 @@ export function TaskAddForm({
   const [priority, setPriority] = useState("4");
   const [dueDate, setDueDate] = useState("");
   const [dueTime, setDueTime] = useState("");
+  const [recurrence, setRecurrence] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const rootRef = useRef<HTMLElement>(null);
 
@@ -96,6 +99,12 @@ export function TaskAddForm({
       return match ? [match.id] : [];
     });
 
+    // The picker wins over an "every ..." token in the title, matching how the
+    // date field overrides a parsed date. A rule needs a due date to count
+    // from, so a picked rule with no date starts at its first occurrence.
+    const rule = recurrence ?? parsed.recurrence;
+    const due = dueDate || parsed.dueDate || (rule ? firstOccurrence(rule, today) : null);
+
     const response = await fetch("/api/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -107,9 +116,9 @@ export function TaskAddForm({
         content: parsed.content,
         description: description.trim() || undefined,
         priority: priority === "4" ? parsed.priority : Number(priority),
-        dueDate: dueDate || parsed.dueDate || undefined,
+        dueDate: due || undefined,
         dueTime: dueDate ? dueTime || undefined : parsed.dueTime || undefined,
-        recurrence: parsed.recurrence || undefined,
+        recurrence: rule || undefined,
         deadlineDate: parsed.deadlineDate || undefined,
         durationMinutes: parsed.durationMinutes || undefined,
       }),
@@ -136,6 +145,7 @@ export function TaskAddForm({
     setPriority("4");
     setDueDate("");
     setDueTime("");
+    setRecurrence(null);
     // Keep the composer ready for the next item. This makes Enter a fast
     // capture flow instead of forcing people to reopen the form each time.
     setExpanded(true);
@@ -201,6 +211,11 @@ export function TaskAddForm({
           className="w-auto"
           value={dueTime}
           onChange={(event) => setDueTime(event.target.value)}
+        />
+        <RecurrencePicker
+          value={recurrence}
+          onChange={setRecurrence}
+          anchorDate={dueDate || today}
         />
         <Select
           items={priorityLabels}

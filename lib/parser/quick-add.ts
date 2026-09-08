@@ -1,5 +1,5 @@
 // Relative import: vitest has no "@/" alias configured.
-import { nextOccurrence, parseRecurrence } from "../recurrence";
+import { firstOccurrence, parseRecurrence } from "../recurrence";
 
 export type QuickAddParse = {
   content: string;
@@ -188,11 +188,7 @@ export function parseQuickAdd(input: string, opts: { today: string }): QuickAddP
       const match = matchRecurrence(words, i);
       if (match) {
         recurrence = match.rule;
-        // First occurrence: interval rules start today, weekday rules on
-        // the next such weekday (matching bare-weekday date phrases).
-        dueDate = /^every!? (\d+ )?(day|week|month|year)s?$/.test(match.rule)
-          ? opts.today
-          : nextOccurrence(match.rule, opts.today, opts.today);
+        dueDate = firstOccurrence(match.rule, opts.today);
         for (let k = 0; k < match.length; k++) consumed.add(i + k);
         i += match.length - 1;
         continue;
