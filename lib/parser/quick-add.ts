@@ -13,6 +13,21 @@ export type QuickAddParse = {
   durationMinutes: number | null; // from a "for <duration>" token
 };
 
+export type QuickAddToken = {
+  kind: "project" | "label" | "priority" | "date" | "time" | "recurrence" | "deadline" | "duration";
+  start: number;
+  end: number;
+  value: string;
+};
+
+type ParseOptions = {
+  today: string;
+  // The composer only consumes references it can actually apply. Omit these
+  // lists to retain the API parser's context-free behavior.
+  projectNames?: readonly string[];
+  labelNames?: readonly string[];
+};
+
 const DAY = 86_400_000;
 
 const WEEKDAYS: Record<string, number> = {
@@ -29,7 +44,8 @@ function format(ms: number): string {
 }
 
 function addDays(date: string, n: number): string {
-  return format(toUtc(date) + n * DAY);
+  const ms = toUtc(date) + n * DAY;
+  return Number.isFinite(ms) && Math.abs(ms) <= 8.64e15 ? format(ms) : "";
 }
 
 function weekday(date: string): number {
@@ -60,7 +76,8 @@ export function matchDate(words: string[], i: number, today: string): { date: st
     if (next in WEEKDAYS) return { date: addDays(nextMonday, (WEEKDAYS[next] + 6) % 7), length: 2 };
   }
   if (w === "in" && i + 2 < words.length && /^\d+$/.test(words[i + 1]) && /^days?$/i.test(words[i + 2])) {
-    return { date: addDays(today, Number(words[i + 1])), length: 3 };
+    const date = addDays(today, Number(words[i + 1]));
+    return /^\d{4}-\d{2}-\d{2}$/.test(date) ? { date, length: 3 } : null;
   }
   const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(w);
   if (iso) {
@@ -84,7 +101,7 @@ export function matchDate(words: string[], i: number, today: string): { date: st
 // Unparseable or unterminated braces are left alone (stay in content).
 function matchDeadline(words: string[], i: number, today: string): { date: string; length: number } | null {
   if (!words[i].startsWith("{")) return null;
-  for (const length of [2, 1]) {
+  for (const length of [3, 2, 1]) {
     if (i + length > words.length) continue;
     const last = words[i + length - 1];
     if (!last.endsWith("}")) continue;
@@ -95,10 +112,7 @@ function matchDeadline(words: string[], i: number, today: string): { date: strin
       .split(/\s+/)
       .filter(Boolean);
     if (inner.length !== length) continue; // braces must hug the phrase exactly
-    const stripped = [...words];
-    stripped[i] = inner[0];
-    stripped[i + length - 1] = inner[length - 1];
-    const match = matchDate(stripped, i, today);
+    const match = matchDate(inner, 0, today);
     if (match && match.length === length) return { date: match.date, length };
   }
   return null;
@@ -141,12 +155,44 @@ function matchDuration(words: string[], i: number): { minutes: number; length: n
   );
   if (!m || (!m[1] && !m[2])) return null;
   const minutes = Number(m[1] ?? 0) * 60 + Number(m[2] ?? 0);
-  return minutes > 0 ? { minutes, length: 2 } : null;
+  return minutes > 0 && minutes <= 1440 ? { minutes, length: 2 } : null;
 }
 
 export function parseQuickAdd(input: string, opts: { today: string }): QuickAddParse {
-  const words = input.split(/\s+/).filter(Boolean);
+  const { parsed } = parseQuickAddPreview(input, opts);
+  return parsed;
+}
+
+// One parsing pass supplies both the saved fields and the exact source ranges
+// to highlight. Matching against original offsets keeps repeated words,
+// Unicode, multiple spaces, and mid-sentence edits aligned with the textarea.
+export function parseQuickAddPreview(input: string, opts: ParseOptions): {
+  parsed: QuickAddParse;
+  tokens: QuickAddToken[];
+} {
+  const matches = [...input.matchAll(/\S+/g)];
+  const words = matches.map((match) => match[0]);
   const consumed = new Set<number>();
+  const tokens: QuickAddToken[] = [];
+
+  function consume(index: number, length: number, kind: QuickAddToken["kind"], value: string) {
+    for (let k = 0; k < length; k++) consumed.add(index + k);
+    const last = matches[index + length - 1];
+    tokens.push({ kind, start: matches[index].index, end: last.index + last[0].length, value });
+  }
+
+  function reference(index: number, names: readonly string[] | undefined) {
+    if (!names) return { name: words[index].slice(1), length: 1 };
+    // Longest existing name wins: #Home office should not become #Home.
+    for (const name of [...names].sort((a, b) => b.length - a.length)) {
+      const parts = name.split(/\s+/);
+      const phrase = words.slice(index, index + parts.length).join(" ").slice(1);
+      if (phrase.toLowerCase() === parts.join(" ").toLowerCase()) {
+        return { name, length: parts.length };
+      }
+    }
+    return null;
+  }
   let projectName: string | null = null;
   const labelNames: string[] = [];
   let priority: 1 | 2 | 3 | 4 = 4;
@@ -162,26 +208,33 @@ export function parseQuickAdd(input: string, opts: { today: string }): QuickAddP
       const match = matchDeadline(words, i, opts.today);
       if (match) {
         deadlineDate = match.date;
-        for (let k = 0; k < match.length; k++) consumed.add(i + k);
+        consume(i, match.length, "deadline", match.date);
         i += match.length - 1;
         continue;
       }
     }
     if (w.length > 1 && w[0] === "#") {
-      projectName = w.slice(1); // last one wins
-      consumed.add(i);
+      const match = reference(i, opts.projectNames);
+      if (match) {
+        projectName = match.name; // last one wins
+        consume(i, match.length, "project", match.name);
+        i += match.length - 1;
+      }
       continue;
     }
     if (w.length > 1 && w[0] === "@") {
-      const name = w.slice(1);
-      if (!labelNames.includes(name)) labelNames.push(name);
-      consumed.add(i);
+      const match = reference(i, opts.labelNames);
+      if (match) {
+        if (!labelNames.includes(match.name)) labelNames.push(match.name);
+        consume(i, match.length, "label", match.name);
+        i += match.length - 1;
+      }
       continue;
     }
     const p = /^p([1-4])$/i.exec(w);
     if (p) {
       priority = Number(p[1]) as 1 | 2 | 3 | 4;
-      consumed.add(i);
+      consume(i, 1, "priority", p[1]);
       continue;
     }
     if (!dueDate && (w.toLowerCase() === "every" || w.toLowerCase() === "every!")) {
@@ -189,7 +242,7 @@ export function parseQuickAdd(input: string, opts: { today: string }): QuickAddP
       if (match) {
         recurrence = match.rule;
         dueDate = firstOccurrence(match.rule, opts.today);
-        for (let k = 0; k < match.length; k++) consumed.add(i + k);
+        consume(i, match.length, "recurrence", match.rule);
         i += match.length - 1;
         continue;
       }
@@ -198,7 +251,7 @@ export function parseQuickAdd(input: string, opts: { today: string }): QuickAddP
       const match = matchDate(words, i, opts.today);
       if (match) {
         dueDate = match.date;
-        for (let k = 0; k < match.length; k++) consumed.add(i + k);
+        consume(i, match.length, "date", match.date);
         i += match.length - 1;
         continue;
       }
@@ -207,8 +260,7 @@ export function parseQuickAdd(input: string, opts: { today: string }): QuickAddP
       const time = matchTime(words[i + 1]);
       if (time) {
         dueTime = time;
-        consumed.add(i);
-        consumed.add(i + 1);
+        consume(i, 2, "time", time);
         i++;
       }
     }
@@ -216,8 +268,7 @@ export function parseQuickAdd(input: string, opts: { today: string }): QuickAddP
       const match = matchDuration(words, i);
       if (match) {
         durationMinutes = match.minutes;
-        consumed.add(i);
-        consumed.add(i + 1);
+        consume(i, 2, "duration", String(match.minutes));
         i++;
       }
     }
@@ -228,7 +279,15 @@ export function parseQuickAdd(input: string, opts: { today: string }): QuickAddP
   const content = words.filter((_, i) => !consumed.has(i)).join(" ");
   if (!content) {
     // A task needs content; if tokens ate everything, treat it all as content.
-    return { content: words.join(" "), projectName: null, labelNames: [], priority: 4, dueDate: null, dueTime: null, recurrence: null, deadlineDate: null, durationMinutes: null };
+    return { parsed: { content: words.join(" "), projectName: null, labelNames: [], priority: 4, dueDate: null, dueTime: null, recurrence: null, deadlineDate: null, durationMinutes: null }, tokens: [] };
   }
-  return { content, projectName, labelNames, priority, dueDate, dueTime, recurrence, deadlineDate, durationMinutes };
+  return { parsed: { content, projectName, labelNames, priority, dueDate, dueTime, recurrence, deadlineDate, durationMinutes }, tokens };
+}
+
+export function removeQuickAddTokens(input: string, tokens: QuickAddToken[]): string {
+  let result = input;
+  for (const token of [...tokens].sort((a, b) => b.start - a.start)) {
+    result = result.slice(0, token.start) + result.slice(token.end);
+  }
+  return result.replace(/\s+/g, " ").trim();
 }

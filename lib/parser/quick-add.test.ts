@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { parseQuickAdd, type QuickAddParse } from "./quick-add";
+import { parseQuickAdd, parseQuickAddPreview, removeQuickAddTokens, type QuickAddParse } from "./quick-add";
 
 // 2026-07-14 is a Tuesday.
 const today = "2026-07-14";
@@ -146,5 +146,50 @@ describe("parseQuickAdd", () => {
 
   test("month rollover for in N days", () => {
     expect(parseQuickAdd("x in 30 days", { today }).dueDate).toBe("2026-08-13");
+  });
+});
+
+describe("live quick-add preview", () => {
+  test("highlights exact source ranges without changing whitespace or Unicode", () => {
+    const input = "  📦 Ship tomorrow\n  at 9am p2 #Home office @deep work {in 3 days} for 45m";
+    const result = parseQuickAddPreview(input, { today, projectNames: ["Home", "Home office"], labelNames: ["deep work"] });
+    expect(result.tokens.map((token) => [token.kind, input.slice(token.start, token.end)])).toEqual([
+      ["date", "tomorrow"], ["time", "at 9am"], ["priority", "p2"], ["project", "#Home office"],
+      ["label", "@deep work"], ["deadline", "{in 3 days}"], ["duration", "for 45m"],
+    ]);
+    expect(result.parsed).toMatchObject({ content: "📦 Ship", projectName: "Home office", labelNames: ["deep work"], deadlineDate: "2026-07-17" });
+  });
+
+  test("updates as a phrase completes and disappears when edited", () => {
+    expect(parseQuickAddPreview("Pay rent tomorro", { today }).tokens).toEqual([]);
+    expect(parseQuickAddPreview("Pay rent tomorrow", { today }).parsed.dueDate).toBe("2026-07-15");
+    expect(parseQuickAddPreview("Pay rent tomor", { today }).parsed.dueDate).toBeNull();
+    expect(parseQuickAddPreview("Pay rent", { today }).tokens).toEqual([]);
+  });
+
+  test("only consumes known project and label references in the composer", () => {
+    const result = parseQuickAddPreview("Read #Homeopathy @unknown #HOME @Errands", { today, projectNames: ["Home"], labelNames: ["errands"] });
+    expect(result.parsed).toMatchObject({ content: "Read #Homeopathy @unknown", projectName: "Home", labelNames: ["errands"] });
+    expect(result.tokens.map((token) => token.value)).toEqual(["Home", "errands"]);
+    expect(parseQuickAddPreview("Read #Home", { today, projectNames: [] }).parsed.content).toBe("Read #Home");
+  });
+
+  test("removing recognized details preserves repeated literal words", () => {
+    const input = "tomorrow tomorrow p1 @work";
+    const { tokens } = parseQuickAddPreview(input, { today });
+    const result = removeQuickAddTokens(input, tokens.filter((token) => token.kind === "date"));
+    expect(result).toBe("tomorrow p1 @work");
+  });
+
+  test("token-only titles have no highlights or hidden fields", () => {
+    const result = parseQuickAddPreview("tomorrow p1", { today });
+    expect(result.tokens).toEqual([]);
+    expect(result.parsed.content).toBe("tomorrow p1");
+    expect(result.parsed.dueDate).toBeNull();
+  });
+
+  test("oversized date and duration phrases remain literal instead of throwing while typing", () => {
+    expect(parseQuickAddPreview("Plan in 99999999999999999999 days for 999h", { today }).tokens).toEqual([]);
+    expect(parseQuickAddPreview("Plan for 24h", { today }).parsed.durationMinutes).toBe(1440);
   });
 });

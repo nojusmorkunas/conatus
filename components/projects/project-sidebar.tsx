@@ -186,7 +186,7 @@ export function ProjectSidebar({
   useEffect(() => {
     if (!quickAddOpen) return;
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setQuickAddOpen(false);
+      if (event.key === "Escape" && !event.defaultPrevented) setQuickAddOpen(false);
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -680,7 +680,7 @@ export function ProjectSidebar({
             role="dialog"
             aria-modal="true"
             aria-label="Add task"
-            className="w-full max-w-xl rounded-lg border border-border bg-background p-4 shadow-lg"
+            className="max-h-[85dvh] w-full max-w-2xl overflow-y-auto rounded-xl bg-background shadow-lg"
             onClick={(event) => event.stopPropagation()}
           >
             <TaskAddForm
@@ -694,6 +694,7 @@ export function ProjectSidebar({
                 router.refresh();
               }}
               onError={() => setQuickAddError(true)}
+              onCancel={() => setQuickAddOpen(false)}
             />
             {quickAddError && <p className="mt-2 text-xs text-destructive">Couldn&apos;t add task.</p>}
           </div>

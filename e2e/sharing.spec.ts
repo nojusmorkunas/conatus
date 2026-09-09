@@ -27,9 +27,9 @@ test("owner shares a project with a collaborator who gets read access", async ({
     await expect(pageA).toHaveURL(/\/projects\//);
 
     await pageA.getByRole("main").getByRole("button", { name: "New task" }).click();
-    await pageA.getByPlaceholder("Task name (try: pay rent tomorrow p2 #Home @bills)").fill("shared task");
-    await pageA.getByRole("main").getByRole("button", { name: "Add task" }).click();
-    await expect(pageA.getByText("shared task", { exact: true })).toBeVisible();
+    await pageA.getByRole("textbox", { name: "Task name", exact: true }).fill("shared task");
+    await pageA.getByRole("main").getByRole("button", { name: "Add task", exact: true }).click();
+    await expect(pageA.locator('[data-task-content="shared task"]')).toBeVisible();
 
     // B registers in a separate context.
     await register(pageB, usernameB);

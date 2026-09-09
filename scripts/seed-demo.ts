@@ -5,6 +5,7 @@ import { createUserWithInboxUsing } from "../lib/auth/create-user";
 import { hashPassword } from "../lib/auth/password";
 import { db } from "../lib/db";
 import {
+  attachments,
   comments,
   filters,
   labels,
@@ -30,6 +31,26 @@ const password = process.env.SEED_PASSWORD ?? "admin12345";
 // A non-UTC default keeps the seed honest: "today" is resolved in the user's
 // zone everywhere, so a UTC-only fixture hides off-by-one-day bugs.
 const timezone = process.env.SEED_TIMEZONE ?? "Europe/Amsterdam";
+
+// The layouts the "Build responsive homepage prototype" task covers, as a real
+// file so the attachment is downloadable rather than a name with nothing behind
+// it. That task also carries sub-tasks, a comment and a reminder, so it is the
+// one place in the seed where a task panel is full on every axis.
+const PROTOTYPE_ATTACHMENT = {
+  filename: "breakpoints.csv",
+  contentType: "text/csv",
+  body: Buffer.from(
+    [
+      "layout,min-width,columns,gutter,nav",
+      "mobile,390,4,16,drawer",
+      "phablet,540,6,20,drawer",
+      "tablet,768,8,24,collapsed",
+      "laptop,1024,12,28,inline",
+      "desktop,1440,12,32,inline",
+      "",
+    ].join("\n"),
+  ),
+};
 
 function dateInTimezone(timezone: string, offsetDays = 0): string {
   const instant = new Date(Date.now() + offsetDays * 86_400_000);
@@ -315,8 +336,17 @@ async function seed(tx: Tx) {
     { userId: owner.id, taskId: shelves.id, remindAt: atOffset(30), seenAt: atOffset(-2) },
   ]);
 
-  // Attachments are intentionally not seeded because they require real S3/MinIO objects.
-  return {
+  // One attachment. The row goes in here; the object is written after the
+  // transaction commits, so a rollback cannot leave an orphan in the bucket.
+  const [attachment] = await tx.insert(attachments).values({
+    taskId: prototype.id,
+    userId: owner.id,
+    filename: PROTOTYPE_ATTACHMENT.filename,
+    contentType: PROTOTYPE_ATTACHMENT.contentType,
+    size: PROTOTYPE_ATTACHMENT.body.length,
+  }).returning();
+
+  const summary = {
     user: owner.username,
     password: createdOwner ? password : "unchanged (the account already existed)",
     collaborator: bob ? bob.username : `not found (collaboration data used ${owner.username} only)`,
@@ -331,13 +361,38 @@ async function seed(tx: Tx) {
     filters: filterRows.length,
     comments: bob ? 6 : 5,
     reminders: 3,
+    attachments: 1,
   };
+
+  // app/api/attachments/route.ts fixes the object key as `${userId}/${attachmentId}`.
+  return { summary, upload: { key: `${owner.id}/${attachment.id}` } };
+}
+
+// ponytail: the bucket write is best-effort. `db:seed` was pure Drizzle and ran
+// against a bare Postgres; making MinIO mandatory would break that for anyone
+// not running the full stack. Without it the task still shows its attachment
+// row — only the download 404s. The import is dynamic because lib/storage.ts
+// builds a MinIO client from S3_* at module load and would throw on the way in.
+async function putAttachment(key: string) {
+  try {
+    const { BUCKET, ensureBucket, s3 } = await import("../lib/storage");
+    await ensureBucket();
+    await s3.putObject(BUCKET, key, PROTOTYPE_ATTACHMENT.body, PROTOTYPE_ATTACHMENT.body.length, {
+      "Content-Type": PROTOTYPE_ATTACHMENT.contentType,
+    });
+    return true;
+  } catch (error) {
+    console.warn(`  attachment object skipped: ${error instanceof Error ? error.message : String(error)}`);
+    return false;
+  }
 }
 
 async function main() {
-  const summary = await db.transaction(seed);
+  const { summary, upload } = await db.transaction(seed);
   console.log("Demo data seeded successfully:");
   for (const [key, value] of Object.entries(summary)) console.log(`  ${key}: ${value}`);
+  const stored = await putAttachment(upload.key);
+  console.log(`  attachmentObject: ${stored ? "written to MinIO" : "missing (MinIO unreachable)"}`);
 }
 
 main().then(() => process.exit(0)).catch((error: unknown) => {

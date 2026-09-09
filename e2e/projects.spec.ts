@@ -225,11 +225,11 @@ test("projects drag from the whole row without a visible drag handle", async ({
   await projectRow(page, "Beta project").click();
   await page.getByRole("main").getByRole("button", { name: "New task" }).click();
   await page
-    .getByPlaceholder("Task name (try: pay rent tomorrow p2 #Home @bills)")
+    .getByRole("textbox", { name: "Task name", exact: true })
     .fill("Hydration check");
-  await page.getByRole("main").getByRole("button", { name: "Add task" }).click();
-  await expect(page.getByText("Hydration check", { exact: true })).toBeVisible();
+  await page.getByRole("main").getByRole("button", { name: "Add task", exact: true }).click();
   const taskRow = page.locator('[data-task-content="Hydration check"]');
+  await expect(taskRow).toBeVisible();
   await expect(taskRow).toHaveCSS("cursor", "pointer");
   const taskBox = await taskRow.boundingBox();
   expect(taskBox).not.toBeNull();

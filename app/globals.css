@@ -140,6 +140,60 @@
   }
 }
 
+/* The real textarea keeps native selection, undo, IME and caret behavior.
+   Its mirror paints only recognition backgrounds, with identical geometry. */
+.task-composer-text {
+  margin: 0;
+  border: 0;
+  padding: 1px 0;
+  font: inherit;
+  font-size: 16px;
+  line-height: 24px;
+  letter-spacing: normal;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 4;
+  scrollbar-gutter: stable;
+}
+
+.task-composer-input textarea {
+  min-height: 26px;
+  max-height: 168px;
+  caret-color: var(--foreground);
+}
+
+.task-composer-input textarea::selection {
+  background: color-mix(in oklch, var(--foreground) 20%, transparent);
+}
+
+.task-composer-highlights {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  color: transparent;
+  pointer-events: none;
+}
+
+.task-composer-highlights mark {
+  border-radius: 3px;
+  background: color-mix(in oklch, var(--foreground) 12%, transparent);
+  color: transparent;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.task-composer-highlights :is([data-token-kind="date"], [data-token-kind="time"], [data-token-kind="recurrence"], [data-token-kind="deadline"]) {
+  background: oklch(0.89 0.10 80 / 65%);
+}
+
+.dark .task-composer-highlights :is([data-token-kind="date"], [data-token-kind="time"], [data-token-kind="recurrence"], [data-token-kind="deadline"]) {
+  background: oklch(0.66 0.12 75 / 30%);
+}
+
+@media (min-width: 640px) {
+  .task-composer-text { font-size: 14px; }
+}
+
 @keyframes task-checkbox-pop {
   0% { transform: scale(1); }
   42% { transform: scale(1.16); }

@@ -61,11 +61,13 @@ test.describe("setting a repeat from the UI", () => {
   test("the composer creates a repeating task with a first due date", async () => {
     await page.getByRole("main").getByRole("button", { name: "New task" }).click();
     await page
-      .getByPlaceholder("Task name (try: pay rent tomorrow p2 #Home @bills)")
+      .getByRole("textbox", { name: "Task name", exact: true })
       .fill(taskContent);
+    await page.getByRole("button", { name: "Add task details", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Repeat", exact: true }).click();
     await page.getByRole("main").getByRole("button", { name: "Repeat", exact: true }).click();
     await page.getByRole("menuitemcheckbox", { name: "Every 2 weeks" }).click();
-    await page.getByRole("main").getByRole("button", { name: "Add task" }).click();
+    await page.getByRole("main").getByRole("button", { name: "Add task", exact: true }).click();
 
     await expect(page.locator(`[data-task-content="${taskContent}"]`)).toBeVisible();
     const task = await fixtureTask(page, projectId);
