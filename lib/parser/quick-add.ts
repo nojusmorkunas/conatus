@@ -1,20 +1,28 @@
-// Relative import: vitest has no "@/" alias configured.
+// Relative imports keep the parser usable in the browser, API, and tests.
 import { firstOccurrence, parseRecurrence } from "../recurrence";
+import { matchDate } from "./date-phrases";
+import { cleanWord, numberValue, ordinalValue, WEEKDAY_NAMES, weekdayIndex } from "./english";
+import { matchDuration, matchTime } from "./time-phrases";
+
+export { matchDate } from "./date-phrases";
 
 export type QuickAddParse = {
   content: string;
   projectName: string | null;
   labelNames: string[];
   priority: 1 | 2 | 3 | 4;
-  dueDate: string | null; // 'YYYY-MM-DD'
-  dueTime: string | null; // 'HH:mm', only set when dueDate is set
-  recurrence: string | null; // canonical rule from parseRecurrence
-  deadlineDate: string | null; // 'YYYY-MM-DD', from a {date phrase} token
-  durationMinutes: number | null; // from a "for <duration>" token
+  dueDate: string | null;
+  dueTime: string | null;
+  recurrence: string | null;
+  deadlineDate: string | null;
+  durationMinutes: number | null;
+  // Wall-clock date/time, interpreted in the device's time zone by the
+  // composer, or the account's time zone by the API.
+  reminderAt: string | null;
 };
 
 export type QuickAddToken = {
-  kind: "project" | "label" | "priority" | "date" | "time" | "recurrence" | "deadline" | "duration";
+  kind: "project" | "label" | "priority" | "date" | "time" | "recurrence" | "deadline" | "duration" | "reminder";
   start: number;
   end: number;
   value: string;
@@ -22,158 +30,101 @@ export type QuickAddToken = {
 
 type ParseOptions = {
   today: string;
-  // The composer only consumes references it can actually apply. Omit these
-  // lists to retain the API parser's context-free behavior.
   projectNames?: readonly string[];
   labelNames?: readonly string[];
 };
 
-const DAY = 86_400_000;
+const DAY_PARTS: Record<string, string> = { morning: "09:00", afternoon: "15:00", evening: "18:00", night: "18:00", tonight: "18:00" };
 
-const WEEKDAYS: Record<string, number> = {
-  sun: 0, sunday: 0, mon: 1, monday: 1, tue: 2, tuesday: 2, wed: 3,
-  wednesday: 3, thu: 4, thursday: 4, fri: 5, friday: 5, sat: 6, saturday: 6,
-};
-
-function toUtc(date: string): number {
-  return Date.parse(`${date}T00:00:00Z`);
-}
-
-function format(ms: number): string {
-  return new Date(ms).toISOString().slice(0, 10);
-}
-
-function addDays(date: string, n: number): string {
-  const ms = toUtc(date) + n * DAY;
-  return Number.isFinite(ms) && Math.abs(ms) <= 8.64e15 ? format(ms) : "";
-}
-
-function weekday(date: string): number {
-  return new Date(toUtc(date)).getUTCDay();
-}
-
-function validDate(year: number, month: number, day: number): string | null {
-  const d = new Date(Date.UTC(year, month - 1, day));
-  return d.getUTCFullYear() === year && d.getUTCMonth() === month - 1 && d.getUTCDate() === day
-    ? format(d.getTime())
-    : null;
-}
-
-// Matches a date phrase starting at words[i]; returns the resolved date and
-// how many words it consumed. Also used by lib/filter for before:/after: phrases.
-export function matchDate(words: string[], i: number, today: string): { date: string; length: number } | null {
-  const w = words[i].toLowerCase();
-  if (w === "today" || w === "tod") return { date: today, length: 1 };
-  if (w === "tomorrow" || w === "tmr") return { date: addDays(today, 1), length: 1 };
-  if (w in WEEKDAYS) {
-    const diff = (WEEKDAYS[w] - weekday(today) + 7) % 7 || 7;
-    return { date: addDays(today, diff), length: 1 };
+function matchDeadline(words: string[], i: number, today: string): { date: string | null; length: number } | null {
+  if (words[i].startsWith("{")) {
+    const end = words.findIndex((word, index) => index >= i && word.endsWith("}"));
+    const length = (end < 0 ? words.length : end + 1) - i;
+    const inner = words.slice(i, i + length).join(" ").slice(1, -1).trim().split(/\s+/);
+    const match = end >= 0 ? matchDate(inner, 0, today) : null;
+    return { date: match && match.length === inner.length ? match.date : null, length };
   }
-  if (w === "next" && i + 1 < words.length) {
-    const next = words[i + 1].toLowerCase();
-    const nextMonday = addDays(today, 7 - ((weekday(today) + 6) % 7));
-    if (next === "week") return { date: nextMonday, length: 2 };
-    if (next in WEEKDAYS) return { date: addDays(nextMonday, (WEEKDAYS[next] + 6) % 7), length: 2 };
-  }
-  if (w === "in" && i + 2 < words.length && /^\d+$/.test(words[i + 1]) && /^days?$/i.test(words[i + 2])) {
-    const date = addDays(today, Number(words[i + 1]));
-    return /^\d{4}-\d{2}-\d{2}$/.test(date) ? { date, length: 3 } : null;
-  }
-  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(w);
-  if (iso) {
-    const date = validDate(Number(iso[1]), Number(iso[2]), Number(iso[3]));
-    return date ? { date, length: 1 } : null;
-  }
-  const dm = /^(\d{1,2})[/.](\d{1,2})$/.exec(w);
-  if (dm) {
-    const year = Number(today.slice(0, 4));
-    const thisYear = validDate(year, Number(dm[2]), Number(dm[1]));
-    if (thisYear && thisYear >= today) return { date: thisYear, length: 1 };
-    const nextYear = validDate(year + 1, Number(dm[2]), Number(dm[1]));
-    return nextYear ? { date: nextYear, length: 1 } : null;
-  }
-  return null;
+  if (words[i] !== "deadline") return null;
+  const skip = ["on", "by"].includes(words[i + 1]) ? 2 : 1;
+  const match = matchDate(words, i + skip, today);
+  return match ? { date: match.date, length: skip + match.length } : null;
 }
 
-// "{date phrase}" deadline token starting at words[i], e.g. "{friday}" or
-// "{next week}". The phrase inside braces reuses matchDate verbatim, so it
-// supports whatever matchDate supports (today, weekdays, next X, ISO, D/M).
-// Unparseable or unterminated braces are left alone (stay in content).
-function matchDeadline(words: string[], i: number, today: string): { date: string; length: number } | null {
-  if (!words[i].startsWith("{")) return null;
-  for (const length of [3, 2, 1]) {
-    if (i + length > words.length) continue;
-    const last = words[i + length - 1];
-    if (!last.endsWith("}")) continue;
-    const inner = words
-      .slice(i, i + length)
-      .join(" ")
-      .slice(1, -1)
-      .split(/\s+/)
-      .filter(Boolean);
-    if (inner.length !== length) continue; // braces must hug the phrase exactly
-    const match = matchDate(inner, 0, today);
-    if (match && match.length === length) return { date: match.date, length };
+// Try the whole recurrence before date matching sees any weekday within it.
+// Retain incomplete or unsupported schedule phrases as text instead of
+// silently saving a shorter, different schedule.
+function matchRecurrence(source: string[], words: string[], i: number, today: string): { rule: string | null; length: number } | null {
+  const w = words[i];
+  const head = /^every!?$/.test(w);
+  const alias = /^(daily|weekly|monthly|yearly|annually|fortnightly)$/.test(w);
+  const inverted = (w === "the" || ordinalValue(w) !== null) && /\bof every!? month\b/.test(words.slice(i, i + 9).join(" "));
+  const monthlyStart = w === "the" && ordinalValue(words[i + 1] ?? "") !== null && weekdayIndex(words[i + 2] ?? "") >= 0;
+  if (!head && !alias && !inverted && !monthlyStart) return null;
+  for (let length = Math.min(24, words.length - i); length >= 1; length--) {
+    const phrase = source.slice(i, i + length).map((word) => /^every![.,!?;:]*$/i.test(word) ? "every!" : word.replace(/[.!?;:]+$/, "")).join(" ").replace(/,+$/, "");
+    const rule = parseRecurrence(phrase);
+    if (!rule) continue;
+    const next = words[i + length];
+    const continuation = next === "and" || next === "of" || weekdayIndex(next ?? "") >= 0 || (source[i + length - 1].endsWith(",") && next && !/^(at|for|due|deadline|p[1-4]|#|@)/.test(next) && !matchDate(words, i + length, today));
+    if (!continuation) return { rule, length };
+    break;
   }
-  return null;
-}
-
-// "every ..." phrase starting at words[i]; longest match wins so
-// "every 2 weeks" isn't cut short at "every 2".
-function matchRecurrence(words: string[], i: number): { rule: string; length: number } | null {
-  for (const length of [3, 2]) {
-    if (i + length > words.length) continue;
-    const rule = parseRecurrence(words.slice(i, i + length).join(" "));
-    if (rule) return { rule, length };
+  let length = 1;
+  while (i + length < words.length && length < 24) {
+    const next = words[i + length];
+    const afterConnector = ["and", "of"].includes(words[i + length - 1]);
+    const scheduleWord = /^(every!?|other|the|last|of|and|day|days|week|weeks|weekday|weekdays|weekend|month|months|year|years)$/.test(next)
+      || numberValue(next) !== null || ordinalValue(next) !== null || /^\d+(st|nd|rd|th)$/.test(next)
+      || next.split(",").every((part) => weekdayIndex(part) >= 0)
+      || WEEKDAY_NAMES.some((day) => next.length >= 2 && day.startsWith(next));
+    if (!afterConnector && !scheduleWord) break;
+    length++;
   }
-  return null;
+  return { rule: null, length };
 }
 
-// 'HH:mm', 'H', 'Hpm', 'H:MMam' → 'HH:mm', or null if not a time.
-function matchTime(word: string): string | null {
-  const m = /^(\d{1,2})(?::(\d{2}))?(am|pm)?$/.exec(word.toLowerCase());
-  if (!m) return null;
-  let hour = Number(m[1]);
-  const minute = m[2] ? Number(m[2]) : 0;
-  if (minute > 59) return null;
-  if (m[3]) {
-    if (hour < 1 || hour > 12) return null;
-    if (m[3] === "pm" && hour !== 12) hour += 12;
-    if (m[3] === "am" && hour === 12) hour = 0;
-  } else if (hour > 23) return null;
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+function dayPart(words: string[], i: number, afterDate: boolean): { time: string; length: number; today: boolean } | null {
+  if (words[i] === "tonight") return { time: DAY_PARTS.tonight, length: 1, today: !afterDate };
+  if (["this", "at"].includes(words[i]) && DAY_PARTS[words[i + 1]]) {
+    return { time: DAY_PARTS[words[i + 1]], length: 2, today: words[i] === "this" || !afterDate };
+  }
+  return afterDate && DAY_PARTS[words[i]] ? { time: DAY_PARTS[words[i]], length: 1, today: false } : null;
 }
 
-// "for <duration>" starting at words[i], e.g. "for 2h", "for 90m", "for
-// 1h30m". Requires the "for" prefix because a bare "2h" is ambiguous with matchTime
-// (24h-style hour tokens like "23" or combined with "at") so it's not treated
-// as a duration on its own.
-function matchDuration(words: string[], i: number): { minutes: number; length: number } | null {
-  if (words[i].toLowerCase() !== "for" || i + 1 >= words.length) return null;
-  const m = /^(?:(\d+)\s*(?:h|hr|hrs|hour|hours))?(?:(\d+)\s*(?:m|min|mins|minute|minutes))?$/i.exec(
-    words[i + 1],
-  );
-  if (!m || (!m[1] && !m[2])) return null;
-  const minutes = Number(m[1] ?? 0) * 60 + Number(m[2] ?? 0);
-  return minutes > 0 && minutes <= 1440 ? { minutes, length: 2 } : null;
+function matchReminder(words: string[], i: number, today: string): { value: string | null; length: number } | null {
+  if (words[i] !== "remind" || words[i + 1] !== "me") return null;
+  let cursor = i + 2;
+  let date: string | null = null;
+  let time: string | null = null;
+  let defaultTime = false;
+  for (let part = 0; part < 3; part++) {
+    const dateMatch: ReturnType<typeof matchDate> = date ? null : matchDate(words, cursor, today);
+    if (dateMatch) { date = dateMatch.date; cursor += dateMatch.length; continue; }
+    const clock: ReturnType<typeof matchTime> = time && !defaultTime ? null : matchTime(words, cursor);
+    if (clock?.time) { time = clock.time; defaultTime = false; cursor += clock.length; continue; }
+    const period: ReturnType<typeof dayPart> = time ? null : dayPart(words, cursor, Boolean(date));
+    if (period) { time = period.time; defaultTime = true; date ??= today; cursor += period.length; continue; }
+    if (clock || words[cursor] === "at" || words[cursor] === "around") return { value: null, length: cursor - i + (clock?.length ?? Math.min(2, words.length - cursor)) };
+    break;
+  }
+  if (!date && !time) return null;
+  if (words[cursor] === "to") cursor++;
+  return { value: (date ?? today) + "T" + (time ?? "09:00"), length: cursor - i };
 }
 
-export function parseQuickAdd(input: string, opts: { today: string }): QuickAddParse {
-  const { parsed } = parseQuickAddPreview(input, opts);
-  return parsed;
+export function parseQuickAdd(input: string, opts: ParseOptions): QuickAddParse {
+  return parseQuickAddPreview(input, opts).parsed;
 }
 
-// One parsing pass supplies both the saved fields and the exact source ranges
-// to highlight. Matching against original offsets keeps repeated words,
-// Unicode, multiple spaces, and mid-sentence edits aligned with the textarea.
-export function parseQuickAddPreview(input: string, opts: ParseOptions): {
-  parsed: QuickAddParse;
-  tokens: QuickAddToken[];
-} {
+// One parsing pass supplies both saved fields and exact highlight ranges.
+// Source tokens keep punctuation and Unicode offsets; matchers use copies.
+export function parseQuickAddPreview(input: string, opts: ParseOptions): { parsed: QuickAddParse; tokens: QuickAddToken[] } {
   const matches = [...input.matchAll(/\S+/g)];
-  const words = matches.map((match) => match[0]);
+  const source = matches.map((match) => match[0]);
+  const words = source.map((word) => cleanWord(word).toLowerCase());
   const consumed = new Set<number>();
   const tokens: QuickAddToken[] = [];
+  const parsed: QuickAddParse = { content: "", projectName: null, labelNames: [], priority: 4, dueDate: null, dueTime: null, recurrence: null, deadlineDate: null, durationMinutes: null, reminderAt: null };
 
   function consume(index: number, length: number, kind: QuickAddToken["kind"], value: string) {
     for (let k = 0; k < length; k++) consumed.add(index + k);
@@ -182,112 +133,136 @@ export function parseQuickAddPreview(input: string, opts: ParseOptions): {
   }
 
   function reference(index: number, names: readonly string[] | undefined) {
-    if (!names) return { name: words[index].slice(1), length: 1 };
-    // Longest existing name wins: #Home office should not become #Home.
+    if (!names) return { name: cleanWord(source[index]).slice(1), length: 1 };
     for (const name of [...names].sort((a, b) => b.length - a.length)) {
       const parts = name.split(/\s+/);
-      const phrase = words.slice(index, index + parts.length).join(" ").slice(1);
-      if (phrase.toLowerCase() === parts.join(" ").toLowerCase()) {
-        return { name, length: parts.length };
-      }
+      const phrase = source.slice(index, index + parts.length).join(" ").slice(1);
+      // Exact matching first preserves punctuation that belongs to a name.
+      if ([phrase, cleanWord(phrase)].some((value) => value.toLowerCase() === parts.join(" ").toLowerCase())) return { name, length: parts.length };
     }
     return null;
   }
-  let projectName: string | null = null;
-  const labelNames: string[] = [];
-  let priority: 1 | 2 | 3 | 4 = 4;
-  let dueDate: string | null = null;
-  let dueTime: string | null = null;
-  let recurrence: string | null = null;
-  let deadlineDate: string | null = null;
-  let durationMinutes: number | null = null;
 
-  for (let i = 0; i < words.length; i++) {
+  let dateEnd = -1;
+  let defaultTime = false;
+  const leadingReminder = words[0] === "remind" && words[1] === "me" && words[2] === "to";
+  for (let i = leadingReminder ? 3 : 0; i < words.length; i++) {
     const w = words[i];
-    if (!deadlineDate && w.startsWith("{")) {
-      const match = matchDeadline(words, i, opts.today);
-      if (match) {
-        deadlineDate = match.date;
-        consume(i, match.length, "deadline", match.date);
-        i += match.length - 1;
-        continue;
+    const deadline = matchDeadline(words, i, opts.today);
+    if (deadline) {
+      if (!parsed.deadlineDate && deadline.date) {
+        parsed.deadlineDate = deadline.date;
+        consume(i, deadline.length, "deadline", deadline.date);
       }
+      i += deadline.length - 1;
+      continue;
     }
-    if (w.length > 1 && w[0] === "#") {
-      const match = reference(i, opts.projectNames);
-      if (match) {
-        projectName = match.name; // last one wins
-        consume(i, match.length, "project", match.name);
+    const reminder = matchReminder(words, i, opts.today);
+    if (reminder) {
+      if (!parsed.reminderAt && reminder.value) {
+        parsed.reminderAt = reminder.value;
+        consume(i, reminder.length, "reminder", reminder.value);
+      }
+      i += reminder.length - 1;
+      continue;
+    }
+    if (w.length > 1 && (w[0] === "#" || w[0] === "@")) {
+      const project = w[0] === "#";
+      const match = reference(i, project ? opts.projectNames : opts.labelNames);
+      if (match?.name) {
+        if (project) parsed.projectName = match.name;
+        else if (!parsed.labelNames.some((label) => label.toLowerCase() === match.name.toLowerCase())) parsed.labelNames.push(match.name);
+        consume(i, match.length, project ? "project" : "label", match.name);
         i += match.length - 1;
       }
       continue;
     }
-    if (w.length > 1 && w[0] === "@") {
-      const match = reference(i, opts.labelNames);
-      if (match) {
-        if (!labelNames.includes(match.name)) labelNames.push(match.name);
-        consume(i, match.length, "label", match.name);
-        i += match.length - 1;
-      }
+    const priority = /^p([1-4])$/.exec(w);
+    if (priority) {
+      parsed.priority = Number(priority[1]) as 1 | 2 | 3 | 4;
+      consume(i, 1, "priority", priority[1]);
       continue;
     }
-    const p = /^p([1-4])$/i.exec(w);
-    if (p) {
-      priority = Number(p[1]) as 1 | 2 | 3 | 4;
-      consume(i, 1, "priority", p[1]);
+    const duration = matchDuration(words, i);
+    if (duration) {
+      if (!parsed.durationMinutes && duration.minutes) {
+        parsed.durationMinutes = duration.minutes;
+        consume(i, duration.length, "duration", String(duration.minutes));
+      }
+      i += duration.length - 1;
       continue;
     }
-    if (!dueDate && (w.toLowerCase() === "every" || w.toLowerCase() === "every!")) {
-      const match = matchRecurrence(words, i);
-      if (match) {
-        recurrence = match.rule;
-        dueDate = firstOccurrence(match.rule, opts.today);
-        consume(i, match.length, "recurrence", match.rule);
-        i += match.length - 1;
-        continue;
-      }
+    // A half-typed decimal duration must not fall through as a D.M date.
+    if (w === "for" && numberValue(words[i + 1] ?? "") !== null) {
+      i++;
+      continue;
     }
-    if (!dueDate) {
-      const match = matchDate(words, i, opts.today);
-      if (match) {
-        dueDate = match.date;
-        consume(i, match.length, "date", match.date);
-        i += match.length - 1;
-        continue;
-      }
+    if (w === "around") {
+      // Fuzzy times need an AM/PM decision; don't extract a bare time inside.
+      const clock = matchTime(words, i + 1);
+      if (clock || numberValue(words[i + 1] ?? "") !== null) i += clock?.length ?? 1;
+      continue;
     }
-    if (!dueTime && w.toLowerCase() === "at" && i + 1 < words.length) {
-      const time = matchTime(words[i + 1]);
-      if (time) {
-        dueTime = time;
-        consume(i, 2, "time", time);
-        i++;
+    const repeat = matchRecurrence(source, words, i, opts.today);
+    if (repeat) {
+      if (!parsed.dueDate && repeat.rule) {
+        parsed.recurrence = repeat.rule;
+        parsed.dueDate = firstOccurrence(repeat.rule, opts.today);
+        consume(i, repeat.length, "recurrence", repeat.rule);
+        dateEnd = i + repeat.length;
       }
+      i += repeat.length - 1;
+      continue;
     }
-    if (!durationMinutes && w.toLowerCase() === "for") {
-      const match = matchDuration(words, i);
+    const clock = matchTime(words, i);
+    if (clock) {
+      if ((!parsed.dueTime || defaultTime) && clock.time) {
+        parsed.dueTime = clock.time;
+        defaultTime = false;
+        consume(i, clock.length, "time", clock.time);
+      }
+      i += clock.length - 1;
+      continue;
+    }
+    if (w === "at" && numberValue(words[i + 1] ?? "") !== null) { i++; continue; }
+    const period = dayPart(words, i, dateEnd === i);
+    if (period && (!parsed.dueTime || defaultTime) && (!period.today || !parsed.dueDate)) {
+      if (period.today) parsed.dueDate = opts.today;
+      parsed.dueTime = period.time;
+      defaultTime = true;
+      consume(i, period.length, period.today ? "date" : "time", period.today ? opts.today : period.time);
+      i += period.length - 1;
+      continue;
+    }
+    if (!parsed.dueDate) {
+      const skip = w === "due" ? (words[i + 1] === "by" ? 2 : 1) : w === "by" ? 1 : 0;
+      const match = matchDate(words, i + skip, opts.today);
       if (match) {
-        durationMinutes = match.minutes;
-        consume(i, 2, "duration", String(match.minutes));
-        i++;
+        parsed.dueDate = match.date;
+        consume(i, skip + match.length, "date", match.date);
+        dateEnd = i + skip + match.length;
+        i += skip + match.length - 1;
       }
     }
   }
 
-  if (dueTime && !dueDate) dueDate = opts.today; // time alone means today
-
-  const content = words.filter((_, i) => !consumed.has(i)).join(" ");
-  if (!content) {
-    // A task needs content; if tokens ate everything, treat it all as content.
-    return { parsed: { content: words.join(" "), projectName: null, labelNames: [], priority: 4, dueDate: null, dueTime: null, recurrence: null, deadlineDate: null, durationMinutes: null }, tokens: [] };
+  if (leadingReminder && (parsed.dueDate || parsed.dueTime) && !parsed.recurrence) {
+    parsed.reminderAt = (parsed.dueDate ?? opts.today) + "T" + (parsed.dueTime ?? "09:00");
+    for (const token of tokens) if (token.kind === "date" || token.kind === "time") { token.kind = "reminder"; token.value = parsed.reminderAt; }
+    consume(0, 3, "reminder", parsed.reminderAt);
+    parsed.dueDate = null;
+    parsed.dueTime = null;
   }
-  return { parsed: { content, projectName, labelNames, priority, dueDate, dueTime, recurrence, deadlineDate, durationMinutes }, tokens };
+  if (parsed.dueTime && !parsed.dueDate) parsed.dueDate = opts.today;
+  parsed.content = source.filter((_, i) => !consumed.has(i)).join(" ");
+  if (!parsed.content) {
+    return { parsed: { content: source.join(" "), projectName: null, labelNames: [], priority: 4, dueDate: null, dueTime: null, recurrence: null, deadlineDate: null, durationMinutes: null, reminderAt: null }, tokens: [] };
+  }
+  return { parsed, tokens: tokens.sort((a, b) => a.start - b.start) };
 }
 
 export function removeQuickAddTokens(input: string, tokens: QuickAddToken[]): string {
   let result = input;
-  for (const token of [...tokens].sort((a, b) => b.start - a.start)) {
-    result = result.slice(0, token.start) + result.slice(token.end);
-  }
+  for (const token of [...tokens].sort((a, b) => b.start - a.start)) result = result.slice(0, token.start) + result.slice(token.end);
   return result.replace(/\s+/g, " ").trim();
 }

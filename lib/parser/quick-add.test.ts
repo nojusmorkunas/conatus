@@ -14,6 +14,7 @@ const defaults: QuickAddParse = {
   recurrence: null,
   deadlineDate: null,
   durationMinutes: null,
+  reminderAt: null,
 };
 
 const cases: [string, Partial<QuickAddParse>][] = [
@@ -79,7 +80,7 @@ const cases: [string, Partial<QuickAddParse>][] = [
   ["call mom at 12am", { content: "call mom", dueDate: "2026-07-14", dueTime: "00:00" }],
   ["call mom at 12pm", { content: "call mom", dueDate: "2026-07-14", dueTime: "12:00" }],
   ["call mom at 9:15am", { content: "call mom", dueDate: "2026-07-14", dueTime: "09:15" }],
-  ["meet at noon", { content: "meet at noon" }], // not a recognized time
+  ["meet at noon", { content: "meet", dueDate: today, dueTime: "12:00" }],
   ["meet at 99", { content: "meet at 99" }],
   ["meet at 13pm", { content: "meet at 13pm" }],
   // combination

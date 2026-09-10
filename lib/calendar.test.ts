@@ -34,6 +34,15 @@ describe("calendar occurrences", () => {
       .toEqual(["2026-02-03", "2026-02-06"]);
   });
 
+  it("projects each day in a weekday list and preserves monthly weekday anchors", () => {
+    expect(calendarOccurrences([{ ...task, dueDate: "2026-07-13", recurrence: "every monday, wednesday, friday" }], "2026-07-14", "2026-07-24").map((entry) => entry.dueDate))
+      .toEqual(["2026-07-15", "2026-07-17", "2026-07-20", "2026-07-22", "2026-07-24"]);
+    expect(calendarOccurrences([{ ...task, dueDate: "2026-06-12", recurrence: "every 2nd friday" }], "2026-07-01", "2026-09-30").map((entry) => entry.dueDate))
+      .toEqual(["2026-07-10", "2026-08-14", "2026-09-11"]);
+    expect(calendarOccurrences([{ ...task, dueDate: "2026-06-29", recurrence: "every 5th monday" }], "2026-07-01", "2026-11-30").map((entry) => entry.dueDate))
+      .toEqual(["2026-08-31", "2026-11-30"]);
+  });
+
   it("leaves non-recurring and unsupported rules as single stored occurrences", () => {
     for (const recurrence of [null, "unsupported rule"]) {
       expect(calendarOccurrences([{ ...task, recurrence }], "2026-01-01", "2026-02-28")).toHaveLength(1);

@@ -20,7 +20,7 @@ describe("parseRecurrence", () => {
     ["every 10 Years", "every 10 years"],
     ["every 0 days", null],
     ["every", null],
-    ["daily", null],
+    ["daily", "every day"],
     ["everyday", null],
     // every! (completion-relative)
     ["every! day", "every! day"],
@@ -39,11 +39,11 @@ describe("parseRecurrence", () => {
     ["every other months", "every 2 months"],
     ["every other monday", "every other monday"],
     ["every other Mon", "every other monday"],
-    ["every other year", null],
+    ["every other year", "every 2 years"],
     ["every other", null],
     // every weekday
     ["every weekday", "every weekday"],
-    ["every weekdays", null],
+    ["every weekdays", "every weekday"],
     // every last day
     ["every last day", "every last day"],
     ["every last days", "every last day"],
@@ -61,6 +61,34 @@ describe("parseRecurrence", () => {
     ["every 31th", null],
     ["every 3st", null],
     ["every 15", null],
+    ["weekly", "every week"],
+    ["monthly", "every month"],
+    ["yearly", "every year"],
+    ["fortnightly", "every 2 weeks"],
+    ["biweekly", null],
+    ["twice a week", null],
+    ["every fortnight", "every 2 weeks"],
+    ["every two weeks", "every 2 weeks"],
+    ["every twenty-one days", "every 21 days"],
+    ["every weekend", "every saturday, sunday"],
+    ["every Monday and Wednesday", "every monday, wednesday"],
+    ["every Mon,Wed,Fri", "every monday, wednesday, friday"],
+    ["every Fri, Mon, and Wed", "every monday, wednesday, friday"],
+    ["every monday, monday", "every monday"],
+    ["every! Sun and Sat", "every! saturday, sunday"],
+    ["every Mon and", null],
+    ["every Mon and someday", null],
+    ["every 2nd Friday", "every 2nd friday"],
+    ["every fifth Monday", "every 5th monday"],
+    ["every last Fri", "every last friday"],
+    ["the first Friday of every month", "every 1st friday"],
+    ["the first Friday of every! month", "every! 1st friday"],
+    ["1st of every month", "every 1st"],
+    ["every month on the twenty-first", "every 21st"],
+    ["every 6th Friday", null],
+    ["every 2th Friday", null],
+    ["every twenty first nonsense", null],
+    ["every 999999999999999 days", null],
   ];
 
   test.each(cases)("%j", (input, expected) => {
@@ -309,5 +337,35 @@ describe("firstOccurrence", () => {
     expect(firstOccurrence("every tuesday", today)).toBe("2026-07-21");
     expect(firstOccurrence("every 20th", today)).toBe("2026-07-20");
     expect(firstOccurrence("every weekday", today)).toBe("2026-07-15");
+  });
+});
+
+describe("weekday lists and monthly weekday schedules", () => {
+  test.each([
+    ["every monday, wednesday, friday", "2026-07-13", "2026-07-14", "2026-07-15"],
+    ["every monday, wednesday, friday", "2026-07-17", "2026-07-17", "2026-07-20"],
+    ["every saturday, sunday", "2026-07-18", "2026-07-18", "2026-07-19"],
+    ["every saturday, sunday", "2026-07-19", "2026-07-19", "2026-07-25"],
+    ["every 2nd friday", "2026-07-10", "2026-07-14", "2026-08-14"],
+    ["every 2nd friday", "2026-08-14", "2026-08-14", "2026-09-11"],
+    ["every 1st friday", "2026-07-03", "2026-08-07", "2026-09-04"],
+    ["every last friday", "2026-01-30", "2026-01-30", "2026-02-27"],
+    ["every last friday", "2028-01-28", "2028-01-28", "2028-02-25"],
+    ["every 5th monday", "2026-06-29", "2026-06-29", "2026-08-31"],
+    ["every 5th monday", "2026-08-31", "2026-08-31", "2026-11-30"],
+    ["every 1st friday", "2020-01-03", "2026-07-14", "2026-08-07"],
+    ["every! 2nd friday", "2026-12-11", "2026-07-14", "2026-08-14"],
+    ["every! monday, wednesday", "2026-12-14", "2026-07-14", "2026-07-15"],
+  ])("%s from %s, completed %s", (rule, from, today, next) => {
+    expect(nextOccurrence(rule, from, today)).toBe(next);
+  });
+
+  test("a monthly weekday on the inclusive end date is the final occurrence", () => {
+    expect(nextOccurrenceWithinEnd("every 2nd friday", "2026-08-14", "2026-08-14", "2026-09-11")).toBe("2026-09-11");
+    expect(nextOccurrenceWithinEnd("every 2nd friday", "2026-09-11", "2026-09-11", "2026-09-11")).toBeNull();
+  });
+
+  test("rejects unsupported schedules rather than entering a non-advancing loop", () => {
+    expect(() => nextOccurrence("every garbage", "2026-07-14", "2026-07-14")).toThrow("Unsupported recurrence");
   });
 });

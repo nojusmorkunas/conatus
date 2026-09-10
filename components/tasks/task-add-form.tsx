@@ -12,6 +12,7 @@ import { firstOccurrence } from "@/lib/recurrence";
 import { addDays, dueLabel, humanizeDuration, weekStartOf } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api-client";
+import { localDateTimeToUtc } from "@/lib/local-time";
 import { RecurrencePicker } from "./recurrence-picker";
 import { TaskComposerInput } from "./task-composer-input";
 import { ComposerChip, ComposerPanel, ComposerPriorityPicker, ComposerProjectPicker, composerPriorityColors, type ComposerLabel, type ComposerProject, type ComposerSection } from "./task-composer-controls";
@@ -61,6 +62,7 @@ export function TaskAddForm({
   const [labelSearch, setLabelSearch] = useState("");
   const [creatingLabel, setCreatingLabel] = useState(false);
   const [reminderDraft, setReminderDraft] = useState("");
+  const [editingReminder, setEditingReminder] = useState<string | null>(null);
   const [reminders, setReminders] = useState<string[]>([]);
   const [files, setFiles] = useState<File[]>([]);
   const [pending, setPending] = useState(false);
@@ -86,6 +88,7 @@ export function TaskAddForm({
   const priority = tokens.some((token) => token.kind === "priority") ? parsed.priority : manualPriority;
   const deadline = parsed.deadlineDate ?? manualDeadline;
   const duration = parsed.durationMinutes ? String(parsed.durationMinutes) : manualDuration;
+  const selectedReminders = [...new Set([...reminders, ...(parsed.reminderAt ? [parsed.reminderAt] : [])])];
   const parsedProject = projects.find((project) => project.name.toLowerCase() === parsed.projectName?.toLowerCase());
   const targetProjectId = parentId ? projectId : parsedProject?.id ?? destination.projectId;
   const targetSectionId = targetProjectId === destination.projectId ? destination.sectionId : null;
@@ -140,7 +143,7 @@ export function TaskAddForm({
   function reset() {
     setContent(""); setDescription(""); setDescriptionOpen(false);
     setManualPriority(4); setSchedule(emptySchedule); setManualDeadline(""); setManualDuration("");
-    setDestination({ projectId, sectionId }); setManualLabelIds([]); setReminders([]); setReminderDraft("");
+    setDestination({ projectId, sectionId }); setManualLabelIds([]); setReminders([]); setReminderDraft(""); setEditingReminder(null);
     setFiles([]); setPanel(null); setRecovery(null); setError(null); setLabelSearch(""); setProjectSearch("");
   }
 
@@ -157,7 +160,11 @@ export function TaskAddForm({
     const failures: string[] = [];
     const jobs: { run: () => Promise<unknown>; failed: () => void; name: string }[] = [];
     if (details.labelIds.length) jobs.push({ run: () => api.patch(`/api/tasks/${taskId}`, { labelIds: details.labelIds }), failed: () => { remaining.labelIds = details.labelIds; }, name: "labels" });
-    for (const remindAt of details.reminders) jobs.push({ run: () => api.post("/api/reminders", { taskId, remindAt: new Date(remindAt).toISOString() }), failed: () => { remaining.reminders.push(remindAt); }, name: "reminders" });
+    for (const value of details.reminders) jobs.push({ run: () => {
+      const remindAt = localDateTimeToUtc(value, Intl.DateTimeFormat().resolvedOptions().timeZone);
+      if (!remindAt) throw new Error("Invalid reminder time");
+      return api.post("/api/reminders", { taskId, remindAt: remindAt.toISOString() });
+    }, failed: () => { remaining.reminders.push(value); }, name: "reminders" });
     for (const file of details.files) jobs.push({ run: () => { const body = new FormData(); body.set("taskId", taskId); body.set("file", file); return api.post("/api/attachments", body); }, failed: () => { remaining.files.push(file); }, name: "attachments" });
     const results = await Promise.allSettled(jobs.map((job) => Promise.resolve().then(job.run)));
     results.forEach((result, index) => { if (result.status === "rejected") { jobs[index].failed(); failures.push(jobs[index].name); } });
@@ -174,6 +181,7 @@ export function TaskAddForm({
     if (submitting.current || creatingLabel || (!recovery && !parsed.content.trim())) return;
     if (!recovery && parsed.content.length > 500) { setError("Keep the task name under 500 characters."); return; }
     if (!recovery && duration && (!Number.isInteger(Number(duration)) || Number(duration) < 1 || Number(duration) > 1440)) { setError("Set a duration between 1 and 1,440 minutes."); return; }
+    if (!recovery && selectedReminders.some((value) => !localDateTimeToUtc(value, Intl.DateTimeFormat().resolvedOptions().timeZone))) { setError("That reminder time does not exist in this device's time zone. Choose another time."); return; }
     submitting.current = true;
     setPending(true);
     setError(null);
@@ -186,7 +194,7 @@ export function TaskAddForm({
         deadlineDate: deadline || undefined, durationMinutes: duration ? Number(duration) : undefined,
       });
       const taskId = "taskId" in task ? task.taskId : task.id;
-      const details = recovery?.details ?? { labelIds: selectedLabels.map((label) => label.id), reminders, files };
+      const details = recovery?.details ?? { labelIds: selectedLabels.map((label) => label.id), reminders: selectedReminders, files };
       if (!(await saveDetails(taskId, details))) return;
       reset();
       setExpanded(true);
@@ -215,7 +223,7 @@ export function TaskAddForm({
   }
 
   const selectedNames = selectedLabels.map((label) => label.name).join(", ");
-  const recognitionSummary = [dueDate && `Date: ${dateText}`, recurrence && `Repeat: ${recurrence}`, priority < 4 && `Priority ${priority}`, selectedNames && `Labels: ${selectedNames}`, deadline && `Deadline: ${dueLabel(deadline, today, "dd/MM/yyyy")}`, duration && `Duration: ${duration} minutes`, parsedProject && `Project: ${parsedProject.name}`].filter(Boolean).join(". ");
+  const recognitionSummary = [dueDate && `Date: ${dateText}`, recurrence && `Repeat: ${recurrence}`, priority < 4 && `Priority ${priority}`, selectedNames && `Labels: ${selectedNames}`, deadline && `Deadline: ${dueLabel(deadline, today, "dd/MM/yyyy")}`, duration && `Duration: ${duration} minutes`, parsedProject && `Project: ${parsedProject.name}`, parsed.reminderAt && `Reminder: ${new Date(parsed.reminderAt).toLocaleString()}`].filter(Boolean).join(". ");
 
   if (!expanded) return (
     <button ref={rootRef as React.Ref<HTMLButtonElement>} type="button" data-quick-add className={cn("group/add-task flex w-full items-center gap-2 rounded-lg border border-dashed border-transparent py-2 text-left text-sm text-muted-foreground transition-colors hover:border-border hover:bg-muted/35 hover:text-foreground", alignWithTask ? "relative pr-2 pl-9 md:pl-[72px]" : "px-2")} onClick={() => setExpanded(true)}>
@@ -228,6 +236,9 @@ export function TaskAddForm({
     <form ref={rootRef as React.Ref<HTMLFormElement>} data-quick-add aria-label="New task" aria-busy={pending} onSubmit={submit}
       onKeyDown={(event) => {
         if (event.key !== "Escape" || event.defaultPrevented) return;
+        // Portalled menus and dialogs handle their own Escape. React still
+        // bubbles their events here after they close, when menuOpen may be false.
+        if (!rootRef.current?.contains(event.target as Node)) return;
         event.preventDefault(); event.stopPropagation();
         if (menuOpen) { setMenuOpen(false); return; }
         if (panel) { closePanel(); return; }
@@ -251,7 +262,7 @@ export function TaskAddForm({
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="min-h-9 gap-3 px-2" onClick={() => setPanel("date")}><CalendarDays />Date</DropdownMenuItem>
                 <DropdownMenuItem className="min-h-9 gap-3 px-2" onClick={() => setPanel("priority")}><Flag />Priority<span className="ml-auto text-xs text-muted-foreground">p1–p4</span></DropdownMenuItem>
-                <DropdownMenuItem className="min-h-9 gap-3 px-2" onClick={() => setPanel("reminders")}><Bell />Reminders</DropdownMenuItem>
+                <DropdownMenuItem className="min-h-9 gap-3 px-2" onClick={() => { setEditingReminder(null); setReminderDraft(""); setPanel("reminders"); }}><Bell />Reminders</DropdownMenuItem>
                 <DropdownMenuItem className="min-h-9 gap-3 px-2" onClick={() => setPanel("labels")}><Tag />Labels<span className="ml-auto text-xs text-muted-foreground">@</span></DropdownMenuItem>
                 <DropdownMenuItem className="min-h-9 gap-3 px-2" onClick={() => setPanel("deadline")}><Flag />Deadline<span className="ml-auto text-xs text-muted-foreground">{'{date}'}</span></DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -275,7 +286,7 @@ export function TaskAddForm({
             {selectedLabels.map((label) => <ComposerChip key={label.id} icon={Tag} label={`Label ${label.name}`} onClick={() => setPanel("labels")} onRemove={() => removeLabel(label)}>{label.name}</ComposerChip>)}
             {deadline && <ComposerChip icon={Flag} label="Deadline" onClick={() => setPanel("deadline")} onRemove={() => { strip(["deadline"]); setManualDeadline(""); }}>{`Deadline: ${dueLabel(deadline, today, "dd/MM/yyyy")}`}</ComposerChip>}
             {duration && <ComposerChip icon={Timer} label="Duration" onClick={() => setPanel("duration")} onRemove={() => { strip(["duration"]); setManualDuration(""); }}>{humanizeDuration(Number(duration))}</ComposerChip>}
-            {reminders.map((reminder) => <ComposerChip key={reminder} icon={Bell} label={`Reminder ${new Date(reminder).toLocaleString()}`} onClick={() => setPanel("reminders")} onRemove={() => setReminders((current) => current.filter((item) => item !== reminder))}>{new Date(reminder).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</ComposerChip>)}
+            {selectedReminders.map((reminder) => <ComposerChip key={reminder} icon={Bell} label={`Reminder ${new Date(reminder).toLocaleString()}`} onClick={() => { setEditingReminder(reminder); setReminderDraft(reminder); setPanel("reminders"); }} onRemove={() => { if (reminder === parsed.reminderAt) strip(["reminder"]); setReminders((current) => current.filter((item) => item !== reminder)); }}>{new Date(reminder).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</ComposerChip>)}
             {files.map((file, index) => <ComposerChip key={`${file.name}-${index}`} icon={Paperclip} label={`Attachment ${file.name}`} onClick={() => fileInputRef.current?.click()} onRemove={() => setFiles((current) => current.filter((_, i) => i !== index))}>{file.name}</ComposerChip>)}
           </div>
           {!recovery && <div className="flex shrink-0 items-center gap-1">
@@ -308,7 +319,7 @@ export function TaskAddForm({
           {panel === "duration" && <label className="block text-xs text-muted-foreground">Estimated time in minutes<Input autoFocus type="number" aria-label="Duration in minutes" min={1} max={1440} step={1} placeholder="30" className="mt-1 w-32" value={duration} onChange={(event) => { strip(["duration"]); setManualDuration(event.target.value); }} /></label>}
           {panel === "reminders" && <>
             <p className="mb-2 text-xs text-muted-foreground">Get a reminder at a specific time. Uses this device&apos;s time zone.</p>
-            <div className="flex flex-wrap gap-2"><Input autoFocus type="datetime-local" aria-label="Reminder date and time" className="min-w-0 flex-1" value={reminderDraft} onChange={(event) => setReminderDraft(event.target.value)} /><Button type="button" size="sm" disabled={!reminderDraft || !Number.isFinite(new Date(reminderDraft).getTime())} onClick={() => { if (!reminders.includes(reminderDraft)) setReminders((current) => [...current, reminderDraft]); setReminderDraft(""); closePanel(); }}>Add reminder</Button></div>
+            <div className="flex flex-wrap gap-2"><Input autoFocus type="datetime-local" aria-label="Reminder date and time" className="min-w-0 flex-1" value={reminderDraft} onChange={(event) => setReminderDraft(event.target.value)} /><Button type="button" size="sm" disabled={!reminderDraft || !Number.isFinite(new Date(reminderDraft).getTime())} onClick={() => { if (editingReminder === parsed.reminderAt) strip(["reminder"]); setReminders((current) => [...new Set([...current.filter((value) => value !== editingReminder), reminderDraft])]); setReminderDraft(""); setEditingReminder(null); closePanel(); }}>{editingReminder ? "Save reminder" : "Add reminder"}</Button></div>
           </>}
           {panel === "labels" && <>
             <Input autoFocus aria-label="Search or create labels" placeholder="Search or create a label" maxLength={120} value={labelSearch} onChange={(event) => setLabelSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); if (labelSearch.trim() && !availableLabels.some((label) => label.name.toLowerCase() === labelSearch.trim().toLowerCase())) void createLabel(); } }} />

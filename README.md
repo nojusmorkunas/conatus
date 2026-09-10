@@ -14,6 +14,10 @@ Conatus is a self-hosted task manager for projects, recurring work, reminders an
 - Import Todoist tasks and work from calendar, list or board views
 - Connect through API tokens and webhooks
 
+Type dates, times, durations, reminders, and repeats directly into a task name.
+See the [natural-language entry guide](./docs/natural-language.md) for supported
+phrases and scheduling conventions.
+
 <p align="center">
   <img src="./public/project_view.png" alt="Conatus project view" width="100%">
 </p>

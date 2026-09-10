@@ -158,3 +158,93 @@ test("failed task creation keeps the draft and supports a single retry", async (
   await expect(input).toHaveValue("");
   expect(await tasksIn(page, projectId)).toHaveLength(1);
 });
+
+test("natural-language dates, spaced times and durations preview and save together", async ({ page }) => {
+  const { composer, input, projectId } = await openComposer(page);
+  await input.fill("Plan release September 15, 2027 at 5 pm. for 1.5 hours deadline September 20, 2027");
+  await expect(composer.getByRole("button", { name: "Date", exact: true })).toHaveText("15/09/2027 · 17:00");
+  await expect(composer.getByRole("button", { name: "Duration", exact: true })).toHaveText("1h 30m");
+  await expect(composer.locator('[data-token-kind="time"]')).toHaveText("at 5 pm.");
+  await expect(composer.locator('[data-token-kind="duration"]')).toHaveText("for 1.5 hours");
+  await expect(composer.locator('[data-token-kind="deadline"]')).toHaveText("deadline September 20, 2027");
+  expect(await tasksIn(page, projectId)).toHaveLength(0);
+  await input.press("Enter");
+  await expect(input).toHaveValue("");
+  expect((await tasksIn(page, projectId))[0]).toMatchObject({ content: "Plan release", dueDate: "2027-09-15", dueTime: "17:00", durationMinutes: 90, deadlineDate: "2027-09-20" });
+
+  await input.fill("Have lunch tomorrow, at noon.");
+  await expect(composer.getByRole("button", { name: "Date", exact: true })).toHaveText("Tomorrow · 12:00");
+  await input.fill("Deep work for 1.5 ho");
+  await expect(composer.getByRole("button", { name: "Date", exact: true })).toHaveText("Date");
+  await expect(composer.locator("mark")).toHaveCount(0);
+  await input.fill("Standup every Mon, Wed, F");
+  await expect(composer.locator("mark")).toHaveCount(0);
+});
+
+test("monthly weekday rules survive Custom editing and weekday lists advance on completion", async ({ page }) => {
+  const { composer, input, projectId } = await openComposer(page);
+  await input.fill("Report every 2nd Friday at noon");
+  await expect(composer.locator('[data-token-kind="recurrence"]')).toHaveText("every 2nd Friday");
+  await composer.getByRole("button", { name: "Repeat", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Custom…" }).click();
+  const custom = page.getByRole("dialog", { name: "Custom repeat" });
+  await expect(custom.getByLabel("Repeat phrase", { exact: true })).toHaveValue("every 2nd friday");
+  await custom.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(input).toHaveValue("Report");
+  await input.press("Enter");
+  await expect(input).toHaveValue("");
+  expect((await tasksIn(page, projectId))[0]).toMatchObject({ content: "Report", recurrence: "every 2nd friday", dueTime: "12:00" });
+
+  await input.fill("Standup every Mon, Wed, Fri at 9 am");
+  await expect(composer.locator('[data-token-kind="recurrence"]')).toHaveText("every Mon, Wed, Fri");
+  await input.press("Enter");
+  await expect(input).toHaveValue("");
+  const saved = (await tasksIn(page, projectId)).find((task: { content: string }) => task.content === "Standup");
+  expect(saved).toMatchObject({ recurrence: "every monday, wednesday, friday", dueTime: "09:00" });
+  const complete = await page.request.patch(`/api/tasks/${saved.id}`, { data: { completed: true } });
+  expect(complete.ok()).toBeTruthy();
+  const advanced = (await tasksIn(page, projectId)).find((task: { id: string }) => task.id === saved.id);
+  expect(advanced.dueDate > saved.dueDate).toBe(true);
+  expect([1, 3, 5]).toContain(new Date(`${advanced.dueDate}T00:00:00Z`).getUTCDay());
+});
+
+test.describe("natural-language reminders", () => {
+  test.use({ timezoneId: "Europe/Amsterdam" });
+
+  test("shows and saves a reminder independently from the due date", async ({ page }) => {
+    const { composer, input, projectId } = await openComposer(page);
+    await input.fill("Remind me September 15, 2027 at noon to call mom");
+    await expect(composer.getByRole("button", { name: /^Reminder / })).toBeVisible();
+    await expect(composer.getByRole("button", { name: "Date", exact: true })).toHaveText("Date");
+    await expect(composer.locator('[data-token-kind="reminder"]')).toHaveText("Remind me September 15, 2027 at noon to");
+    await input.press("Enter");
+    await expect(input).toHaveValue("");
+    const [saved] = await tasksIn(page, projectId);
+    expect(saved).toMatchObject({ content: "call mom", dueDate: null, dueTime: null });
+    const reminders = await (await page.request.get(`/api/reminders?taskId=${saved.id}`)).json();
+    expect(reminders).toHaveLength(1);
+    expect(reminders[0].remindAt).toBe("2027-09-15T10:00:00.000Z");
+  });
+
+  test("allows editing and removing detected reminders without hidden schedule fields", async ({ page }) => {
+    const { composer, input, projectId } = await openComposer(page);
+    await input.fill("Remind me tomorrow to call mom");
+    await composer.getByRole("button", { name: /^Reminder / }).click();
+    await expect(composer.getByLabel("Reminder date and time")).toHaveValue(/T09:00$/);
+    await composer.getByLabel("Reminder date and time").fill("2027-02-10T16:00");
+    await composer.getByRole("button", { name: "Save reminder", exact: true }).click();
+    await expect(input).toHaveValue("call mom");
+    await input.press("Enter");
+    await expect(input).toHaveValue("");
+    const [saved] = await tasksIn(page, projectId);
+    const reminders = await (await page.request.get(`/api/reminders?taskId=${saved.id}`)).json();
+    expect(reminders).toHaveLength(1);
+    expect(reminders[0].remindAt).toBe("2027-02-10T15:00:00.000Z");
+
+    await input.fill("Remind me tomorrow to buy cat food");
+    await composer.getByRole("button", { name: /^Remove reminder /i }).click();
+    await expect(input).toHaveValue("buy cat food");
+    await expect(composer.getByRole("button", { name: /^Reminder / })).toHaveCount(0);
+    await expect(composer.getByRole("button", { name: "Date", exact: true })).toHaveText("Date");
+  });
+});

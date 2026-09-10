@@ -40,8 +40,7 @@ const unitLabels: Record<Unit, string> = {
   year: "years",
 };
 
-// The rules people reach for. Everything else the grammar accepts is built in
-// the custom dialog, so the menu stays short without capping what's possible.
+// Common rules stay in the menu; the custom dialog also accepts repeat phrases.
 const PRESETS = [
   { label: "Daily", rule: "every day" },
   { label: "Weekly", rule: "every week" },
@@ -61,7 +60,7 @@ function recurrenceLabel(rule: string) {
   const preset = PRESETS.find((option) => option.rule === plain);
   const base = preset
     ? preset.label
-    : capitalize(plain.replace(/ (\w+day)$/, (_, day) => ` ${capitalize(day)}`));
+    : capitalize(plain.replace(/\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/g, capitalize));
   return rule.startsWith("every!") ? `${base}, from completion` : base;
 }
 
@@ -167,12 +166,12 @@ export function RecurrencePicker({
                 type="button"
                 aria-label="Repeat"
                 className={cn(
-                  "flex items-center gap-1 text-sm",
+                  "flex min-w-0 max-w-full items-center gap-1 text-sm",
                   !value && "text-muted-foreground",
                 )}
               >
                 <Repeat className="size-3.5" />
-                {value ? recurrenceLabel(value) : "Add repeat"}
+                <span className="truncate" title={value ? recurrenceLabel(value) : undefined}>{value ? recurrenceLabel(value) : "Add repeat"}</span>
               </button>
             ) : (
               <Button
@@ -182,10 +181,10 @@ export function RecurrencePicker({
                 aria-label="Repeat"
                 // text-sm keeps it level with the select triggers beside it,
                 // which stay at 14px in their small size.
-                className={cn("text-sm", !value && "text-muted-foreground")}
+                className={cn("min-w-0 max-w-full text-sm", !value && "text-muted-foreground")}
               >
                 <Repeat />
-                {value ? recurrenceLabel(value) : "No repeat"}
+                <span className="truncate" title={value ? recurrenceLabel(value) : undefined}>{value ? recurrenceLabel(value) : "No repeat"}</span>
                 <ChevronDown data-icon="inline-end" className="text-muted-foreground" />
               </Button>
             )
@@ -244,14 +243,16 @@ function CustomRepeatDialog({
   const [fields, setFields] = useState(() => toFields(value));
   // Held as text so the field can be cleared mid-edit without snapping to 1.
   const [intervalText, setIntervalText] = useState(String(toFields(value).interval));
+  // Preserve NLP rules that cannot be represented by the interval controls.
+  const [phrase, setPhrase] = useState<string | null>(() => value && buildRule(toFields(value)) !== value ? value : null);
 
   function update(changes: Partial<Fields>) {
     setFields((current) => ({ ...current, ...changes }));
   }
 
-  const showWeekday = fields.unit === "week" && fields.interval <= 2;
-  const showMonthDay = fields.unit === "month" && fields.interval === 1;
-  const rule = buildRule(fields);
+  const showWeekday = phrase === null && fields.unit === "week" && fields.interval <= 2;
+  const showMonthDay = phrase === null && fields.unit === "month" && fields.interval === 1;
+  const rule = phrase === null ? buildRule(fields) : parseRecurrence(phrase);
 
   return (
     <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -265,7 +266,10 @@ function CustomRepeatDialog({
             </Dialog.Close>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 text-sm">
+          {phrase !== null ? <label className="block text-sm">Repeat phrase
+            <Input autoFocus aria-label="Repeat phrase" className="mt-1" value={phrase} onChange={(event) => setPhrase(event.target.value)} />
+            <span className="mt-1 block text-xs text-muted-foreground">For example, every Mon and Wed, or every 2nd Friday.</span>
+          </label> : <div className="flex flex-wrap items-center gap-2 text-sm">
             <span className="text-muted-foreground">Repeat every</span>
             <Input
               type="number"
@@ -299,7 +303,7 @@ function CustomRepeatDialog({
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </div>}
 
           {showWeekday && (
             <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
@@ -365,8 +369,12 @@ function CustomRepeatDialog({
               // otherwise end up in this control's accessible name.
               aria-label="Count from the completion date"
               className="mt-0.5 size-4 accent-foreground"
-              checked={fields.fromCompletion}
-              onChange={(event) => update({ fromCompletion: event.target.checked })}
+              checked={phrase === null ? fields.fromCompletion : Boolean(rule?.startsWith("every!"))}
+              disabled={phrase !== null && !rule}
+              onChange={(event) => {
+                if (phrase !== null && rule) setPhrase(rule.replace(/^every!? /, event.target.checked ? "every! " : "every "));
+                else update({ fromCompletion: event.target.checked });
+              }}
             />
             <span>
               Count from the completion date
@@ -376,7 +384,8 @@ function CustomRepeatDialog({
             </span>
           </label>
 
-          <p className="mt-4 text-xs text-muted-foreground">
+          {phrase === null && <button type="button" className="mt-3 text-xs underline underline-offset-2" onClick={() => setPhrase(rule ?? "every week")}>Use a repeat phrase</button>}
+          <p className="mt-4 text-xs text-muted-foreground" aria-live="polite">
             {rule ? `Repeats: ${recurrenceLabel(rule)}` : "That combination isn't a valid repeat."}
           </p>
 

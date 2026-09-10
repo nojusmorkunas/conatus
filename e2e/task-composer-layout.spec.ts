@@ -28,6 +28,8 @@ test("composer highlights align and controls fit desktop and narrow mobile layou
   ] as const) {
     await page.setViewportSize({ width, height });
     await page.evaluate((isDark) => document.documentElement.classList.toggle("dark", isDark), dark);
+    await input.fill("Plan the week every Mon, Tue, Wed, Thu, Fri, Sat, Sun at noon for 1h 30m p2 #Inbox @bills");
+    await expect(form.locator('[data-token-kind="recurrence"]')).toHaveText("every Mon, Tue, Wed, Thu, Fri, Sat, Sun");
     // The mirror and textarea must have the same wrap width and typography.
     const geometry = await form.evaluate((element) => {
       const input = element.querySelector("textarea")!;
@@ -38,6 +40,7 @@ test("composer highlights align and controls fit desktop and narrow mobile layou
     expect(geometry.inputFont).toBe(geometry.mirrorFont);
     expect(geometry.overflowing).toBe(false);
     expect(geometry.viewportOverflowing).toBe(false);
+    if (reviewDir) await page.screenshot({ path: `${reviewDir}/${name}-composer.png`, fullPage: true, animations: "disabled" });
     await form.getByRole("button", { name: "Add task details" }).click();
     const menu = page.getByRole("menu", { name: "Add task details" });
     await expect(menu).toBeVisible();
@@ -46,6 +49,8 @@ test("composer highlights align and controls fit desktop and narrow mobile layou
     expect(box!.x + box!.width).toBeLessThanOrEqual(width);
     if (reviewDir) await page.screenshot({ path: `${reviewDir}/${name}.png`, fullPage: true, animations: "disabled" });
     await menu.press("Escape");
+    await expect(form).toBeVisible();
+    await expect(input).toHaveValue(/Plan the week every Mon/);
   }
 
   await input.fill("Discuss ".repeat(45) + "tomorrow p2");

@@ -1,34 +1,48 @@
-const WEEKDAY_NAMES = [
-  "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday",
-] as const;
+import { numberValue, ordinal, ordinalValue, WEEKDAY_NAMES, weekdayIndex } from "../parser/english";
 
-function weekdayIndex(word: string): number {
-  return WEEKDAY_NAMES.findIndex(
-    (name) => name === word || (word.length === 3 && name.startsWith(word)),
-  );
-}
+export { ordinal } from "../parser/english";
 
-export function ordinal(n: number): string {
-  const suffix =
-    n % 10 === 1 && n !== 11 ? "st"
-    : n % 10 === 2 && n !== 12 ? "nd"
-    : n % 10 === 3 && n !== 13 ? "rd"
-    : "th";
-  return `${n}${suffix}`;
+const ALIASES: Record<string, string> = {
+  daily: "day", weekly: "week", monthly: "month", yearly: "year", annually: "year", fortnightly: "2 weeks",
+};
+
+function monthlyAnchor(text: string): string | null {
+  const words = text.replace(/^the /, "").split(" ");
+  const day = weekdayIndex(words.at(-1) ?? "");
+  if (day >= 0) {
+    const position = words.slice(0, -1).join(" ");
+    if (position === "last") return `last ${WEEKDAY_NAMES[day]}`;
+    const nth = ordinalValue(position);
+    return nth && nth <= 5 ? `${ordinal(nth)} ${WEEKDAY_NAMES[day]}` : null;
+  }
+  if (/^last days?$/.test(text)) return "last day";
+  const nth = ordinalValue(text.replace(/^the /, ""));
+  return nth ? ordinal(nth) : null;
 }
 
 // Rule body after the "every"/"every!" head → canonical body, else null.
-// Bodies: "day|week|month|year", "N days|weeks|months|years", "<weekday>",
-// "weekday" (Mon–Fri), "last day", "<Nth>" (day of month, 1st–31st),
-// "other <day|week|month|weekday>" ("other week" → "2 weeks").
+// Bodies include intervals, weekday lists, monthly days, and monthly weekdays.
 function parseRuleBody(words: string[]): string | null {
+  const text = words.join(" ").replace(/^the /, "").replace(/ of (?:the )?month$/, "");
+  // A bare "second" can be a time unit; it isn't enough to infer the 2nd
+  // day of a month. "second Friday" and "second of every month" are clear.
+  const anchored = text === "second" ? null : monthlyAnchor(text);
+  if (anchored) return anchored;
+
+  // A list is one rule: never silently keep its first weekday. Canonical
+  // lists are unique, in Monday-first order, and round-trip through imports.
+  if (text.includes(",") || /\band\b/.test(text)) {
+    const parts = text.split(/\s*,\s*(?:and\s+)?|\s+and\s+/);
+    const days = parts.map(weekdayIndex);
+    if (days.length < 2 || days.some((day) => day < 0)) return null;
+    return [...new Set(days)].sort((a, b) => (a + 6) % 7 - (b + 6) % 7).map((day) => WEEKDAY_NAMES[day]).join(", ");
+  }
   if (words.length === 1) {
     const day = weekdayIndex(words[0]);
     if (day >= 0) return WEEKDAY_NAMES[day];
-    if (words[0] === "weekday") return "weekday";
-    const nth = /^([1-9]\d?)(?:st|nd|rd|th)$/.exec(words[0]);
-    if (nth && Number(nth[1]) <= 31 && words[0] === ordinal(Number(nth[1])))
-      return words[0];
+    if (/^weekdays?$/.test(words[0])) return "weekday";
+    if (/^weekends?$/.test(words[0])) return "saturday, sunday";
+    if (words[0] === "fortnight") return "2 weeks";
     const unit = /^(day|week|month|year)s?$/.exec(words[0]);
     return unit ? unit[1] : null;
   }
@@ -37,17 +51,14 @@ function parseRuleBody(words: string[]): string | null {
     if (words[0] === "other") {
       const day = weekdayIndex(words[1]);
       if (day >= 0) return `other ${WEEKDAY_NAMES[day]}`;
-      const unit = /^(day|week|month)s?$/.exec(words[1]);
+      const unit = /^(day|week|month|year)s?$/.exec(words[1]);
       return unit ? `2 ${unit[1]}s` : null;
     }
-    if (words[0] === "last" && /^days?$/.test(words[1])) return "last day";
-    if (/^[1-9]\d*$/.test(words[0])) {
-      const unit = /^(day|week|month|year)s?$/.exec(words[1]);
-      if (!unit) return null;
-      const n = Number(words[0]);
-      return n === 1 ? unit[1] : `${n} ${unit[1]}s`;
-    }
   }
+
+  const unit = /^(day|week|month|year)s?$/.exec(words.at(-1) ?? "");
+  const n = numberValue(words.slice(0, -1).join(" "));
+  if (unit && n !== null && Number.isInteger(n) && n >= 1 && n <= 999) return n === 1 ? unit[1] : `${n} ${unit[1]}s`;
 
   return null;
 }
@@ -57,7 +68,21 @@ function parseRuleBody(words: string[]): string | null {
 // from the completion day instead of stepping from the old due date.
 // Canonical strings round-trip: parseRecurrence(canonical) === canonical.
 export function parseRecurrence(text: string): string | null {
-  const [head, ...rest] = text.trim().toLowerCase().split(/\s+/);
+  const normalized = text.trim().toLowerCase().replace(/[.!?;:]+$/, "").replace(/\s+/g, " ");
+  if (ALIASES[normalized]) return `every ${ALIASES[normalized]}`;
+  // "the first Friday of every month" and "1st of every month" retain
+  // their monthly anchor instead of becoming a floating month interval.
+  const inverted = /^(?:the )?(.+?) of (every!?) month$/.exec(normalized);
+  if (inverted) {
+    const anchor = monthlyAnchor(inverted[1]);
+    return anchor ? `${inverted[2]} ${anchor}` : null;
+  }
+  const onMonth = /^(every!?) month on (?:the )?(.+)$/.exec(normalized);
+  if (onMonth) {
+    const anchor = monthlyAnchor(onMonth[2]);
+    return anchor ? `${onMonth[1]} ${anchor}` : null;
+  }
+  const [head, ...rest] = normalized.split(" ");
   if ((head !== "every" && head !== "every!") || rest.length === 0) return null;
   const body = parseRuleBody(rest);
   return body === null ? null : `${head} ${body}`;
@@ -97,9 +122,37 @@ function utcWeekday(date: string): number {
 // due date: "every! 3 days" → today + 3. The existing signature already
 // carries `today`, so callers need no change to get every! semantics.
 export function nextOccurrence(rule: string, from: string, today: string): string {
-  const words = rule.split(" ");
+  const canonical = parseRecurrence(rule);
+  if (!canonical) throw new Error(`Unsupported recurrence: ${rule}`);
+  const words = canonical.split(" ");
   if (words[0] === "every!") from = today;
   const floor = from > today ? from : today;
+
+  const monthlyWeekday = /^(last|[1-5](?:st|nd|rd|th)) (\w+)$/.exec(words.slice(1).join(" "));
+  const monthlyDay = monthlyWeekday && weekdayIndex(monthlyWeekday[2]);
+  if (monthlyWeekday && monthlyDay !== null && monthlyDay >= 0) {
+    const [year, month] = floor.split("-").map(Number);
+    for (let offset = 0; offset < 24; offset++) {
+      const total = year * 12 + month - 1 + offset;
+      const y = Math.floor(total / 12);
+      const m = total % 12;
+      const last = new Date(Date.UTC(y, m + 1, 0));
+      const wanted = monthlyWeekday[1] === "last"
+        ? last.getUTCDate() - (last.getUTCDay() - monthlyDay + 7) % 7
+        : 1 + (monthlyDay - new Date(Date.UTC(y, m, 1)).getUTCDay() + 7) % 7 + (parseInt(monthlyWeekday[1]) - 1) * 7;
+      // A fifth weekday skips months where it doesn't exist.
+      if (wanted > last.getUTCDate()) continue;
+      const date = new Date(Date.UTC(y, m, wanted)).toISOString().slice(0, 10);
+      if (date > floor) return date;
+    }
+    throw new Error(`Could not advance monthly weekday: ${rule}`);
+  }
+
+  if (canonical.includes(",")) {
+    const days = canonical.replace(/^every!? /, "").split(", ").map(weekdayIndex);
+    const diff = Math.min(...days.map((day) => (day - utcWeekday(floor) + 7) % 7 || 7));
+    return addDays(floor, diff);
+  }
 
   // "other <weekday>": fortnightly, anchor-preserving. The anchor is `from`
   // itself when it falls on the weekday, else the first such weekday after
@@ -109,9 +162,9 @@ export function nextOccurrence(rule: string, from: string, today: string): strin
   if (words[1] === "other") {
     const day = weekdayIndex(words[2]);
     const diff = (day - utcWeekday(from) + 7) % 7;
-    let date = addDays(from, diff || 14);
-    while (date <= today) date = addDays(date, 14);
-    return date;
+    const first = addDays(from, diff || 14);
+    const elapsed = (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${first}T00:00:00Z`)) / 86_400_000;
+    return addDays(first, Math.max(0, Math.floor(elapsed / 14) + 1) * 14);
   }
 
   // "weekday": next Mon–Fri strictly after the floor. At most 2 skips.
@@ -121,16 +174,12 @@ export function nextOccurrence(rule: string, from: string, today: string): strin
     return date;
   }
 
-  // "last day" / "<Nth>": that day each month, clamped to month length
-  // ("last day" ≡ 31st under clamping). Walk month-by-month from the
-  // anchor month so a clamped Feb never drifts the day-of-month anchor.
-  // Candidates advance ~monthly, so the walk terminates as soon as it
-  // passes `floor`; the 5000-month cap (~415 years) only guards against
-  // a bug ever making this loop infinite.
+  // "last day" / "<Nth>": that day each month, clamped to month length.
+  // Start at the floor's month while retaining the rule's day anchor.
   const nth = /^(\d+)(?:st|nd|rd|th)$/.exec(words[1]);
   if (words[1] === "last" || nth) {
     const wanted = nth ? Number(nth[1]) : 31;
-    const [year, month] = from.split("-").map(Number);
+    const [year, month] = floor.split("-").map(Number);
     for (let k = 0; k < 5000; k++) {
       const total = year * 12 + (month - 1) + k;
       const y = Math.floor(total / 12);
@@ -155,9 +204,14 @@ export function nextOccurrence(rule: string, from: string, today: string): strin
   const months = unit === "month" ? n : unit === "year" ? n * 12 : 0;
   const days = unit === "day" ? n : unit === "week" ? n * 7 : 0;
 
-  for (let step = 1; ; step++) {
+  // Jump close to the floor before checking month-end clamping. This keeps
+  // long-overdue daily tasks from walking through thousands of old dates.
+  const elapsedDays = (Date.parse(`${floor}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000;
+  const elapsedMonths = (Number(floor.slice(0, 4)) - Number(from.slice(0, 4))) * 12 + Number(floor.slice(5, 7)) - Number(from.slice(5, 7));
+  const start = months ? Math.max(1, Math.floor(elapsedMonths / months)) : Math.max(1, Math.floor(elapsedDays / days) + 1);
+  for (let step = start; ; step++) {
     const date = months ? addMonths(from, step * months) : addDays(from, step * days);
-    if (date > today) return date;
+    if (date > floor) return date;
   }
 }
 
@@ -178,7 +232,9 @@ export function nextOccurrenceWithinEnd(
 // monday", "every 15th") jump to the next matching day, so a rule picked
 // mid-week doesn't land on a date that doesn't satisfy it.
 export function firstOccurrence(rule: string, today: string): string {
-  return /^every!? (\d+ )?(day|week|month|year)s?$/.test(rule)
+  const canonical = parseRecurrence(rule);
+  if (!canonical) throw new Error(`Unsupported recurrence: ${rule}`);
+  return /^every!? (\d+ )?(day|week|month|year)s?$/.test(canonical)
     ? today
-    : nextOccurrence(rule, today, today);
+    : nextOccurrence(canonical, today, today);
 }
