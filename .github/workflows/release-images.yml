@@ -113,28 +113,3 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: gh release upload "$RELEASE_TAG" docker-compose.yml .env.example --clobber
-
-  synchronize-website:
-    name: Synchronize website release metadata
-    needs: deployment-files
-    # Prereleases keep their manual review path. A normal release reaches this
-    # job only after both images and the matching deployment assets are ready.
-    if: ${{ !github.event.release.prerelease && !github.event.release.draft }}
-    runs-on: ubuntu-latest
-    permissions: {}
-
-    steps:
-      - name: Dispatch the verified release to useconatus.com
-        env:
-          GH_TOKEN: ${{ secrets.WEBSITE_RELEASE_SYNC_TOKEN }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          RELEASE_PUBLISHED_AT: ${{ github.event.release.published_at }}
-        run: |
-          if [ -z "$GH_TOKEN" ]; then
-            echo "WEBSITE_RELEASE_SYNC_TOKEN is required to synchronize website release metadata." >&2
-            exit 1
-          fi
-          gh api --method POST repos/nojusmorkunas/useconatus/dispatches \
-            -f event_type=conatus-release-ready \
-            -f client_payload[tag]="$RELEASE_TAG" \
-            -f client_payload[published_at]="$RELEASE_PUBLISHED_AT"
