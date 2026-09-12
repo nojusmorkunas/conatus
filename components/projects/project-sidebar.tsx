@@ -671,6 +671,22 @@ export function ProjectSidebar({
         </Button>
       )}
 
+      {inboxProjectId && !mobileOpen && !quickAddOpen && (
+        <Button
+          type="button"
+          size="icon"
+          className="fixed right-[calc(1rem+env(safe-area-inset-right))] bottom-[calc(1rem+env(safe-area-inset-bottom))] z-30 size-14 rounded-full shadow-lg md:hidden"
+          aria-label="Quick add task"
+          aria-haspopup="dialog"
+          onClick={() => {
+            setQuickAddError(false);
+            setQuickAddOpen(true);
+          }}
+        >
+          <Plus className="size-7" aria-hidden="true" />
+        </Button>
+      )}
+
       {quickAddOpen && inboxProjectId && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"

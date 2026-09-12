@@ -23,6 +23,7 @@ import {
 import { toastError } from "@/components/ui/toast";
 import { TASK_INDENT_WIDTH } from "@/lib/task-tree";
 import { ProjectIconPicker, ProjectTile } from "./project-icon-picker";
+import { ProjectColorPicker } from "./project-color-picker";
 import type { Project, ProjectDropIndicator } from "./project-types";
 
 export function ProjectRow({
@@ -247,6 +248,11 @@ export function ProjectRow({
                   value={project.icon}
                   color={project.color}
                   onChange={(icon) => void patch({ icon })}
+                />
+                <div className="my-1 h-px bg-border" />
+                <ProjectColorPicker
+                  value={project.color}
+                  onChange={(color) => void patch({ color })}
                 />
               </DropdownMenuSubContent>
             </DropdownMenuSub>

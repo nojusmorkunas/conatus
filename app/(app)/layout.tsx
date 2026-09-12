@@ -80,7 +80,7 @@ export default async function AppLayout({
         counts={counts}
         todayCount={todayCount}
       />
-      <main className="flex-1 min-w-0 overflow-y-auto">{children}</main>
+      <main className="flex-1 min-w-0 overflow-y-auto pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0">{children}</main>
       <Toaster />
     </div>
   );

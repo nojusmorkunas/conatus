@@ -6,12 +6,15 @@ import {
   ArrowUpDown,
   Download,
   Ellipsis,
+  Folder,
   History,
   LayoutGrid,
   ListTodo,
   Menu,
   MessageSquare,
+  Pencil,
   Star,
+  Trash2,
   Users,
   X,
 } from "lucide-react";
@@ -38,6 +41,8 @@ import { toastError } from "@/components/ui/toast";
 import { ProjectCommentsPanel } from "./project-comments-panel";
 import { projectColorTextClass } from "./project-color-dot";
 import { ProjectIcon } from "./project-icons";
+import { ProjectIconPicker } from "./project-icon-picker";
+import { ProjectColorPicker } from "./project-color-picker";
 
 type Project = typeof projects.$inferSelect;
 type Member = { userId: string; username: string; role: "owner" | "editor" };
@@ -97,13 +102,27 @@ export function ProjectHeader({
     });
   }, [isOwner, project.id, project.isInbox, project.parentId]);
 
-  async function toggleFavorite() {
+  async function updateProject(body: { name?: string; icon?: string | null; color?: string; isFavorite?: boolean }) {
     try {
-      await api.patch(`/api/projects/${project.id}`, { isFavorite: !project.isFavorite });
+      await api.patch(`/api/projects/${project.id}`, body);
+      window.dispatchEvent(new Event("sidebar:projects:refresh"));
+      router.refresh();
+      return true;
     } catch (error) {
       toastError(error, "Couldn't update the project.");
-    } finally {
+      return false;
+    }
+  }
+
+  async function removeProject() {
+    if (!confirm(`Move "${project.name}" to Trash? Any sub-projects will move to Trash too. You can restore them later.`)) return;
+    try {
+      await api.delete(`/api/projects/${project.id}`);
+      window.dispatchEvent(new Event("sidebar:projects:refresh"));
+      router.replace("/today");
       router.refresh();
+    } catch (error) {
+      toastError(error, "Couldn't delete the project.");
     }
   }
 
@@ -127,13 +146,7 @@ export function ProjectHeader({
       setName(project.name);
       return;
     }
-    const response = await fetch(`/api/projects/${project.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: nextName }),
-    });
-    if (!response.ok) setName(project.name);
-    router.refresh();
+    if (!await updateProject({ name: nextName })) setName(project.name);
   }
 
   return (
@@ -264,7 +277,7 @@ export function ProjectHeader({
               </Button>
             }
           />
-          <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuContent align="end" className="w-52" finalFocus={!editingName}>
             <DropdownMenuGroup className="sm:hidden">
               <DropdownMenuLabel>View</DropdownMenuLabel>
               <DropdownMenuCheckboxItem
@@ -282,12 +295,32 @@ export function ProjectHeader({
             </DropdownMenuGroup>
             <DropdownMenuSeparator className="sm:hidden" />
             {isOwner && !project.isInbox && (
-              <DropdownMenuCheckboxItem
-                checked={project.isFavorite}
-                onClick={toggleFavorite}
-              >
-                <Star /> Favorite
-              </DropdownMenuCheckboxItem>
+              <>
+                <DropdownMenuItem onClick={() => { setName(project.name); setEditingName(true); }}>
+                  <Pencil /> Rename
+                </DropdownMenuItem>
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <Folder /> Change icon
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="w-64 p-2">
+                    <ProjectIconPicker
+                      value={project.icon}
+                      color={project.color}
+                      onChange={(icon) => void updateProject({ icon })}
+                    />
+                    <DropdownMenuSeparator />
+                    <ProjectColorPicker
+                      value={project.color}
+                      onChange={(color) => void updateProject({ color })}
+                    />
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                <DropdownMenuItem onClick={() => void updateProject({ isFavorite: !project.isFavorite })}>
+                  <Star /> {project.isFavorite ? "Unpin it" : "Pin it!"}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
             )}
             <DropdownMenuItem onClick={() => setSharingOpen((open) => !open)}>
               <Users /> {isOwner ? "Share" : "View members"}
@@ -332,6 +365,14 @@ export function ProjectHeader({
                     ))}
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
+              </>
+            )}
+            {isOwner && !project.isInbox && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" onClick={() => void removeProject()}>
+                  <Trash2 /> Move to Trash
+                </DropdownMenuItem>
               </>
             )}
           </DropdownMenuContent>
