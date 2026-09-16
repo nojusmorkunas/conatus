@@ -1,12 +1,13 @@
 import { eq } from "drizzle-orm";
 
+import { unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 
 export async function POST() {
   const user = await requireUser();
-  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return unauthorized();
 
   await db
     .update(users)

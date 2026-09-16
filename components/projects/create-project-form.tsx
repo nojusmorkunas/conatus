@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { jsonInit } from "@/lib/api-client";
 import {
   Select,
   SelectContent,
@@ -38,16 +39,12 @@ export function CreateProjectForm({
 
     setPending(true);
     setError(null);
-    const response = await fetch("/api/projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const response = await fetch("/api/projects", jsonInit("POST", {
         name,
         icon,
         color,
         parentId: parentId === "none" ? null : parentId,
-      }),
-    });
+      }));
     setPending(false);
 
     if (!response.ok) {

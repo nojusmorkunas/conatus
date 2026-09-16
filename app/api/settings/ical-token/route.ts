@@ -1,15 +1,14 @@
 import { randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 
+import { unauthorized } from "@/lib/api/responses";
 import { requireSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 
 export async function POST() {
   const user = await requireSessionUser();
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const token = randomBytes(24).toString("base64url");
   await db
@@ -22,9 +21,7 @@ export async function POST() {
 
 export async function DELETE() {
   const user = await requireSessionUser();
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   await db
     .update(users)

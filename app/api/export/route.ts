@@ -1,14 +1,13 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
+import { unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { labels, projects, sections, taskLabels, tasks } from "@/lib/db/schema";
 
 export async function GET() {
   const user = await requireUser();
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   // Export covers own projects only. Tasks created in someone else's
   // shared project stay out so the file round-trips through import.

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { ResendVerificationForm } from "@/components/auth/resend-verification-form";
+import { jsonInit } from "@/lib/api-client";
 
 type VerificationState = "pending" | "success" | "error";
 
@@ -16,12 +17,7 @@ export function VerifyEmail({ token }: { token?: string }) {
     if (!token) return;
 
     const controller = new AbortController();
-    fetch("/api/auth/verify-email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token }),
-      signal: controller.signal,
-    }).then((response) => {
+    fetch("/api/auth/verify-email", { ...jsonInit("POST", { token }), signal: controller.signal }).then((response) => {
       setState(response.ok ? "success" : "error");
     }).catch((error: unknown) => {
       if (error instanceof Error && error.name === "AbortError") return;

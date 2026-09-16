@@ -12,6 +12,7 @@ import {
   FieldError,
   FieldLabel,
 } from "@/components/ui/field";
+import { jsonInit } from "@/lib/api-client";
 import { resendVerificationSchema } from "@/lib/validation";
 
 type ResendVerificationInput = z.infer<typeof resendVerificationSchema>;
@@ -34,11 +35,7 @@ export function ResendVerificationForm({
 
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
-    const response = await fetch("/api/auth/verify-email/resend", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(values),
-    });
+    const response = await fetch("/api/auth/verify-email/resend", jsonInit("POST", values));
     if (!response.ok) {
       setError("Something went wrong. Please try again.");
       return;

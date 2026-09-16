@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 
+import { invalid, notFound, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { comments } from "@/lib/db/schema";
@@ -18,22 +19,15 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireUser("comments:write");
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const { id } = await params;
   const comment = await ownedComment(user.id, id);
-  if (!comment) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!comment) return notFound();
 
   const parsed = commentUpdateSchema.safeParse(await request.json());
   if (!parsed.success) {
-    return Response.json(
-      { error: parsed.error.flatten().fieldErrors },
-      { status: 400 },
-    );
+    return invalid(parsed.error);
   }
 
   const [updated] = await db
@@ -50,15 +44,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireUser("comments:delete");
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const { id } = await params;
   const comment = await ownedComment(user.id, id);
-  if (!comment) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!comment) return notFound();
 
   await db.delete(comments).where(eq(comments.id, id));
 

@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 
+import { notFound, unauthorized } from "@/lib/api/responses";
 import { requireSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { apiTokens } from "@/lib/db/schema";
@@ -9,9 +10,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireSessionUser();
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const { id } = await params;
   const [deleted] = await db
@@ -20,9 +19,7 @@ export async function DELETE(
     .where(and(eq(apiTokens.id, id), eq(apiTokens.userId, user.id)))
     .returning({ id: apiTokens.id });
 
-  if (!deleted) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!deleted) return notFound();
 
   return Response.json({ ok: true });
 }

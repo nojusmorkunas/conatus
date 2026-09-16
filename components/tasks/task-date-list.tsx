@@ -7,6 +7,7 @@ import { CheckCircle2 } from "lucide-react";
 import { TaskModal } from "./task-modal";
 import { TaskRow } from "./task-row";
 import type { Label, TaskWithLabels } from "./types";
+import { jsonInit } from "@/lib/api-client";
 import { usePendingAction } from "@/lib/use-pending-action";
 import { completeRecurring } from "@/lib/recurring-complete";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -53,11 +54,7 @@ export function TaskDateList({
 
   function patch(taskId: string, body: Record<string, unknown>) {
     return withError(() =>
-      fetch(`/api/tasks/${taskId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      }),
+      fetch(`/api/tasks/${taskId}`, jsonInit("PATCH", body)),
     );
   }
 
@@ -131,10 +128,7 @@ export function TaskDateList({
   }
 
   async function duplicateTask(task: TaskWithLabels) {
-    const response = await fetch("/api/tasks", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const response = await fetch("/api/tasks", jsonInit("POST", {
         projectId: task.projectId,
         sectionId: task.sectionId,
         parentId: task.parentId,
@@ -147,8 +141,7 @@ export function TaskDateList({
         durationMinutes: task.durationMinutes,
         recurrence: task.recurrence,
         afterId: task.id,
-      }),
-    });
+      }));
     if (!response.ok) { setError("That didn't work. Try again."); return; }
     const duplicate: { id: string } = await response.json();
     if (task.labels.length) await patch(duplicate.id, { labelIds: task.labels.map((label) => label.id) });

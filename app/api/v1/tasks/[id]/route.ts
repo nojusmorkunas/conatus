@@ -4,6 +4,7 @@ import {
   DELETE,
   PATCH,
 } from "@/app/api/tasks/[id]/route";
+import { notFound, unauthorized } from "@/lib/api/responses";
 import { requireApiActor } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { requireTaskAccess } from "@/lib/db/access";
@@ -19,10 +20,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const actor = await requireApiActor("tasks:read");
-  if (!actor) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!actor) return unauthorized();
   const { id } = await params;
   const task = await requireTaskAccess(actor.id, id);
-  if (!task) return Response.json({ error: "Not found" }, { status: 404 });
+  if (!task) return notFound();
 
   const [withTaskLabels] = hasScope(actor.scopes, "labels:read")
     ? await withLabels([task], actor.id)

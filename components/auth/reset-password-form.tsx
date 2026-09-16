@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import type { z } from "zod";
 
+import { jsonInit } from "@/lib/api-client";
 import { passwordResetFormSchema } from "@/lib/validation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,11 +32,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
 
   const onSubmit = handleSubmit(async ({ password, confirmPassword }) => {
     setError(null);
-    const response = await fetch("/api/auth/password-reset/confirm", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, password, confirmPassword }),
-    });
+    const response = await fetch("/api/auth/password-reset/confirm", jsonInit("POST", { token, password, confirmPassword }));
     if (!response.ok) {
       setError(
         response.status === 400

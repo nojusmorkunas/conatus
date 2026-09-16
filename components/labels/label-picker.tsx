@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { Plus, Tag } from "lucide-react";
 
+import { jsonInit } from "@/lib/api-client";
 import type { labels as labelsTable } from "@/lib/db/schema";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,11 +51,7 @@ export function LabelPicker({
     setCreating(true);
     setError(null);
     try {
-      const response = await fetch("/api/labels", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, color: "gray" }),
-      });
+      const response = await fetch("/api/labels", jsonInit("POST", { name, color: "gray" }));
       if (!response.ok) {
         setError("Could not create label. Try a different name.");
         return;

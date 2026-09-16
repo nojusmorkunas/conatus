@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Repeat2 } from "lucide-react";
+import { jsonInit } from "@/lib/api-client";
 import { calendarOccurrences, type CalendarOccurrence } from "@/lib/calendar";
 import { useRouter } from "next/navigation";
 import {
@@ -90,11 +91,7 @@ export function CalendarView({
       existing.id === taskId ? { ...existing, dueDate: date, dueTime } : existing,
     ));
     try {
-      const response = await fetch(`/api/tasks/${taskId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dueDate: date, dueTime }),
-      });
+      const response = await fetch(`/api/tasks/${taskId}`, jsonInit("PATCH", { dueDate: date, dueTime }));
       if (!response.ok) throw new Error("Move failed");
       router.refresh();
     } catch {

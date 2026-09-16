@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { Pencil, Trash2, X } from "lucide-react";
 
+import { jsonInit } from "@/lib/api-client";
 import type { comments as commentsTable } from "@/lib/db/schema";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -57,11 +58,7 @@ export function ProjectCommentsPanel({
 
   async function addComment(content: string) {
     const response = await withError(() =>
-      fetch("/api/comments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId, content }),
-      }),
+      fetch("/api/comments", jsonInit("POST", { projectId, content })),
     );
     if (!response) return false;
     const comment = await response.json();
@@ -73,11 +70,7 @@ export function ProjectCommentsPanel({
 
   async function editComment(comment: Comment, content: string) {
     const response = await withError(() =>
-      fetch(`/api/comments/${comment.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
-      }),
+      fetch(`/api/comments/${comment.id}`, jsonInit("PATCH", { content })),
     );
     if (!response) return false;
     const updated = await response.json();

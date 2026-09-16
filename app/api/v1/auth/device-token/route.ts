@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 
+import { invalid } from "@/lib/api/responses";
 import { agentTokenScopes, generateAgentToken } from "@/lib/auth/api-token";
 import {
   LOGIN_RETRY_AFTER_SECONDS,
@@ -19,10 +20,7 @@ export async function POST(request: Request) {
     await request.json().catch(() => null),
   );
   if (!parsed.success) {
-    return Response.json(
-      { error: parsed.error.flatten().fieldErrors },
-      { status: 400 },
-    );
+    return invalid(parsed.error);
   }
 
   const username = normalizeUsername(parsed.data.username);

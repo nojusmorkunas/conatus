@@ -8,6 +8,7 @@ import { signIn } from "next-auth/react";
 import Link from "next/link";
 import type { z } from "zod";
 
+import { jsonInit } from "@/lib/api-client";
 import { registerSchema } from "@/lib/validation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,11 +48,7 @@ export function RegisterForm({
     setError(null);
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
-    const response = await fetch("/api/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password, timezone, inviteToken }),
-    });
+    const response = await fetch("/api/register", jsonInit("POST", { username, password, timezone, inviteToken }));
 
     if (!response.ok) {
       const body = await response.json().catch(() => null);

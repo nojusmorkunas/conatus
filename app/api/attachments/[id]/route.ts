@@ -2,6 +2,7 @@ import { Readable } from "node:stream";
 
 import { eq } from "drizzle-orm";
 
+import { notFound, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { requireTaskAccess } from "@/lib/db/access";
@@ -24,15 +25,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireUser();
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const { id } = await params;
   const attachment = await accessibleAttachment(user.id, id);
-  if (!attachment) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!attachment) return notFound();
 
   await ensureBucket();
   // Object keys are prefixed with the *uploader's* id, not the requester's.
@@ -52,15 +49,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireUser();
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const { id } = await params;
   const attachment = await accessibleAttachment(user.id, id);
-  if (!attachment) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!attachment) return notFound();
 
   await ensureBucket();
   try {

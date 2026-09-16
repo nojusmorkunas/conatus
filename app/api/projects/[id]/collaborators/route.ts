@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
+import { notFound, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { normalizeUsername } from "@/lib/auth/registration";
 import { db } from "@/lib/db";
@@ -19,15 +20,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireUser();
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const { id } = await params;
   const access = await requireProjectAccess(user.id, id);
-  if (!access) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!access) return notFound();
   if (access.role !== "owner") {
     return Response.json(
       { error: "Only the project owner can manage collaborators" },
@@ -55,15 +52,11 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireUser();
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const { id } = await params;
   const access = await requireProjectAccess(user.id, id);
-  if (!access) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!access) return notFound();
   if (access.role !== "owner") {
     return Response.json(
       { error: "Only the project owner can manage collaborators" },
@@ -117,15 +110,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireUser();
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const { id } = await params;
   const access = await requireProjectAccess(user.id, id);
-  if (!access) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!access) return notFound();
 
   const parsed = removeSchema.safeParse(await request.json());
   if (!parsed.success) {
@@ -152,9 +141,7 @@ export async function DELETE(
       ),
     )
     .returning();
-  if (removed.length === 0) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (removed.length === 0) return notFound();
 
   // Removing a collaborator also removes assignments that would otherwise
   // point at someone who can no longer access this project's tasks.

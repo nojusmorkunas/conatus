@@ -5,6 +5,7 @@ import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { jsonInit } from "@/lib/api-client";
 
 export function CreateSectionForm({
   projectId,
@@ -26,11 +27,7 @@ export function CreateSectionForm({
     if (!name.trim()) return;
 
     setPending(true);
-    const response = await fetch("/api/sections", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId, name: name.trim(), afterId }),
-    });
+    const response = await fetch("/api/sections", jsonInit("POST", { projectId, name: name.trim(), afterId }));
     setPending(false);
 
     if (!response.ok) {

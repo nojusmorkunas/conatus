@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 
+import { invalid, unauthorized } from "@/lib/api/responses";
 import { requireSessionUser } from "@/lib/auth/session";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { db } from "@/lib/db";
@@ -8,18 +9,13 @@ import { passwordChangeSchema } from "@/lib/validation";
 
 export async function POST(request: Request) {
   const sessionUser = await requireSessionUser();
-  if (!sessionUser) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!sessionUser) return unauthorized();
 
   const parsed = passwordChangeSchema.safeParse(
     await request.json().catch(() => null),
   );
   if (!parsed.success) {
-    return Response.json(
-      { error: parsed.error.flatten().fieldErrors },
-      { status: 400 },
-    );
+    return invalid(parsed.error);
   }
 
   const [user] = await db
@@ -28,9 +24,7 @@ export async function POST(request: Request) {
     .where(eq(users.id, sessionUser.id))
     .limit(1);
 
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   if (
     user.passwordHash !== null &&

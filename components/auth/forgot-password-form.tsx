@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import type { z } from "zod";
 
+import { jsonInit } from "@/lib/api-client";
 import { requestPasswordResetSchema } from "@/lib/validation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,11 +32,7 @@ export function ForgotPasswordForm() {
 
   const onSubmit = handleSubmit(async ({ email }) => {
     setError(null);
-    const response = await fetch("/api/auth/password-reset/request", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
-    });
+    const response = await fetch("/api/auth/password-reset/request", jsonInit("POST", { email }));
     if (!response.ok) {
       setError("Something went wrong. Please try again.");
       return;

@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { jsonInit } from "@/lib/api-client";
 import { CheckCircle2, Trash2 } from "lucide-react";
 
 type CompletedTask = {
@@ -51,11 +52,7 @@ export function CompletedTaskList({
   async function restore(task: CompletedTask, group: string) {
     setError(null);
     removeTask(task.id);
-    const response = await fetch(`/api/tasks/${task.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ completed: false }),
-    });
+    const response = await fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", { completed: false }));
     if (!response.ok) {
       setError("Couldn't restore that task. Try again.");
       restoreTask(task, group);

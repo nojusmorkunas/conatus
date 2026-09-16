@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 
+import { invalid, notFound, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { filters } from "@/lib/db/schema";
@@ -18,22 +19,15 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireUser();
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const { id } = await params;
   const filter = await ownedFilter(user.id, id);
-  if (!filter) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!filter) return notFound();
 
   const parsed = filterUpdateSchema.safeParse(await request.json());
   if (!parsed.success) {
-    return Response.json(
-      { error: parsed.error.flatten().fieldErrors },
-      { status: 400 },
-    );
+    return invalid(parsed.error);
   }
 
   const [updated] = await db
@@ -50,15 +44,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireUser();
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const { id } = await params;
   const filter = await ownedFilter(user.id, id);
-  if (!filter) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!filter) return notFound();
 
   await db.delete(filters).where(eq(filters.id, id));
 

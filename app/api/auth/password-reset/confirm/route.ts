@@ -1,5 +1,6 @@
 import { and, eq, isNull, ne } from "drizzle-orm";
 
+import { invalid } from "@/lib/api/responses";
 import { hashToken } from "@/lib/auth/api-token";
 import { hashPassword } from "@/lib/auth/password";
 import { db } from "@/lib/db";
@@ -14,10 +15,7 @@ export async function POST(request: Request) {
     await request.json().catch(() => null),
   );
   if (!parsed.success) {
-    return Response.json(
-      { error: parsed.error.flatten().fieldErrors },
-      { status: 400 },
-    );
+    return invalid(parsed.error);
   }
 
   const [resetToken] = await db

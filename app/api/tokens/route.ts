@@ -5,6 +5,7 @@ import {
   agentTokenScopes,
   generateAgentToken,
 } from "@/lib/auth/api-token";
+import { invalid, unauthorized } from "@/lib/api/responses";
 import { requireSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { apiTokens } from "@/lib/db/schema";
@@ -12,9 +13,7 @@ import { apiTokenCreateSchema } from "@/lib/validation";
 
 export async function GET() {
   const user = await requireSessionUser();
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const tokens = await db
     .select({
@@ -36,16 +35,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const user = await requireSessionUser();
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const parsed = apiTokenCreateSchema.safeParse(await request.json());
   if (!parsed.success) {
-    return Response.json(
-      { error: parsed.error.flatten().fieldErrors },
-      { status: 400 },
-    );
+    return invalid(parsed.error);
   }
 
   const generated = generateAgentToken();

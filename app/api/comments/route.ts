@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 
+import { invalid, notFound, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { requireProjectAccess, requireTaskAccess } from "@/lib/db/access";
@@ -9,9 +10,7 @@ import { commentCreateSchema } from "@/lib/validation";
 
 export async function GET(request: Request) {
   const user = await requireUser("comments:read");
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const params = new URL(request.url).searchParams;
   const taskId = params.get("taskId");
@@ -23,9 +22,7 @@ export async function GET(request: Request) {
   const scope = taskId
     ? await requireTaskAccess(user.id, taskId)
     : await requireProjectAccess(user.id, projectId!);
-  if (!scope) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!scope) return notFound();
 
   const scopeComments = await db
     .select()
@@ -38,23 +35,18 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const user = await requireUser("comments:write");
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const parsed = commentCreateSchema.safeParse(await request.json());
   if (!parsed.success) {
-    return Response.json(
-      { error: parsed.error.flatten().fieldErrors },
-      { status: 400 },
-    );
+    return invalid(parsed.error);
   }
 
   const { taskId, projectId, content } = parsed.data;
 
   if (taskId) {
     const task = await requireTaskAccess(user.id, taskId);
-    if (!task) return Response.json({ error: "Not found" }, { status: 404 });
+    if (!task) return notFound();
 
     const [comment] = await db
       .insert(comments)
@@ -76,7 +68,7 @@ export async function POST(request: Request) {
   }
 
   const access = await requireProjectAccess(user.id, projectId!);
-  if (!access) return Response.json({ error: "Not found" }, { status: 404 });
+  if (!access) return notFound();
 
   const [comment] = await db
     .insert(comments)

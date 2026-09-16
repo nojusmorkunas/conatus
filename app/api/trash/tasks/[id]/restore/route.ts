@@ -1,5 +1,6 @@
 import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 
+import { notFound, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { projectCollaborators, projects, tasks } from "@/lib/db/schema";
@@ -10,7 +11,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireUser("tasks:write");
-  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return unauthorized();
 
   const { id } = await params;
   const [row] = await db
@@ -25,9 +26,7 @@ export async function POST(
       ),
     )
     .where(and(eq(tasks.id, id), isNotNull(tasks.deletedAt), isNull(projects.deletedAt)));
-  if (!row || (row.ownerId !== user.id && !row.collaboratorId)) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!row || (row.ownerId !== user.id && !row.collaboratorId)) return notFound();
 
   // A child is restored with its deleted descendants. Trash only offers root
   // tasks, so this cannot revive a task beneath a still-deleted parent.
