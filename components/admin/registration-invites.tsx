@@ -5,6 +5,7 @@ import { Copy, Link2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { jsonInit } from "@/lib/api-client";
 
 type Invitation = {
   id: string;
@@ -29,11 +30,7 @@ export function RegistrationInvites({
     setPending(true);
     setMessage(null);
     setCreatedUrl(null);
-    const response = await fetch("/api/admin/registration-invites", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: username.trim() }),
-    });
+    const response = await fetch("/api/admin/registration-invites", jsonInit("POST", { username: username.trim() }));
     const body = await response.json().catch(() => null);
     setPending(false);
     if (!response.ok) {

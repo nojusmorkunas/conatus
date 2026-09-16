@@ -13,7 +13,7 @@ import {
   type SettingsInput,
 } from "@/lib/validation";
 import { activityGraphSourceOptions } from "@/lib/activity-sources";
-import { api } from "@/lib/api-client";
+import { api, jsonInit } from "@/lib/api-client";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -112,11 +112,7 @@ export function SettingsForm({
     setImportResult(null);
     try {
       const body = JSON.parse(await file.text());
-      const res = await fetch("/api/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      const res = await fetch("/api/import", jsonInit("POST", body));
       const result = await res.json();
       setImportResult(
         res.ok
@@ -182,11 +178,7 @@ export function SettingsForm({
     if (!apiTokenName.trim()) return;
 
     setCreatingApiToken(true);
-    const res = await fetch("/api/tokens", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: apiTokenName }),
-    });
+    const res = await fetch("/api/tokens", jsonInit("POST", { name: apiTokenName }));
     if (res.ok) {
       const result = await res.json();
       setCreatedApiToken({ id: result.id, raw: result.token });
@@ -217,11 +209,7 @@ export function SettingsForm({
     if (!webhookUrl.trim()) return;
 
     setCreatingWebhook(true);
-    const res = await fetch("/api/webhooks", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: webhookUrl }),
-    });
+    const res = await fetch("/api/webhooks", jsonInit("POST", { url: webhookUrl }));
     if (res.ok) {
       const result = await res.json();
       setWebhooks((current) => [{
@@ -253,11 +241,7 @@ export function SettingsForm({
   };
 
   const onEnableWebhook = async (id: string) => {
-    const res = await fetch(`/api/webhooks/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isActive: true }),
-    });
+    const res = await fetch(`/api/webhooks/${id}`, jsonInit("PATCH", { isActive: true }));
     if (!res.ok) return;
     const webhook = await res.json();
     setWebhooks((current) => current.map((item) => item.id === id ? webhook : item));

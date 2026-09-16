@@ -39,6 +39,7 @@ import {
 } from "@dnd-kit/sortable";
 import { generateKeyBetween } from "fractional-indexing";
 
+import { jsonInit } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -272,11 +273,7 @@ export function ProjectSidebar({
     ).sort((a, b) => (a.order < b.order ? -1 : 1)));
 
     try {
-      const response = await fetch(`/api/projects/${moving.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ parentId, afterId }),
-      });
+      const response = await fetch(`/api/projects/${moving.id}`, jsonInit("PATCH", { parentId, afterId }));
       if (!response.ok) {
         const body = await response.json().catch(() => null) as { error?: unknown } | null;
         setProjects(previousProjects);
@@ -332,11 +329,7 @@ export function ProjectSidebar({
     ));
 
     try {
-      const response = await fetch(`/api/projects/${moving.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ favoriteAfterId: previous?.id ?? null }),
-      });
+      const response = await fetch(`/api/projects/${moving.id}`, jsonInit("PATCH", { favoriteAfterId: previous?.id ?? null }));
       if (!response.ok) {
         const body = await response.json().catch(() => null) as { error?: unknown } | null;
         setProjects(previousProjects);

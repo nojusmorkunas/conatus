@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { Filter, Plus } from "lucide-react";
 
+import { jsonInit } from "@/lib/api-client";
 import type { filters as filtersTable, labels as labelsTable } from "@/lib/db/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,11 +58,7 @@ export function FiltersLabelsManager({
     setSaving(true);
 
     try {
-      const response = await fetch("/api/filters", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: filterName, query: filterQuery }),
-      });
+      const response = await fetch("/api/filters", jsonInit("POST", { name: filterName, query: filterQuery }));
       if (!response.ok) {
         setError(await errorMessage(response));
         return;
@@ -82,11 +79,7 @@ export function FiltersLabelsManager({
     setSaving(true);
 
     try {
-      const response = await fetch("/api/labels", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: labelName, color: labelColor }),
-      });
+      const response = await fetch("/api/labels", jsonInit("POST", { name: labelName, color: labelColor }));
       if (!response.ok) {
         setError(await errorMessage(response));
         return;

@@ -5,6 +5,7 @@ import { signOut } from "next-auth/react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { jsonInit } from "@/lib/api-client";
 
 export function AccountSettings({
   username,
@@ -37,11 +38,7 @@ export function AccountSettings({
     }
 
     setPasswordPending(true);
-    const response = await fetch("/api/account/password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
-    });
+    const response = await fetch("/api/account/password", jsonInit("POST", { currentPassword, newPassword, confirmPassword }));
     const result = await response.json();
     setPasswordPending(false);
 
@@ -66,11 +63,7 @@ export function AccountSettings({
     setDeleteError(null);
     setDeletePending(true);
 
-    const response = await fetch("/api/account", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: confirmationUsername }),
-    });
+    const response = await fetch("/api/account", jsonInit("DELETE", { username: confirmationUsername }));
 
     if (!response.ok) {
       const result = await response.json();

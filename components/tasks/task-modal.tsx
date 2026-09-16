@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode, type RefOb
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight, ChevronUp, Ellipsis, Flag, Paperclip, Pencil, Plus, Repeat, Trash2, X } from "lucide-react";
 
+import { jsonInit } from "@/lib/api-client";
 import type { attachments as attachmentsTable, comments as commentsTable, reminders as remindersTable } from "@/lib/db/schema";
 import { dueLabel, humanizeDuration, pastDateLabel } from "@/lib/dates";
 import { firstOccurrence } from "@/lib/recurrence";
@@ -83,7 +84,7 @@ export function TaskModal({ task, labels, members = [], currentUserId, today, da
     return response;
   }
   async function patch(body: object) {
-    const response = await withError(() => fetch(`/api/tasks/${task.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }));
+    const response = await withError(() => fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", body)));
     if (response) onChanged();
     return response;
   }
@@ -157,13 +158,13 @@ export function TaskModal({ task, labels, members = [], currentUserId, today, da
 
   async function saveTitle() { setEditingTitle(false); const content = title.trim(); if (content && content !== task.content) await patch({ content }); else setTitle(task.content); }
   async function saveDescription() { setEditingDescription(false); if (description !== (task.description ?? "")) await patch({ description: description || null }); }
-  async function toggleSubtask(subtask: TaskWithLabels) { const response = await withError(() => fetch(`/api/tasks/${subtask.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ completed: !subtask.isCompleted }) })); if (response) { await fetchProjectTasks(); onChanged(); } }
-  async function addComment(content: string) { const response = await withError(() => fetch("/api/comments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ taskId: task.id, content }) })); if (response) { const comment = await response.json(); setComments((current) => [...current, comment]); onChanged(); } }
-  async function editComment(comment: Comment, content: string) { const response = await withError(() => fetch(`/api/comments/${comment.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content }) })); if (response) { const updated = await response.json(); setComments((current) => current.map((item) => item.id === updated.id ? updated : item)); onChanged(); } }
+  async function toggleSubtask(subtask: TaskWithLabels) { const response = await withError(() => fetch(`/api/tasks/${subtask.id}`, jsonInit("PATCH", { completed: !subtask.isCompleted }))); if (response) { await fetchProjectTasks(); onChanged(); } }
+  async function addComment(content: string) { const response = await withError(() => fetch("/api/comments", jsonInit("POST", { taskId: task.id, content }))); if (response) { const comment = await response.json(); setComments((current) => [...current, comment]); onChanged(); } }
+  async function editComment(comment: Comment, content: string) { const response = await withError(() => fetch(`/api/comments/${comment.id}`, jsonInit("PATCH", { content }))); if (response) { const updated = await response.json(); setComments((current) => current.map((item) => item.id === updated.id ? updated : item)); onChanged(); } }
   async function deleteComment(comment: Comment) { const response = await withError(() => fetch(`/api/comments/${comment.id}`, { method: "DELETE" })); if (response) { setComments((current) => current.filter((item) => item.id !== comment.id)); onChanged(); } }
   async function uploadFile(file: File) { const body = new FormData(); body.set("taskId", task.id); body.set("file", file); setUploading(true); const response = await withError(() => fetch("/api/attachments", { method: "POST", body })); setUploading(false); if (fileInputRef.current) fileInputRef.current.value = ""; if (response) { const attachment = await response.json(); setAttachments((current) => [...current, attachment]); onChanged(); } }
   async function deleteAttachment(attachment: Attachment) { const response = await withError(() => fetch(`/api/attachments/${attachment.id}`, { method: "DELETE" })); if (response) { setAttachments((current) => current.filter((item) => item.id !== attachment.id)); onChanged(); } }
-  async function addReminder() { if (!reminderValue) return; const response = await withError(() => fetch("/api/reminders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ taskId: task.id, remindAt: new Date(reminderValue).toISOString() }) })); if (response) { const reminder = await response.json(); setReminders((current) => [...current, reminder]); setReminderValue(""); setAddingReminder(false); onChanged(); } }
+  async function addReminder() { if (!reminderValue) return; const response = await withError(() => fetch("/api/reminders", jsonInit("POST", { taskId: task.id, remindAt: new Date(reminderValue).toISOString() }))); if (response) { const reminder = await response.json(); setReminders((current) => [...current, reminder]); setReminderValue(""); setAddingReminder(false); onChanged(); } }
   async function deleteReminder(reminder: Reminder) { const response = await withError(() => fetch(`/api/reminders/${reminder.id}`, { method: "DELETE" })); if (response) { setReminders((current) => current.filter((item) => item.id !== reminder.id)); onChanged(); } }
 
   return <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:p-4 md:py-[6vh]" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>

@@ -23,6 +23,7 @@ import type {
   labels as labelsTable,
   sections as sectionsTable,
 } from "@/lib/db/schema";
+import { jsonInit } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { completeRecurring } from "@/lib/recurring-complete";
 import { LabelChip } from "@/components/labels/label-chip";
@@ -120,11 +121,7 @@ export function Board({
       ),
     );
     const ok = await withError(() =>
-      fetch(`/api/tasks/${task.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ completed: true }),
-      }),
+      fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", { completed: true })),
     );
     if (!ok) await refresh();
   }
@@ -172,11 +169,7 @@ export function Board({
     );
 
     const ok = await withError(() =>
-      fetch(`/api/tasks/${task.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sectionId, afterId: before?.id ?? null }),
-      }),
+      fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", { sectionId, afterId: before?.id ?? null })),
     );
     if (!ok) await refresh();
   }

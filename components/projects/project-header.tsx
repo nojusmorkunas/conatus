@@ -21,7 +21,7 @@ import {
 
 import type { projects } from "@/lib/db/schema";
 import type { SortBy } from "@/lib/task-sort";
-import { api } from "@/lib/api-client";
+import { api, jsonInit } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -129,11 +129,7 @@ export function ProjectHeader({
   async function moveProject(value: unknown) {
     if (typeof value !== "string") return;
     const nextParentId = value === "none" ? null : value;
-    const response = await fetch(`/api/projects/${project.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ parentId: nextParentId }),
-    });
+    const response = await fetch(`/api/projects/${project.id}`, jsonInit("PATCH", { parentId: nextParentId }));
     if (!response.ok) return;
     setParentId(value);
     router.refresh();
@@ -453,11 +449,7 @@ function SharePanel({
     setPending(true);
     setError(null);
     setConfirmation(null);
-    const response = await fetch(`/api/projects/${projectId}/collaborators`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: username.trim() }),
-    });
+    const response = await fetch(`/api/projects/${projectId}/collaborators`, jsonInit("POST", { username: username.trim() }));
     setPending(false);
 
     if (!response.ok) {
@@ -472,11 +464,7 @@ function SharePanel({
   }
 
   async function remove(userId: string) {
-    const response = await fetch(`/api/projects/${projectId}/collaborators`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId }),
-    });
+    const response = await fetch(`/api/projects/${projectId}/collaborators`, jsonInit("DELETE", { userId }));
     if (!response.ok) return;
 
     if (userId === currentUserId) {

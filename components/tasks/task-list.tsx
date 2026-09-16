@@ -25,6 +25,7 @@ import { generateKeyBetween } from "fractional-indexing";
 
 import { TaskDragPreview } from "./task-row";
 import { taskCollisionDetection, taskDropAnimation, taskKeyboardCoordinates } from "./task-drag";
+import { jsonInit } from "@/lib/api-client";
 import { projectTaskDrop, type TaskDropProjection, type TaskDropTarget } from "@/lib/task-drop";
 import { TaskModal } from "./task-modal";
 import { TaskGroup } from "./task-group";
@@ -193,11 +194,7 @@ export function TaskList({
         ),
       );
       const ok = await withError(() =>
-        fetch(`/api/tasks/${task.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ completed: false }),
-        }),
+        fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", { completed: false })),
       );
       if (!ok) await refresh();
       return;
@@ -245,11 +242,7 @@ export function TaskList({
       `Completed "${task.content}"`,
       async () => {
         const ok = await withError(() =>
-          fetch(`/api/tasks/${task.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ completed: true }),
-          }),
+          fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", { completed: true })),
         );
         if (!ok) await refresh();
       },
@@ -280,11 +273,7 @@ export function TaskList({
     durationMinutes: number | null,
   ) {
     const ok = await withError(() =>
-      fetch(`/api/tasks/${task.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dueDate, dueTime, deadlineDate, durationMinutes }),
-      }),
+      fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", { dueDate, dueTime, deadlineDate, durationMinutes })),
     );
     if (ok) await refresh();
   }
@@ -312,10 +301,7 @@ export function TaskList({
 
   async function duplicateTask(task: TaskWithLabels) {
     setError(null);
-    const response = await fetch("/api/tasks", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const response = await fetch("/api/tasks", jsonInit("POST", {
           projectId: task.projectId,
           sectionId: task.sectionId,
           parentId: task.parentId,
@@ -328,8 +314,7 @@ export function TaskList({
         durationMinutes: task.durationMinutes,
         recurrence: task.recurrence,
         afterId: task.id,
-      }),
-    });
+      }));
     if (!response.ok) {
       setError("That didn't work. Try again.");
       return;
@@ -344,11 +329,7 @@ export function TaskList({
 
   async function changeLabels(task: TaskWithLabels, labelIds: string[]) {
     const ok = await withError(() =>
-      fetch(`/api/tasks/${task.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ labelIds }),
-      }),
+      fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", { labelIds })),
     );
     if (ok) await refresh();
   }
@@ -358,11 +339,7 @@ export function TaskList({
     assigneeId: string | null,
   ) {
     const ok = await withError(() =>
-      fetch(`/api/tasks/${task.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assigneeId }),
-      }),
+      fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", { assigneeId })),
     );
     if (ok) await refresh();
   }
@@ -389,11 +366,7 @@ export function TaskList({
   }
 
   function patchTask(taskId: string, body: object) {
-    return fetch(`/api/tasks/${taskId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    return fetch(`/api/tasks/${taskId}`, jsonInit("PATCH", body));
   }
 
   function selectedTasks() {
@@ -598,11 +571,7 @@ export function TaskList({
     );
 
     const ok = await withError(() =>
-      fetch(`/api/sections/${section.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ afterId: before?.id ?? null }),
-      }),
+      fetch(`/api/sections/${section.id}`, jsonInit("PATCH", { afterId: before?.id ?? null })),
     );
     if (!ok) router.refresh();
   }
@@ -710,9 +679,7 @@ export function TaskList({
                 onSelectionToggle={toggleTaskSelection}
                 onToggleTaskCollapsed={toggleTaskCollapsed}
                 onRenameSection={(section, name) =>
-                  mutateSection(() => fetch(`/api/sections/${section.id}`, {
-                    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }),
-                  }))
+                  mutateSection(() => fetch(`/api/sections/${section.id}`, jsonInit("PATCH", { name })))
                 }
                 onDeleteSection={(section) =>
                   mutateSection(() => fetch(`/api/sections/${section.id}`, { method: "DELETE" }))

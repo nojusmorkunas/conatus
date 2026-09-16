@@ -54,7 +54,9 @@ async function handle<T>(response: Response): Promise<T> {
   return payload as T;
 }
 
-function jsonInit(method: string, body?: unknown): RequestInit {
+// Exported for call sites that want the raw Response and their own ok-handling.
+// They get the JSON headers and stringify without `api.*`, which throws instead.
+export function jsonInit(method: string, body?: unknown): RequestInit {
   if (body === undefined) return { method };
   if (body instanceof FormData) return { method, body };
   return {
@@ -73,6 +75,5 @@ export const api = {
   get: <T>(url: string) => request<T>(url),
   post: <T>(url: string, body?: unknown) => request<T>(url, jsonInit("POST", body)),
   patch: <T>(url: string, body?: unknown) => request<T>(url, jsonInit("PATCH", body)),
-  put: <T>(url: string, body?: unknown) => request<T>(url, jsonInit("PUT", body)),
   delete: <T>(url: string, body?: unknown) => request<T>(url, jsonInit("DELETE", body)),
 };

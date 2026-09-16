@@ -18,6 +18,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { jsonInit } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import type { Project, Section } from "./types";
 
@@ -72,11 +73,7 @@ export function SectionHeading({
   }
 
   async function runAction(body: object) {
-    const response = await fetch(`/api/sections/${section.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    const response = await fetch(`/api/sections/${section.id}`, jsonInit("PATCH", body));
     if (response.ok) router.refresh();
   }
 
