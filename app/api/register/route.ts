@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 
+import { invalid } from "@/lib/api/responses";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import {
@@ -32,10 +33,7 @@ export async function POST(request: Request) {
     await request.json().catch(() => null),
   );
   if (!parsed.success) {
-    return Response.json(
-      { error: parsed.error.flatten().fieldErrors },
-      { status: 400 },
-    );
+    return invalid(parsed.error);
   }
 
   const { username, password, timezone, inviteToken } = parsed.data;

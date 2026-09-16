@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 
+import { invalid } from "@/lib/api/responses";
 import { hashToken } from "@/lib/auth/api-token";
 import { getRequestOrigin } from "@/lib/auth/origin";
 import { normalizeEmail } from "@/lib/auth/registration";
@@ -34,10 +35,7 @@ export async function POST(request: Request) {
     await request.json().catch(() => null),
   );
   if (!parsed.success) {
-    return Response.json(
-      { error: parsed.error.flatten().fieldErrors },
-      { status: 400 },
-    );
+    return invalid(parsed.error);
   }
 
   const normalizedEmail = normalizeEmail(parsed.data.email);

@@ -1,5 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 
+import { notFound } from "@/lib/api/responses";
 import { isInstanceAdmin } from "@/lib/auth/registration";
 import { requireSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -22,6 +23,6 @@ export async function DELETE(
       and(eq(registrationInvites.id, id), isNull(registrationInvites.usedAt)),
     )
     .returning({ id: registrationInvites.id });
-  if (!revoked) return Response.json({ error: "Not found" }, { status: 404 });
+  if (!revoked) return notFound();
   return Response.json({ ok: true });
 }

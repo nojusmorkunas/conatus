@@ -1,6 +1,7 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { generateKeyBetween } from "fractional-indexing";
 
+import { invalid, notFound, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { requireProjectAccess } from "@/lib/db/access";
@@ -23,29 +24,20 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireUser("projects:write");
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const { id } = await params;
   const section = await accessibleSection(user.id, id);
-  if (!section) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!section) return notFound();
 
   const parsed = sectionUpdateSchema.safeParse(await request.json());
   if (!parsed.success) {
-    return Response.json(
-      { error: parsed.error.flatten().fieldErrors },
-      { status: 400 },
-    );
+    return invalid(parsed.error);
   }
 
   if ("projectId" in parsed.data) {
     const targetProjectId = parsed.data.projectId;
-    if (!(await requireProjectAccess(user.id, targetProjectId))) {
-      return Response.json({ error: "Not found" }, { status: 404 });
-    }
+    if (!(await requireProjectAccess(user.id, targetProjectId))) return notFound();
     const targetSections = await db.select().from(sections)
       .where(eq(sections.projectId, targetProjectId)).orderBy(sections.order);
     const order = generateKeyBetween(targetSections.at(-1)?.order ?? null, null);
@@ -142,9 +134,7 @@ export async function PATCH(
     let index = 0;
     if (afterId) {
       index = others.findIndex((sibling) => sibling.id === afterId) + 1;
-      if (index === 0) {
-        return Response.json({ error: "Not found" }, { status: 404 });
-      }
+      if (index === 0) return notFound();
     }
 
     const [updated] = await db
@@ -188,15 +178,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireUser("projects:write");
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const { id } = await params;
   const section = await accessibleSection(user.id, id);
-  if (!section) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!section) return notFound();
 
   await db.delete(sections).where(eq(sections.id, id));
 

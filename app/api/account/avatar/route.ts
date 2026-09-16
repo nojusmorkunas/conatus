@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 
+import { notFound, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
@@ -9,9 +10,7 @@ const MAX_SIZE = 5 * 1024 * 1024;
 
 export async function POST(request: Request) {
   const user = await requireUser();
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const form = await request.formData();
   const file = form.get("file");
@@ -38,18 +37,14 @@ export async function POST(request: Request) {
 
 export async function GET() {
   const user = await requireUser();
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const [account] = await db
     .select({ image: users.image })
     .from(users)
     .where(eq(users.id, user.id))
     .limit(1);
-  if (!account?.image) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!account?.image) return notFound();
 
   await ensureBucket();
   const [object, stat] = await Promise.all([

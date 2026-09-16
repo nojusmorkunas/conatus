@@ -2,6 +2,7 @@ import { and, desc, eq, gte, ilike, inArray, isNull, lt, lte, or, type SQL } fro
 
 import { POST as createTask } from "@/app/api/tasks/route";
 import { withIdempotency } from "@/lib/api/idempotency";
+import { notFound, unauthorized } from "@/lib/api/responses";
 import { requireApiActor } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { accessibleProjectIds } from "@/lib/db/access";
@@ -34,7 +35,7 @@ function decodeCursor(value: string | null): Cursor | null {
 
 export async function GET(request: Request) {
   const actor = await requireApiActor("tasks:read");
-  if (!actor) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!actor) return unauthorized();
 
   // Read the clock before querying so a write landing mid-request falls inside
   // the next sync window rather than between two of them.
@@ -96,7 +97,7 @@ export async function GET(request: Request) {
       .from(labels)
       .where(and(eq(labels.id, labelId), eq(labels.userId, actor.id)))
       .limit(1);
-    if (!ownedLabel) return Response.json({ error: "Not found" }, { status: 404 });
+    if (!ownedLabel) return notFound();
     const matchingLinks = await db
       .select({ taskId: taskLabels.taskId })
       .from(taskLabels)
@@ -137,7 +138,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const actor = await requireApiActor("tasks:write");
-  if (!actor) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!actor) return unauthorized();
   return withIdempotency(
     request,
     { userId: actor.id, operation: "tasks.create" },

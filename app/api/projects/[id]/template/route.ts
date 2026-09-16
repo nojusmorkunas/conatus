@@ -1,5 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 
+import { notFound, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { requireProjectAccess } from "@/lib/db/access";
@@ -17,15 +18,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireUser();
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const { id } = await params;
   const access = await requireProjectAccess(user.id, id);
-  if (!access) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!access) return notFound();
 
   const [projectSections, activeTasks] = await Promise.all([
     db.select().from(sections).where(eq(sections.projectId, id)).orderBy(sections.order),

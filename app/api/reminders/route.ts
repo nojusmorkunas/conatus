@@ -1,5 +1,6 @@
 import { and, eq, isNull, lte } from "drizzle-orm";
 
+import { invalid, notFound, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { requireTaskAccess } from "@/lib/db/access";
@@ -8,9 +9,7 @@ import { reminderCreateSchema } from "@/lib/validation";
 
 export async function GET(request: Request) {
   const user = await requireUser("reminders:read");
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const url = new URL(request.url);
   const taskId = url.searchParams.get("taskId");
@@ -44,9 +43,7 @@ export async function GET(request: Request) {
     return Response.json({ error: "taskId is required" }, { status: 400 });
   }
 
-  if (!(await requireTaskAccess(user.id, taskId))) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!(await requireTaskAccess(user.id, taskId))) return notFound();
 
   // Reminders are personal: members never see each other's.
   const taskReminders = await db
@@ -60,23 +57,16 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const user = await requireUser("reminders:write");
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const parsed = reminderCreateSchema.safeParse(await request.json());
   if (!parsed.success) {
-    return Response.json(
-      { error: parsed.error.flatten().fieldErrors },
-      { status: 400 },
-    );
+    return invalid(parsed.error);
   }
 
   const { taskId, remindAt } = parsed.data;
 
-  if (!(await requireTaskAccess(user.id, taskId))) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!(await requireTaskAccess(user.id, taskId))) return notFound();
 
   const [reminder] = await db
     .insert(reminders)

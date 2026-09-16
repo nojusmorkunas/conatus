@@ -1,5 +1,6 @@
 import { and, count, eq, sql } from "drizzle-orm";
 
+import { unauthorized } from "@/lib/api/responses";
 import { normalizeUsername, REGISTRATION_LOCK_ID } from "@/lib/auth/registration";
 import { requireSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -8,9 +9,7 @@ import { accountDeleteSchema } from "@/lib/validation";
 
 export async function DELETE(request: Request) {
   const sessionUser = await requireSessionUser();
-  if (!sessionUser) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!sessionUser) return unauthorized();
 
   const parsed = accountDeleteSchema.safeParse(
     await request.json().catch(() => null),

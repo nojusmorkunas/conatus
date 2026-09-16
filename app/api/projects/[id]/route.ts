@@ -1,6 +1,7 @@
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { generateKeyBetween } from "fractional-indexing";
 
+import { invalid, notFound, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { requireProjectAccess } from "@/lib/db/access";
@@ -14,15 +15,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireUser("projects:read");
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const { id } = await params;
   const access = await requireProjectAccess(user.id, id);
-  if (!access) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!access) return notFound();
   const project = access.project;
 
   const projectSections = await db
@@ -39,15 +36,11 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireUser("projects:write");
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const { id } = await params;
   const access = await requireProjectAccess(user.id, id);
-  if (!access) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!access) return notFound();
   if (access.role !== "owner") {
     return Response.json(
       { error: "Only the project owner can edit the project" },
@@ -64,10 +57,7 @@ export async function PATCH(
   }
   const parsed = projectUpdateSchema.safeParse(body);
   if (!parsed.success) {
-    return Response.json(
-      { error: parsed.error.flatten().fieldErrors },
-      { status: 400 },
-    );
+    return invalid(parsed.error);
   }
 
   if (project.isInbox && parsed.data.name && parsed.data.name !== project.name) {
@@ -167,15 +157,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireUser("projects:delete");
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const { id } = await params;
   const access = await requireProjectAccess(user.id, id);
-  if (!access) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!access) return notFound();
   if (access.role !== "owner") {
     return Response.json(
       { error: "Only the project owner can delete the project" },

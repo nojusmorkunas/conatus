@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { generateKeyBetween } from "fractional-indexing";
 
+import { invalid, notFound, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { todayInTimezone } from "@/lib/dates";
 import { db } from "@/lib/db";
@@ -34,22 +35,15 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireUser("tasks:write");
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const { id } = await params;
   const task = await requireTaskAccess(user.id, id);
-  if (!task) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!task) return notFound();
 
   const parsed = taskUpdateSchema.safeParse(await request.json());
   if (!parsed.success) {
-    return Response.json(
-      { error: parsed.error.flatten().fieldErrors },
-      { status: 400 },
-    );
+    return invalid(parsed.error);
   }
 
   if ("completed" in parsed.data) {
@@ -128,9 +122,7 @@ export async function PATCH(
           .from(labels)
           .where(and(inArray(labels.id, labelIds), eq(labels.userId, user.id)))
       : [];
-    if (owned.length !== labelIds.length) {
-      return Response.json({ error: "Not found" }, { status: 404 });
-    }
+    if (owned.length !== labelIds.length) return notFound();
 
     await db.delete(taskLabels).where(eq(taskLabels.taskId, id));
     if (labelIds.length) {
@@ -170,9 +162,7 @@ export async function PATCH(
 
     if (parentId) {
       const parent = projectTasks.find((candidate) => candidate.id === parentId);
-      if (!parent) {
-        return Response.json({ error: "Not found" }, { status: 404 });
-      }
+      if (!parent) return notFound();
       sectionId = parent.sectionId;
     }
 
@@ -196,9 +186,7 @@ export async function PATCH(
         .select({ id: sections.id })
         .from(sections)
         .where(and(eq(sections.id, sectionId), eq(sections.projectId, task.projectId)));
-      if (!section) {
-        return Response.json({ error: "Not found" }, { status: 404 });
-      }
+      if (!section) return notFound();
     }
 
     const siblings = await db
@@ -211,9 +199,7 @@ export async function PATCH(
     let index = 0;
     if (afterId) {
       index = others.findIndex((sibling) => sibling.id === afterId) + 1;
-      if (index === 0) {
-        return Response.json({ error: "Not found" }, { status: 404 });
-      }
+      if (index === 0) return notFound();
     }
 
     const descendantIds = [...descendants].filter((descendantId) => descendantId !== id);
@@ -296,9 +282,7 @@ export async function PATCH(
   }
 
   if (projectId && projectId !== task.projectId) {
-    if (!(await requireProjectAccess(user.id, projectId))) {
-      return Response.json({ error: "Not found" }, { status: 404 });
-    }
+    if (!(await requireProjectAccess(user.id, projectId))) return notFound();
   }
 
   const projectChanged = targetProjectId !== task.projectId;
@@ -322,9 +306,7 @@ export async function PATCH(
       .select({ id: sections.id })
       .from(sections)
       .where(and(eq(sections.id, sectionId), eq(sections.projectId, targetProjectId)));
-    if (!section) {
-      return Response.json({ error: "Not found" }, { status: 404 });
-    }
+    if (!section) return notFound();
   }
 
   // A project move drops sections from the old project; an explicit
@@ -371,15 +353,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireUser("tasks:delete");
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const { id } = await params;
   const task = await requireTaskAccess(user.id, id);
-  if (!task) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!task) return notFound();
 
   const [project] = await db
     .select({ name: projects.name })

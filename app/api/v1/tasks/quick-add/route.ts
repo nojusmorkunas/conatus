@@ -4,6 +4,7 @@ import { POST as createTask } from "@/app/api/tasks/route";
 import { PATCH as updateTask } from "@/app/api/tasks/[id]/route";
 import { POST as createReminder } from "@/app/api/reminders/route";
 import { withIdempotency } from "@/lib/api/idempotency";
+import { unauthorized } from "@/lib/api/responses";
 import { requireApiActor } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { accessibleProjects } from "@/lib/db/access";
@@ -14,7 +15,7 @@ import { localDateTimeToUtc } from "@/lib/local-time";
 
 export async function POST(request: Request) {
   const actor = await requireApiActor("tasks:write");
-  if (!actor) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!actor) return unauthorized();
 
   return withIdempotency(
     request,

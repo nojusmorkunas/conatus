@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 
+import { unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { todayInTimezone } from "@/lib/dates";
 import { db } from "@/lib/db";
@@ -11,7 +12,7 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   const user = await requireUser();
-  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return unauthorized();
 
   try {
     const form = await request.formData();

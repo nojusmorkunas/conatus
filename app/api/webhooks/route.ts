@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { desc, eq } from "drizzle-orm";
 
+import { invalid, unauthorized } from "@/lib/api/responses";
 import { requireSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { webhooks } from "@/lib/db/schema";
@@ -8,7 +9,7 @@ import { webhookCreateSchema } from "@/lib/validation";
 
 export async function GET() {
   const user = await requireSessionUser();
-  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return unauthorized();
 
   const endpoints = await db
     .select({
@@ -27,14 +28,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const user = await requireSessionUser();
-  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return unauthorized();
 
   const parsed = webhookCreateSchema.safeParse(await request.json());
   if (!parsed.success) {
-    return Response.json(
-      { error: parsed.error.flatten().fieldErrors },
-      { status: 400 },
-    );
+    return invalid(parsed.error);
   }
 
   const secret = randomBytes(24).toString("base64url");

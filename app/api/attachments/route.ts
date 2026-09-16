@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 
+import { notFound, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { requireTaskAccess } from "@/lib/db/access";
@@ -10,18 +11,14 @@ const MAX_SIZE = 10 * 1024 * 1024;
 
 export async function GET(request: Request) {
   const user = await requireUser();
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const taskId = new URL(request.url).searchParams.get("taskId");
   if (!taskId) {
     return Response.json({ error: "taskId is required" }, { status: 400 });
   }
 
-  if (!(await requireTaskAccess(user.id, taskId))) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!(await requireTaskAccess(user.id, taskId))) return notFound();
 
   const taskAttachments = await db
     .select()
@@ -34,9 +31,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const user = await requireUser();
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const form = await request.formData();
   const taskId = form.get("taskId");
@@ -51,9 +46,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "File exceeds 10MB limit" }, { status: 413 });
   }
 
-  if (!(await requireTaskAccess(user.id, taskId))) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!(await requireTaskAccess(user.id, taskId))) return notFound();
 
   const [attachment] = await db
     .insert(attachments)

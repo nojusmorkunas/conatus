@@ -1,6 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { generateKeyBetween } from "fractional-indexing";
 
+import { invalid, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { accessibleProjects } from "@/lib/db/access";
@@ -14,25 +15,18 @@ import { projectCreateSchema } from "@/lib/validation";
 // Clients replace their whole project list from this response.
 export async function GET() {
   const user = await requireUser("projects:read");
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   return Response.json(await accessibleProjects(user.id));
 }
 
 export async function POST(request: Request) {
   const user = await requireUser("projects:write");
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const parsed = projectCreateSchema.safeParse(await request.json());
   if (!parsed.success) {
-    return Response.json(
-      { error: parsed.error.flatten().fieldErrors },
-      { status: 400 },
-    );
+    return invalid(parsed.error);
   }
 
   if (parsed.data.parentId) {

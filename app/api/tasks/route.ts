@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { generateKeyBetween } from "fractional-indexing";
 
+import { invalid, notFound, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { isProjectMember, requireProjectAccess } from "@/lib/db/access";
@@ -11,18 +12,14 @@ import { taskCreateSchema } from "@/lib/validation";
 
 export async function GET(request: Request) {
   const user = await requireUser("tasks:read");
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const projectId = new URL(request.url).searchParams.get("projectId");
   if (!projectId) {
     return Response.json({ error: "projectId is required" }, { status: 400 });
   }
 
-  if (!(await requireProjectAccess(user.id, projectId))) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!(await requireProjectAccess(user.id, projectId))) return notFound();
 
   const projectTasks = await db
     .select()
@@ -37,16 +34,11 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const user = await requireUser("tasks:write");
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const parsed = taskCreateSchema.safeParse(await request.json());
   if (!parsed.success) {
-    return Response.json(
-      { error: parsed.error.flatten().fieldErrors },
-      { status: 400 },
-    );
+    return invalid(parsed.error);
   }
 
   const {
@@ -67,9 +59,7 @@ export async function POST(request: Request) {
   } = parsed.data;
 
   const access = await requireProjectAccess(user.id, projectId);
-  if (!access) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!access) return notFound();
   const project = access.project;
 
   if (assigneeId && !(await isProjectMember(assigneeId, projectId))) {
@@ -86,9 +76,7 @@ export async function POST(request: Request) {
       .select({ id: sections.id })
       .from(sections)
       .where(and(eq(sections.id, sectionId), eq(sections.projectId, projectId)));
-    if (!section) {
-      return Response.json({ error: "Not found" }, { status: 404 });
-    }
+    if (!section) return notFound();
   }
 
   if (parentId) {
@@ -96,9 +84,7 @@ export async function POST(request: Request) {
       .select({ id: tasks.id, sectionId: tasks.sectionId })
       .from(tasks)
       .where(and(eq(tasks.id, parentId), eq(tasks.projectId, projectId), isNull(tasks.deletedAt)));
-    if (!parent) {
-      return Response.json({ error: "Not found" }, { status: 404 });
-    }
+    if (!parent) return notFound();
     effectiveSectionId = parent.sectionId;
   }
 
@@ -123,9 +109,7 @@ export async function POST(request: Request) {
     let index = 0;
     if (afterId) {
       index = siblings.findIndex((sibling) => sibling.id === afterId) + 1;
-      if (index === 0) {
-        return Response.json({ error: "Not found" }, { status: 404 });
-      }
+      if (index === 0) return notFound();
     }
     order = generateKeyBetween(
       siblings[index - 1]?.order ?? null,

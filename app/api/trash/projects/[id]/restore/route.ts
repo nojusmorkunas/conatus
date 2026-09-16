@@ -1,5 +1,6 @@
 import { eq, inArray } from "drizzle-orm";
 
+import { notFound, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { projects } from "@/lib/db/schema";
@@ -9,21 +10,21 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireUser("projects:write");
-  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return unauthorized();
 
   const { id } = await params;
   const [project] = await db
     .select({ id: projects.id })
     .from(projects)
     .where(eq(projects.id, id));
-  if (!project) return Response.json({ error: "Not found" }, { status: 404 });
+  if (!project) return notFound();
 
   const owned = await db
     .select({ id: projects.id, parentId: projects.parentId, deletedAt: projects.deletedAt })
     .from(projects)
     .where(eq(projects.userId, user.id));
   const root = owned.find((candidate) => candidate.id === id);
-  if (!root?.deletedAt) return Response.json({ error: "Not found" }, { status: 404 });
+  if (!root?.deletedAt) return notFound();
   if (root.parentId && owned.find((candidate) => candidate.id === root.parentId)?.deletedAt) {
     return Response.json({ error: "Restore the parent project first" }, { status: 400 });
   }

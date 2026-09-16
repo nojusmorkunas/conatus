@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 
+import { invalid, notFound, unauthorized } from "@/lib/api/responses";
 import { requireSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { webhooks } from "@/lib/db/schema";
@@ -10,7 +11,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireSessionUser();
-  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return unauthorized();
 
   const { id } = await params;
   const [deleted] = await db
@@ -18,7 +19,7 @@ export async function DELETE(
     .where(and(eq(webhooks.id, id), eq(webhooks.userId, user.id)))
     .returning({ id: webhooks.id });
 
-  if (!deleted) return Response.json({ error: "Not found" }, { status: 404 });
+  if (!deleted) return notFound();
   return Response.json({ ok: true });
 }
 
@@ -27,14 +28,11 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireSessionUser();
-  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return unauthorized();
 
   const parsed = webhookUpdateSchema.safeParse(await request.json());
   if (!parsed.success) {
-    return Response.json(
-      { error: parsed.error.flatten().fieldErrors },
-      { status: 400 },
-    );
+    return invalid(parsed.error);
   }
 
   const { id } = await params;
@@ -53,6 +51,6 @@ export async function PATCH(
       createdAt: webhooks.createdAt,
     });
 
-  if (!webhook) return Response.json({ error: "Not found" }, { status: 404 });
+  if (!webhook) return notFound();
   return Response.json(webhook);
 }

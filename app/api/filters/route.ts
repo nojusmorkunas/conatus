@@ -1,6 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { generateKeyBetween } from "fractional-indexing";
 
+import { invalid, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { filters } from "@/lib/db/schema";
@@ -8,9 +9,7 @@ import { filterCreateSchema } from "@/lib/validation";
 
 export async function GET() {
   const user = await requireUser();
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const userFilters = await db
     .select()
@@ -23,16 +22,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const user = await requireUser();
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return unauthorized();
 
   const parsed = filterCreateSchema.safeParse(await request.json());
   if (!parsed.success) {
-    return Response.json(
-      { error: parsed.error.flatten().fieldErrors },
-      { status: 400 },
-    );
+    return invalid(parsed.error);
   }
 
   const [last] = await db
