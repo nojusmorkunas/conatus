@@ -658,7 +658,7 @@ export function ProjectSidebar({
               <DropdownMenuItem onClick={() => signOut({ callbackUrl: "/login" })}>
                 <LogOut /> Log out
               </DropdownMenuItem>
-              <p className="px-2 py-1.5 text-xs text-muted-foreground">v0.2.0-beta.1 experimental</p>
+              <p className="px-2 py-1.5 text-xs text-muted-foreground">v1.0.0</p>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

@@ -43,8 +43,8 @@ curl -o .env https://raw.githubusercontent.com/nojusmorkunas/conatus/main/.env.e
 Open `.env` and set these values:
 
 ```env
-# Use latest after the first stable release.
-# Use 0.2.0-beta.1 when installing the beta release.
+# Use latest for the current stable release, or pin an exact version such as
+# 1.0.0 when reproducible upgrades matter.
 CONATUS_VERSION=latest
 CONATUS_PORT=4399
 
