@@ -27,7 +27,6 @@ import { TaskDragPreview } from "./task-row";
 import { taskCollisionDetection, taskDropAnimation, taskKeyboardCoordinates } from "./task-drag";
 import { jsonInit } from "@/lib/api-client";
 import { truncate } from "@/lib/utils";
-import { toastManager } from "@/components/ui/toast";
 import { projectTaskDrop, type TaskDropProjection, type TaskDropTarget } from "@/lib/task-drop";
 import { TaskModal } from "./task-modal";
 import { TaskGroup } from "./task-group";
@@ -299,15 +298,32 @@ export function TaskList({
     return ok;
   }
 
-  async function dropOnProject(task: TaskWithLabels, projectId: string, projectName: string) {
-    const count = actsOnSelection(task) ? selectedTaskIds.length : 1;
+  async function dropOnProject(task: TaskWithLabels, targetProjectId: string, projectName: string) {
+    const moved = actsOnSelection(task)
+      ? tasks.filter((candidate) => selectedTaskIds.includes(candidate.id))
+      : [task];
+    // Where each task sat, so undo can put it back in its section rather than
+    // only in this project. Its place in the order is not restored: a project
+    // move appends, and the server has no memory of the old position.
+    const origin = moved.map((item) => ({ id: item.id, sectionId: item.sectionId }));
     const ok = actsOnSelection(task)
-      ? await moveSelectedTasks(projectId)
-      : await moveTask(task, projectId);
+      ? await moveSelectedTasks(targetProjectId)
+      : await moveTask(task, targetProjectId);
     if (!ok) return;
-    toastManager.add({
-      title: `${count} ${count === 1 ? "task" : "tasks"} added to ${projectName}`,
-    });
+
+    schedule(
+      `${moved.length} ${moved.length === 1 ? "task" : "tasks"} added to ${projectName}`,
+      // The move is already written, so the toast only has an inverse to offer.
+      () => {},
+      () => {
+        void Promise.all(
+          origin.map((item) => patchTask(item.id, { projectId, sectionId: item.sectionId })),
+        ).then(async () => {
+          await refresh();
+          router.refresh();
+        });
+      },
+    );
   }
 
   async function moveTask(task: TaskWithLabels, targetProjectId: string) {
