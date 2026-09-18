@@ -93,11 +93,6 @@ export const accountDeleteSchema = z.object({
   username: z.string().trim().min(1),
 });
 
-export const autoLabelRuleSchema = z.object({
-  contains: z.string().trim().min(1).max(120),
-  labelId: z.uuid(),
-});
-
 export const settingsSchema = z.object({
   name: z.string().trim().max(100).optional(),
   timezone: z.string().min(1),
@@ -105,11 +100,10 @@ export const settingsSchema = z.object({
   weekStart: z.number().int().min(0).max(6),
   dailyGoal: z.number().int().min(1).max(100),
   activityGraphSource: z.enum(activityGraphSources),
-  // Optional so older clients — the API, the MCP server — can keep PATCHing
-  // settings with the fields they know about.
-  // A view key or the id of a project to open on; see lib/start-page.
+  // A view key or the id of a project to open on; see lib/start-page. Optional
+  // so older clients — the API, the MCP server — can keep PATCHing settings
+  // with the fields they know about.
   startPage: z.union([z.enum(startPageViewValues), z.uuid()]).optional(),
-  autoLabelRules: z.array(autoLabelRuleSchema).max(50).optional(),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;

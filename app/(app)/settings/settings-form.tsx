@@ -61,14 +61,12 @@ function formatTokenDate(value: string) {
 export function SettingsForm({
   defaults,
   projects,
-  labels,
   icalToken,
   initialApiTokens,
   initialWebhooks,
 }: {
   defaults: SettingsInput;
   projects: { id: string; name: string }[];
-  labels: { id: string; name: string }[];
   icalToken: string | null;
   initialApiTokens: ApiToken[];
   initialWebhooks: Webhook[];
@@ -100,7 +98,6 @@ export function SettingsForm({
     ...startPageViews.map((view) => ({ value: view.value, label: view.label })),
     ...projects.map((project) => ({ value: project.id, label: project.name })),
   ];
-  const labelOptions = labels.map((label) => ({ value: label.id, label: label.name }));
   const { control, handleSubmit, formState } = useForm<SettingsInput>({
     resolver: zodResolver(settingsSchema),
     defaultValues: defaults,
@@ -394,98 +391,6 @@ export function SettingsForm({
                 <FieldDescription>Where the app opens.</FieldDescription>
               </>
             )}
-          />
-        </Field>
-
-        <Field>
-          <FieldLabel>Auto-labeling</FieldLabel>
-          <Controller
-            control={control}
-            name="autoLabelRules"
-            render={({ field }) => {
-              const rules = field.value ?? [];
-              return (
-              <>
-                {rules.length > 0 && (
-                  <div className="space-y-2">
-                    {rules.map((rule, index) => (
-                      <div key={index} className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm text-muted-foreground">Name contains</span>
-                        <Input
-                          className="w-44"
-                          maxLength={120}
-                          aria-label={`Rule ${index + 1} text`}
-                          value={rule.contains}
-                          onChange={(event) =>
-                            field.onChange(
-                              rules.map((existing, position) =>
-                                position === index
-                                  ? { ...existing, contains: event.target.value }
-                                  : existing,
-                              ),
-                            )
-                          }
-                        />
-                        <span className="text-sm text-muted-foreground">add label</span>
-                        <Select
-                          items={labelOptions}
-                          value={rule.labelId}
-                          onValueChange={(value) =>
-                            field.onChange(
-                              rules.map((existing, position) =>
-                                position === index
-                                  ? { ...existing, labelId: String(value) }
-                                  : existing,
-                              ),
-                            )
-                          }
-                        >
-                          <SelectTrigger size="sm" aria-label={`Rule ${index + 1} label`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {labelOptions.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            field.onChange(rules.filter((_, position) => position !== index))
-                          }
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={labels.length === 0 || rules.length >= 50}
-                    onClick={() =>
-                      field.onChange([...rules, { contains: "", labelId: labels[0].id }])
-                    }
-                  >
-                    Add rule
-                  </Button>
-                </div>
-                <FieldDescription>
-                  {labels.length === 0
-                    ? "Create a label first."
-                    : "A new task whose name contains your text gets the label. Case does not matter."}
-                </FieldDescription>
-              </>
-              );
-            }}
           />
         </Field>
 

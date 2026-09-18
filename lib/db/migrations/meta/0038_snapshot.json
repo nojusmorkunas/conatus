@@ -1,5 +1,5 @@
 {
-  "id": "752a4447-44dc-4748-b010-1650fa8e74a8",
+  "id": "2b09eda2-6f6e-45c6-8d72-180dfb53a6ca",
   "prevId": "5880c22a-de90-4c19-b3c6-41d022b25bf5",
   "version": "7",
   "dialect": "postgresql",
@@ -1734,13 +1734,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'today'"
-        },
-        "auto_label_rules": {
-          "name": "auto_label_rules",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
         },
         "onboarding_completed_at": {
           "name": "onboarding_completed_at",

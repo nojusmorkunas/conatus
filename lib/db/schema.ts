@@ -34,11 +34,6 @@ export const users = pgTable(
     activityGraphSource: text("activity_graph_source").notNull().default("completed"),
     // Where "/" lands: a view key or a project id; see lib/start-page.
     startPage: text("start_page").notNull().default("today"),
-    // Rules that label a new task by what its name contains; see lib/auto-label.
-    autoLabelRules: jsonb("auto_label_rules")
-      .$type<{ contains: string; labelId: string }[]>()
-      .notNull()
-      .default(sql`'[]'::jsonb`),
     // Null only for a newly-created account. The onboarding completion route
     // records the first-run choice so the flow is never shown on every visit.
     onboardingCompletedAt: timestamp("onboarding_completed_at"),

@@ -4,7 +4,7 @@ import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { requireSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { accessibleProjects } from "@/lib/db/access";
-import { apiTokens, labels, registrationInvites, users, webhooks } from "@/lib/db/schema";
+import { apiTokens, registrationInvites, users, webhooks } from "@/lib/db/schema";
 import type { SettingsInput } from "@/lib/validation";
 import { AccountSettings } from "@/components/account/account-settings";
 import { RegistrationInvites } from "@/components/admin/registration-invites";
@@ -24,7 +24,6 @@ export default async function SettingsPage() {
       dailyGoal: users.dailyGoal,
       activityGraphSource: users.activityGraphSource,
       startPage: users.startPage,
-      autoLabelRules: users.autoLabelRules,
       icalToken: users.icalToken,
       username: users.username,
       passwordHash: users.passwordHash,
@@ -33,14 +32,7 @@ export default async function SettingsPage() {
     .from(users)
     .where(eq(users.id, sessionUser.id));
 
-  const [userProjects, userLabels] = await Promise.all([
-    accessibleProjects(sessionUser.id),
-    db
-      .select({ id: labels.id, name: labels.name })
-      .from(labels)
-      .where(eq(labels.userId, sessionUser.id))
-      .orderBy(labels.order),
-  ]);
+  const userProjects = await accessibleProjects(sessionUser.id);
 
   const tokens = await db
     .select({
@@ -143,13 +135,11 @@ export default async function SettingsPage() {
               activityGraphSource:
                 user.activityGraphSource as SettingsInput["activityGraphSource"],
               startPage: user.startPage,
-              autoLabelRules: user.autoLabelRules,
             }}
             projects={userProjects.map((project) => ({
               id: project.id,
               name: project.isInbox && !project.shared ? "Inbox" : project.name,
             }))}
-            labels={userLabels}
             icalToken={user.icalToken}
             initialApiTokens={tokens.map((token) => ({
               ...token,

@@ -285,6 +285,13 @@ export function TaskList({
     if (ok) await refresh();
   }
 
+  // Dragging any one of the selected tasks takes the rest with it.
+  function moveSelectedTasks(targetProjectId: string) {
+    return bulkAction((task) => patchTask(task.id, { projectId: targetProjectId })).then(() =>
+      router.refresh(),
+    );
+  }
+
   async function moveTask(task: TaskWithLabels, targetProjectId: string) {
     if (targetProjectId === task.projectId) return;
     const ok = await withError(() => patchTask(task.id, { projectId: targetProjectId }));
@@ -398,6 +405,8 @@ export function TaskList({
   const flatOrder = groups.flatMap((group) => roots(group.id).map((task) => task.id));
   const detailIndex = detailTaskId ? flatOrder.indexOf(detailTaskId) : -1;
   const activeTask = tasks.find((task) => task.id === activeId) ?? null;
+  const draggingSelection = Boolean(activeTask && selectedTaskIds.includes(activeTask.id));
+  const draggedCount = draggingSelection ? selectedTaskIds.length : 1;
   const activeDepth = activeTask ? taskDepth(tasks, activeTask.id) : 0;
   const activeSection = orderedSections.find((section) => section.id === activeId) ?? null;
   const draggedIds = useMemo(() => activeId ? subtreeIds(tasks, activeId) : new Set<string>(), [tasks, activeId]);
@@ -618,7 +627,8 @@ export function TaskList({
           if (orderedSections.some((section) => section.id === event.active.id)) {
             void handleSectionDragEnd(event);
           } else if (task && droppedOnProjectId) {
-            void moveTask(task, droppedOnProjectId);
+            if (draggingSelection) void moveSelectedTasks(droppedOnProjectId);
+            else void moveTask(task, droppedOnProjectId);
           } else if (task && heldInPlace(event)) {
             startSelecting(task.id);
           } else if (!selecting && sortBy === "manual") {
@@ -660,7 +670,7 @@ export function TaskList({
                 today={today}
                 dateFormat={dateFormat}
                 selecting={selecting}
-                draggable={!selecting && sortBy === "manual"}
+                draggable={sortBy === "manual"}
                 activeTaskId={activeTask?.id ?? null}
                 draggedIds={draggedIds}
                 projection={projection}
@@ -704,8 +714,15 @@ export function TaskList({
           zIndex={50}
         >
           {activeTask ? (
-            <TaskDragPreview task={activeTask} allTasks={tasks} depth={activeDepth}
-              members={members} currentUserId={currentUserId} today={today} dateFormat={dateFormat} />
+            <div className="relative">
+              <TaskDragPreview task={activeTask} allTasks={tasks} depth={activeDepth}
+                members={members} currentUserId={currentUserId} today={today} dateFormat={dateFormat} />
+              {draggedCount > 1 && (
+                <span className="absolute -top-2 -left-2 flex size-6 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground shadow">
+                  {draggedCount}
+                </span>
+              )}
+            </div>
           ) : activeSection ? (
             <div className="cursor-grabbing rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-bold shadow-xl ring-1 ring-black/5">
               {activeSection.name}
