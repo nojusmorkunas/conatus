@@ -44,6 +44,13 @@ import { AssigneeChip, DeadlineChip, DueChip, DurationChip } from "./task-chips"
 import { AssigneeEditor, DueEditor } from "./task-editors";
 import type { Label, ProjectMember, TaskWithLabels } from "./types";
 
+// Anything here handles its own click, so the row must keep out of the way.
+// Menus are portalled out of the row in the DOM but still inside it in the
+// React tree, so their clicks bubble here: without the menu selectors, picking
+// "Move to…" or a label would also open the task behind the menu.
+const ROW_CONTROLS =
+  "button, input, a, textarea, select, [data-slot=dropdown-menu-content], [role=menuitem], [role=menuitemcheckbox], [role=menuitemradio], [role=dialog]";
+
 function TaskRowComponent({
   task,
   allTasks,
@@ -67,6 +74,7 @@ function TaskRowComponent({
   selecting = false,
   selected = false,
   onSelectionToggle,
+  onSelectionStart,
   draggable = false,
   draggedDescendant = false,
   collapsed = false,
@@ -101,6 +109,8 @@ function TaskRowComponent({
   selecting?: boolean;
   selected?: boolean;
   onSelectionToggle?: (task: TaskWithLabels) => void;
+  /** Ctrl/Cmd-click, or a press and hold on touch, starts selecting here. */
+  onSelectionStart?: (task: TaskWithLabels) => void;
   draggable?: boolean;
   draggedDescendant?: boolean;
   collapsed?: boolean;
@@ -114,6 +124,8 @@ function TaskRowComponent({
   const [isCompleting, setIsCompleting] = useState(false);
   const [completionHeight, setCompletionHeight] = useState<number | null>(null);
   const completionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const heldOpen = useRef(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useDraggable({
     id: task.id,
@@ -141,7 +153,19 @@ function TaskRowComponent({
 
   useEffect(() => () => {
     if (completionTimer.current) clearTimeout(completionTimer.current);
+    if (holdTimer.current) clearTimeout(holdTimer.current);
   }, []);
+
+  // Press and hold to start selecting. A draggable row leaves this to the drag
+  // sensor instead — it claims the same gesture at 250ms — and picks the hold
+  // up when the drag ends without having moved.
+  const holdToSelect = Boolean(onSelectionStart) && !draggable && !selecting;
+
+  function cancelHold() {
+    if (!holdTimer.current) return;
+    clearTimeout(holdTimer.current);
+    holdTimer.current = null;
+  }
 
   // A repeating task is not leaving the list: completing it moves it to its
   // next due date. The row's collapse animation would play it out and then
@@ -208,19 +232,26 @@ function TaskRowComponent({
           // Only real controls opt out of row-drag. The row itself carries
           // role="button" from dnd-kit attributes, so a [role=button] check
           // would match every press and kill dragging entirely.
-          const control = (event.target as Element).closest?.(
-            "button, input, a, textarea, select",
-          );
+          const control = (event.target as Element).closest?.(ROW_CONTROLS);
           if (control && control !== event.currentTarget) return;
           listeners?.onMouseDown?.(event);
         }}
         onTouchStart={(event) => {
-          const control = (event.target as Element).closest?.(
-            "button, input, a, textarea, select",
-          );
+          const control = (event.target as Element).closest?.(ROW_CONTROLS);
           if (control && control !== event.currentTarget) return;
+          if (holdToSelect) {
+            heldOpen.current = false;
+            holdTimer.current = setTimeout(() => {
+              holdTimer.current = null;
+              heldOpen.current = true;
+              onSelectionStart?.(task);
+            }, 450);
+          }
           listeners?.onTouchStart?.(event);
         }}
+        onTouchMove={cancelHold}
+        onTouchEnd={cancelHold}
+        onTouchCancel={cancelHold}
         className={cn(
           "task-row group relative mb-0.5 flex items-start gap-2 py-2.5 pr-2",
           selecting && "cursor-pointer",
@@ -236,13 +267,20 @@ function TaskRowComponent({
             onSelectionToggle?.(task);
             return;
           }
+          // The tap that ended a press-and-hold already did its job.
+          if (heldOpen.current) {
+            heldOpen.current = false;
+            return;
+          }
           // Click anywhere opens the task; real controls (checkbox, menus,
           // links) handle their own clicks. After a real drag dnd-kit swallows
           // the trailing click, so dropping a task never opens it.
-          const control = (event.target as Element).closest?.(
-            "button, input, a, textarea, select",
-          );
+          const control = (event.target as Element).closest?.(ROW_CONTROLS);
           if (control) return;
+          if ((event.ctrlKey || event.metaKey) && onSelectionStart) {
+            onSelectionStart(task);
+            return;
+          }
           onOpenDetail(task);
         }}
         onKeyDown={(event) => {

@@ -8,7 +8,10 @@ import { TaskModal } from "./task-modal";
 import { TaskRow } from "./task-row";
 import type { Label, TaskWithLabels } from "./types";
 import { jsonInit } from "@/lib/api-client";
+import { truncate } from "@/lib/utils";
 import { usePendingAction } from "@/lib/use-pending-action";
+import { useTaskSelection } from "@/lib/use-task-selection";
+import { BulkToolbar } from "./bulk-toolbar";
 import { completeRecurring } from "@/lib/recurring-complete";
 import { EmptyState } from "@/components/ui/empty-state";
 
@@ -34,6 +37,14 @@ export function TaskDateList({
   const [error, setError] = useState<string | null>(null);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const { pending, schedule, undo } = usePendingAction();
+  const {
+    selecting,
+    selectedIds,
+    projects,
+    start: startSelecting,
+    toggle: toggleSelection,
+    run: runOnSelection,
+  } = useTaskSelection();
 
   const [syncedFrom, setSyncedFrom] = useState(initialGroups);
   if (initialGroups !== syncedFrom) {
@@ -86,7 +97,7 @@ export function TaskDateList({
       // of these date groups entirely, which local state cannot work out.
       router.refresh();
       schedule(
-        `Completed "${task.content}"`,
+        `Completed "${truncate(task.content)}"`,
         // Already written, so the toast only has an inverse left to offer.
         () => {},
         () => {
@@ -108,7 +119,7 @@ export function TaskDateList({
       })),
     );
     schedule(
-      `Completed "${task.content}"`,
+      `Completed "${truncate(task.content)}"`,
       () => patch(task.id, { completed: true }),
       () => setGroups(previousGroups),
     );
@@ -121,7 +132,7 @@ export function TaskDateList({
       tasks: group.tasks.filter((existing) => existing.id !== task.id),
     })));
     schedule(
-      `Moved "${task.content}" to Trash`,
+      `Moved "${truncate(task.content)}" to Trash`,
       () => withError(() => fetch(`/api/tasks/${task.id}`, { method: "DELETE" })),
       () => setGroups(previousGroups),
     );
@@ -146,6 +157,23 @@ export function TaskDateList({
     const duplicate: { id: string } = await response.json();
     if (task.labels.length) await patch(duplicate.id, { labelIds: task.labels.map((label) => label.id) });
     router.refresh();
+  }
+
+  const allTasks = groups.flatMap((group) => group.tasks);
+
+  async function bulkAction(action: (task: TaskWithLabels) => Promise<Response>) {
+    setError(null);
+    const byId = new Map(allTasks.map((task) => [task.id, task]));
+    const ok = await runOnSelection(
+      (taskId) => action(byId.get(taskId)!),
+      () => router.refresh(),
+    );
+    if (!ok) setError("Some updates failed.");
+    return ok;
+  }
+
+  function patchSelected(body: Record<string, unknown>) {
+    void bulkAction((task) => fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", body)));
   }
 
   const visibleGroups = groups
@@ -193,6 +221,10 @@ export function TaskDateList({
               onDuplicate={duplicateTask}
               onSubtaskAdded={() => router.refresh()}
               onOpenDetail={(task) => setDetailTaskId(task.id)}
+              selecting={selecting}
+              selected={selectedIds.includes(task.id)}
+              onSelectionToggle={(target) => toggleSelection(target.id)}
+              onSelectionStart={(target) => startSelecting(target.id)}
               onError={() => setError("That didn't work. Try again.")}
             />
           ))}
@@ -200,6 +232,26 @@ export function TaskDateList({
       ))}
 
       {error && <p className="text-xs text-destructive">{error}</p>}
+
+      {selectedIds.length > 0 && (
+        <BulkToolbar
+          count={selectedIds.length}
+          projects={projects}
+          labels={labels}
+          onComplete={() => patchSelected({ completed: true })}
+          onDelete={() => void bulkAction((task) => fetch(`/api/tasks/${task.id}`, { method: "DELETE" }))}
+          onMove={(projectId) => patchSelected({ projectId })}
+          onPriority={(priority) => patchSelected({ priority })}
+          onDueDate={(dueDate) => patchSelected({ dueDate })}
+          onLabel={(labelId) =>
+            void bulkAction((task) =>
+              fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", {
+                labelIds: [...new Set([...task.labels.map((label) => label.id), labelId])],
+              })),
+            )
+          }
+        />
+      )}
 
       {pending && (
         <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-foreground px-4 py-2 text-sm text-background shadow-lg">

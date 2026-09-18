@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { generateKeyBetween } from "fractional-indexing";
 
 import { invalid, notFound, unauthorized } from "@/lib/api/responses";
@@ -6,8 +6,9 @@ import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { isProjectMember, requireProjectAccess } from "@/lib/db/access";
 import { logActivity } from "@/lib/db/activity";
-import { sections, tasks } from "@/lib/db/schema";
+import { labels, sections, taskLabels, tasks, users } from "@/lib/db/schema";
 import { withCommentCounts, withLabels } from "@/lib/db/task-labels";
+import { autoLabelIds } from "@/lib/auto-label";
 import { taskCreateSchema } from "@/lib/validation";
 
 export async function GET(request: Request) {
@@ -146,6 +147,8 @@ export async function POST(request: Request) {
     })
     .returning();
 
+  await applyAutoLabels(user.id, task.id, task.content);
+
   await logActivity({
     userId: user.id,
     type: "task.created",
@@ -156,4 +159,29 @@ export async function POST(request: Request) {
   });
 
   return Response.json(task, { status: 201 });
+}
+
+// Every way to create a task — the composer, the v1 API, quick add — comes
+// through the POST above, so the rules only have to be applied here.
+// ponytail: one extra read per create; cache the rules if that ever shows up.
+async function applyAutoLabels(userId: string, taskId: string, content: string) {
+  const [account] = await db
+    .select({ autoLabelRules: users.autoLabelRules })
+    .from(users)
+    .where(eq(users.id, userId));
+  const wanted = autoLabelIds(content, account?.autoLabelRules ?? []);
+  if (!wanted.length) return;
+
+  // A rule can outlive the label it points at, so only labels the user still
+  // owns are attached.
+  const owned = await db
+    .select({ id: labels.id })
+    .from(labels)
+    .where(and(inArray(labels.id, wanted), eq(labels.userId, userId)));
+  if (!owned.length) return;
+
+  await db
+    .insert(taskLabels)
+    .values(owned.map((label) => ({ taskId, labelId: label.id })))
+    .onConflictDoNothing();
 }

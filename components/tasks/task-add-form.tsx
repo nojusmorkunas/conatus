@@ -155,6 +155,27 @@ export function TaskAddForm({
     onCancel?.();
   }
 
+  // An empty composer left behind after the caret moves away is just clutter,
+  // so it puts itself away. A form opened expanded by its parent (a subtask, a
+  // "add task above", the quick-add dialog) is left alone: something else owns
+  // when it goes. Focus is read a tick later, once it has settled on whatever
+  // was clicked — including the menus and pickers this composer opens, which
+  // land outside the form in the DOM.
+  function collapseWhenEmptyAndBlurred() {
+    if (initiallyExpanded) return;
+    setTimeout(() => {
+      if (submitting.current || pending || recovery) return;
+      if (content.trim() || description.trim() || files.length || reminders.length) return;
+      const active = document.activeElement;
+      if (
+        active &&
+        (rootRef.current?.contains(active) ||
+          active.closest("[data-slot=dropdown-menu-content], [role=dialog]"))
+      ) return;
+      cancel();
+    }, 0);
+  }
+
   async function saveDetails(taskId: string, details: Details) {
     const remaining: Details = { labelIds: [], reminders: [], files: [] };
     const failures: string[] = [];
@@ -234,6 +255,7 @@ export function TaskAddForm({
 
   return (
     <form ref={rootRef as React.Ref<HTMLFormElement>} data-quick-add aria-label="New task" aria-busy={pending} onSubmit={submit}
+      onBlur={collapseWhenEmptyAndBlurred}
       onKeyDown={(event) => {
         if (event.key !== "Escape" || event.defaultPrevented) return;
         // Portalled menus and dialogs handle their own Escape. React still

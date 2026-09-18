@@ -122,12 +122,13 @@ export function DueEditor({
           type="number"
           min={1}
           max={1440}
-          aria-label="Duration (minutes)"
-          placeholder="min"
+          aria-label="Duration in minutes"
+          placeholder="30"
           className="w-20"
           value={duration}
           onChange={(event) => setDuration(event.target.value)}
         />
+        <span className="text-xs text-muted-foreground">minutes</span>
         {duration && (
           <Button type="button" variant="ghost" size="sm" onClick={() => setDuration("")}>
             Clear

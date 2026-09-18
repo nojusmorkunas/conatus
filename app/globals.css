@@ -236,6 +236,14 @@
   --task-card-inset: 28px;
 }
 
+/* A task dragged over a sidebar project. Set from the task list's drag
+   handlers, which hit-test the row under the pointer. */
+[data-task-drop-target] {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+  background-color: color-mix(in oklch, var(--primary) 12%, transparent);
+}
+
 @media (max-width: 639px) {
   :root {
     --task-indent-base: 8px;
@@ -368,11 +376,14 @@
     min-height: 2.75rem;
   }
 
+  /* The completion checkbox is square by design and already carries a 44px
+     touch area through its ::after, so the blanket minimum would only
+     stretch it into a tall rectangle. */
   .project-sidebar a,
-  .project-sidebar button,
+  .project-sidebar button:not(.task-checkbox),
   .project-sidebar form,
   .task-dialog a,
-  .task-dialog button {
+  .task-dialog button:not(.task-checkbox) {
     min-height: 2.75rem;
   }
 }
