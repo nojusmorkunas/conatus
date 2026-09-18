@@ -18,7 +18,10 @@ services:
       start_period: 10s
 
   minio:
-    image: minio/minio
+    # MinIO stopped publishing to Docker Hub, so minio/minio no longer pulls.
+    # Pinned because the console this file exposes on 9001 was dropped from
+    # later releases.
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:

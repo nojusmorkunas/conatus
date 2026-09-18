@@ -11,7 +11,7 @@ else
 fi
 
 if ! docker inspect todoist-minio >/dev/null 2>&1; then
-  docker run -d --name todoist-minio -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin -p 9000:9000 -p 9001:9001 minio/minio server /data --console-address :9001
+  docker run -d --name todoist-minio -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin -p 9000:9000 -p 9001:9001 quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z server /data --console-address :9001
 else
   docker start todoist-minio >/dev/null
 fi

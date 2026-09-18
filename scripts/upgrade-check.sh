@@ -112,6 +112,10 @@ cleanup() {
 trap cleanup EXIT
 
 git show "$from_tag:docker-compose.yml" > "$work/old-compose.yml"
+# Released compose files still pull MinIO from Docker Hub, which no longer
+# serves it. Point them at the registry MinIO publishes to now, so upgrading
+# from an old release is still testable.
+sed -i 's#image: minio/minio.*#image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z#' "$work/old-compose.yml"
 
 cat > "$env_file" <<EOF
 POSTGRES_USER=$pg_user
