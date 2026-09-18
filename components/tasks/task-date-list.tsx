@@ -253,8 +253,8 @@ export function TaskDateList({
               selecting={selecting}
               selected={selectedIds.includes(task.id)}
               selectionCount={selectedIds.length}
-              onSelectionToggle={(target) => toggleSelection(target.id)}
-              onSelectionStart={(target) => startSelecting(target.id)}
+              onSelectionToggle={(target) => toggleSelection([target.id])}
+              onSelectionStart={(target) => startSelecting([target.id])}
               onError={() => setError("That didn't work. Try again.")}
             />
           ))}

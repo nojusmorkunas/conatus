@@ -14,16 +14,18 @@ export function useTaskSelection() {
     setSelectedIds([]);
   }
 
-  function start(taskId: string) {
+  // Callers pass the clicked task first, then anything that travels with it —
+  // its subtasks. Ticking a subtask on its own still only affects that one.
+  function start(ids: string[]) {
     setSelecting(true);
-    setSelectedIds([taskId]);
+    setSelectedIds([...new Set(ids)]);
   }
 
-  function toggle(taskId: string) {
+  function toggle(ids: string[]) {
     setSelectedIds((current) =>
-      current.includes(taskId)
-        ? current.filter((id) => id !== taskId)
-        : [...current, taskId],
+      current.includes(ids[0])
+        ? current.filter((id) => !ids.includes(id))
+        : [...new Set([...current, ...ids])],
     );
   }
 

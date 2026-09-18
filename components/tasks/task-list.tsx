@@ -27,6 +27,7 @@ import { TaskDragPreview } from "./task-row";
 import { taskCollisionDetection, taskDropAnimation, taskKeyboardCoordinates } from "./task-drag";
 import { jsonInit } from "@/lib/api-client";
 import { truncate } from "@/lib/utils";
+import { toastManager } from "@/components/ui/toast";
 import { projectTaskDrop, type TaskDropProjection, type TaskDropTarget } from "@/lib/task-drop";
 import { TaskModal } from "./task-modal";
 import { TaskGroup } from "./task-group";
@@ -44,15 +45,6 @@ import type { Label, ProjectMember, Section, TaskWithLabels } from "./types";
 
 export type { ProjectMember, TaskWithLabels };
 
-// Where the pointer ended up: dnd-kit reports where the gesture started plus
-// how far it has moved.
-function dropPoint(event: Pick<DragEndEvent, "activatorEvent" | "delta">) {
-  const activator = event.activatorEvent as MouseEvent & TouchEvent;
-  const origin = activator.touches?.[0] ?? activator.changedTouches?.[0] ?? activator;
-  if (typeof origin?.clientX !== "number") return null;
-  return { x: origin.clientX + event.delta.x, y: origin.clientY + event.delta.y };
-}
-
 // The sidebar runs its own DndContext for reordering projects, and dnd-kit
 // cannot drop across contexts. Hit-testing the row under the pointer moves a
 // task into a project without merging the two drag systems.
@@ -69,6 +61,10 @@ function sidebarProjectRowAt(point: { x: number; y: number } | null) {
 
 function projectIdOf(row: HTMLElement | null) {
   return row?.dataset.projectId ?? row?.dataset.favoriteProjectId ?? null;
+}
+
+function projectNameOf(row: HTMLElement | null) {
+  return row?.dataset.projectName ?? row?.dataset.favoriteProjectName ?? "the project";
 }
 
 // A press and hold that never moved is a request to select, not to reorder.
@@ -114,6 +110,7 @@ export function TaskList({
   const dropContext = useRef<{ target: TaskDropTarget; visibleIds: Set<string> } | null>(null);
   const indentWidth = useRef(28);
   const sidebarDropRow = useRef<HTMLElement | null>(null);
+  const pointer = useRef<{ x: number; y: number } | null>(null);
   const moveQueue = useRef(Promise.resolve());
   const moveRevision = useRef(0);
   const moveFailed = useRef(false);
@@ -125,6 +122,7 @@ export function TaskList({
     selectedIds: selectedTaskIds,
     start: startSelecting,
     toggle: toggleTaskSelection,
+    exit: exitSelection,
     run: runOnSelection,
   } = useTaskSelection();
   const { pending, schedule, undo } = usePendingAction();
@@ -283,20 +281,37 @@ export function TaskList({
     if (ok) await refresh();
   }
 
+  // Selecting a task selects what hangs off it. The clicked task comes first
+  // so the hook knows which one was ticked.
+  function selectionIdsFor(task: TaskWithLabels) {
+    return [task.id, ...[...subtreeIds(tasks, task.id)].filter((id) => id !== task.id)];
+  }
+
   // A row inside the selection speaks for all of it: the menu, and a drag.
   function actsOnSelection(task: TaskWithLabels) {
     return selecting && selectedTaskIds.length > 1 && selectedTaskIds.includes(task.id);
   }
 
   // Dragging any one of the selected tasks takes the rest with it.
-  function moveSelectedTasks(targetProjectId: string) {
-    return bulkAction((task) => patchTask(task.id, { projectId: targetProjectId })).then(() =>
-      router.refresh(),
-    );
+  async function moveSelectedTasks(targetProjectId: string) {
+    const ok = await bulkAction((task) => patchTask(task.id, { projectId: targetProjectId }));
+    router.refresh();
+    return ok;
+  }
+
+  async function dropOnProject(task: TaskWithLabels, projectId: string, projectName: string) {
+    const count = actsOnSelection(task) ? selectedTaskIds.length : 1;
+    const ok = actsOnSelection(task)
+      ? await moveSelectedTasks(projectId)
+      : await moveTask(task, projectId);
+    if (!ok) return;
+    toastManager.add({
+      title: `${count} ${count === 1 ? "task" : "tasks"} added to ${projectName}`,
+    });
   }
 
   async function moveTask(task: TaskWithLabels, targetProjectId: string) {
-    if (targetProjectId === task.projectId) return;
+    if (targetProjectId === task.projectId) return false;
     const ok = await withError(() => patchTask(task.id, { projectId: targetProjectId }));
     if (ok) {
       await refresh();
@@ -304,6 +319,7 @@ export function TaskList({
       // the task leaving one project and joining another.
       router.refresh();
     }
+    return ok;
   }
 
   // Copying labels needs a second request, so the caller gets whichever
@@ -428,6 +444,21 @@ export function TaskList({
   const activeSection = orderedSections.find((section) => section.id === activeId) ?? null;
   const draggedIds = useMemo(() => activeId ? subtreeIds(tasks, activeId) : new Set<string>(), [tasks, activeId]);
 
+  // dnd-kit reports how far a drag has travelled, but that figure is batched
+  // and can lag the release. Where the pointer actually is decides the drop.
+  useEffect(() => {
+    if (!activeId) return;
+    function track(event: PointerEvent) {
+      pointer.current = { x: event.clientX, y: event.clientY };
+    }
+    window.addEventListener("pointermove", track, true);
+    window.addEventListener("pointerup", track, true);
+    return () => {
+      window.removeEventListener("pointermove", track, true);
+      window.removeEventListener("pointerup", track, true);
+    };
+  }, [activeId]);
+
   useEffect(() => {
     if (!activeId) return;
     const previous = document.body.style.cursor;
@@ -460,6 +491,46 @@ export function TaskList({
       .flatMap((sectionId) => flattenTaskGroup(tasks, sectionId)),
     [tasks, orderedSections],
   );
+
+  // Only the top of a selected branch moves: its subtasks come along with it,
+  // and moving them too would flatten them into the drop target.
+  function selectionRoots() {
+    const selected = new Set(selectedTaskIds);
+    const byId = new Map(tasks.map((task) => [task.id, task]));
+    const rowOrder = new Map(flatTasks.map((task, index) => [task.id, index]));
+    return selectedTaskIds
+      .filter((id) => {
+        let parentId = byId.get(id)?.parentId ?? null;
+        while (parentId) {
+          if (selected.has(parentId)) return false;
+          parentId = byId.get(parentId)?.parentId ?? null;
+        }
+        return true;
+      })
+      .sort((a, b) => (rowOrder.get(a) ?? 0) - (rowOrder.get(b) ?? 0));
+  }
+
+  // A drop inside the list puts the whole selection at the drop point, in the
+  // order the rows appear now. Each task lands after the previous one, so the
+  // group keeps its shape instead of arriving reversed.
+  async function moveSelectionTo(target: TaskDropProjection) {
+    setError(null);
+    let afterId = target.afterId;
+    for (const id of selectionRoots()) {
+      const response = await patchTask(id, {
+        sectionId: target.sectionId,
+        parentId: target.parentId,
+        afterId,
+      });
+      if (!response.ok) {
+        setError("Some updates failed.");
+        break;
+      }
+      afterId = id;
+    }
+    await refresh();
+    exitSelection();
+  }
 
   function updateProjection(next: TaskDropProjection | null) {
     const current = projectionRef.current;
@@ -627,31 +698,38 @@ export function TaskList({
             indentWidth.current = parseFloat(getComputedStyle(node).getPropertyValue("--task-indent-step")) || 28;
           }
           setActiveId(String(event.active.id));
+          pointer.current = null;
           updateProjection(null);
         }}
         onDragMove={(event) => {
-          highlightSidebarDrop(dropPoint(event));
-          if (!selecting && sortBy === "manual") updateProjection(dragProjection(event));
+          highlightSidebarDrop(pointer.current);
+          if (sortBy === "manual") updateProjection(dragProjection(event));
         }}
         onDragOver={(event) => {
-          if (!selecting && sortBy === "manual") updateProjection(dragProjection(event));
+          if (sortBy === "manual") updateProjection(dragProjection(event));
         }}
         onDragEnd={(event) => {
           setActiveId(null);
-          // Read the release point, not the last highlight: a drag that passes
-          // over the sidebar and comes back may never fire another move.
-          const droppedOnProjectId = projectIdOf(sidebarProjectRowAt(dropPoint(event)));
+          // Read where the pointer was released, not the last highlight: a drag
+          // that crosses the sidebar and comes back may fire no further move.
+          const droppedRow = sidebarProjectRowAt(pointer.current);
+          const droppedOnProjectId = projectIdOf(droppedRow);
           highlightSidebarDrop(null);
           const task = tasks.find((candidate) => candidate.id === event.active.id);
           if (orderedSections.some((section) => section.id === event.active.id)) {
             void handleSectionDragEnd(event);
           } else if (task && droppedOnProjectId) {
-            if (draggingSelection) void moveSelectedTasks(droppedOnProjectId);
-            else void moveTask(task, droppedOnProjectId);
-          } else if (task && heldInPlace(event)) {
-            startSelecting(task.id);
-          } else if (!selecting && sortBy === "manual") {
-            void handleTaskDragEnd(event);
+            void dropOnProject(task, droppedOnProjectId, projectNameOf(droppedRow));
+          } else if (task && !selecting && heldInPlace(event)) {
+            startSelecting(selectionIdsFor(task));
+          } else if (task && sortBy === "manual") {
+            // A selection lands as a group; anything else reorders on its own.
+            const target = projectionRef.current;
+            if (actsOnSelection(task)) {
+              if (target) void moveSelectionTo(target);
+            } else {
+              void handleTaskDragEnd(event);
+            }
           }
           updateProjection(null);
         }}
@@ -722,8 +800,8 @@ export function TaskList({
                 }
                 onSubtaskAdded={refresh}
                 onOpenDetail={(task) => setDetailTaskId(task.id)}
-                onSelectionToggle={(task) => toggleTaskSelection(task.id)}
-                onSelectionStart={(task) => startSelecting(task.id)}
+                onSelectionToggle={(task) => toggleTaskSelection(selectionIdsFor(task))}
+                onSelectionStart={(task) => startSelecting(selectionIdsFor(task))}
                 onToggleTaskCollapsed={toggleTaskCollapsed}
                 onRenameSection={(section, name) =>
                   mutateSection(() => fetch(`/api/sections/${section.id}`, jsonInit("PATCH", { name })))
@@ -761,7 +839,9 @@ export function TaskList({
               <TaskDragPreview task={activeTask} allTasks={tasks} depth={activeDepth}
                 members={members} currentUserId={currentUserId} today={today} dateFormat={dateFormat} />
               {draggedCount > 3 && (
-                <span className="absolute -top-2 -left-2 flex size-6 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground shadow">
+                // Sits on the right: dropping onto the sidebar puts the left
+                // edge of the preview off-screen.
+                <span className="absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground shadow">
                   {draggedCount}
                 </span>
               )}
