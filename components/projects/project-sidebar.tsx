@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
   CalendarDays,
@@ -94,6 +94,7 @@ export function ProjectSidebar({
   todayCount: number;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const sidebarRef = useRef<HTMLElement>(null);
   const [projects, setProjects] = useState(initialProjects);
   const [favoriteLabels, setFavoriteLabels] = useState(initialLabels);
@@ -113,6 +114,15 @@ export function ProjectSidebar({
   const projectProjectionRef = useRef<ReturnType<typeof projectTaskDepth>>(null);
   const [favoritesExpanded, setFavoritesExpanded] = useState(true);
   const [projectsExpanded, setProjectsExpanded] = useState(true);
+
+  // Adding a task from anywhere inside a project means adding it to that
+  // project. Everywhere else — Focus, Calendar, a label — falls back to Inbox.
+  const openProjectId = pathname?.startsWith("/projects/")
+    ? pathname.split("/")[2]
+    : null;
+  const quickAddProjectId =
+    projects.find((project) => project.id === openProjectId && !project.isArchived)?.id ??
+    inboxProjectId;
 
   // A shared project can be its owner's Inbox; only my own Inbox is pinned.
   const inbox = projects.find((project) => project.isInbox && !project.shared);
@@ -453,6 +463,9 @@ export function ProjectSidebar({
               <ViewLink href="/filters-labels" icon={<LayoutGrid className="size-4" />}>
                 Organize
               </ViewLink>
+              <ViewLink href="/stats" icon={<ChartNoAxesColumn className="size-4" />}>
+                Stats
+              </ViewLink>
               <ViewLink href="/trash" icon={<Trash2 className="size-4" />}>
                 Trash
               </ViewLink>
@@ -693,7 +706,8 @@ export function ProjectSidebar({
             onClick={(event) => event.stopPropagation()}
           >
             <TaskAddForm
-              projectId={inboxProjectId}
+              key={quickAddProjectId ?? inboxProjectId}
+              projectId={quickAddProjectId ?? inboxProjectId}
               sectionId={null}
               today={today}
               labels={labels}

@@ -236,6 +236,14 @@
   --task-card-inset: 28px;
 }
 
+/* A task dragged over a sidebar project. Set from the task list's drag
+   handlers, which hit-test the row under the pointer. */
+[data-task-drop-target] {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+  background-color: color-mix(in oklch, var(--primary) 12%, transparent);
+}
+
 @media (max-width: 639px) {
   :root {
     --task-indent-base: 8px;
@@ -269,6 +277,13 @@
 
 .task-row:not(.is-dragging):hover::before {
   background-color: color-mix(in oklch, var(--muted) 55%, transparent);
+}
+
+/* A selected row keeps its own checkbox and says so with the card behind it,
+   ringed so it reads as picked rather than merely hovered. */
+.task-row.is-selected::before {
+  background-color: color-mix(in oklch, var(--primary) 10%, transparent);
+  box-shadow: inset 0 0 0 1.5px color-mix(in oklch, var(--primary) 40%, transparent);
 }
 
 /* Keep source geometry fixed: moving targets make small corrections jitter.
@@ -310,13 +325,34 @@
 
 /* Reuse the row's full presentation and dimensions. Its painted surface starts
    at the card edge; the transparent gutter keeps the original pickup offset. */
+/* Dragging a selection carries a stack: layers of the same card, offset
+   behind the real preview. Three is as many as reads clearly. */
+.task-drag-stack {
+  position: relative;
+}
+
+.task-drag-stack-layer {
+  position: absolute;
+  inset-block: 0;
+  right: 0;
+  left: var(--task-card-inset);
+  border-radius: 0.5rem;
+  background: color-mix(in oklch, var(--card) 88%, transparent);
+  box-shadow: 0 8px 24px oklch(0 0 0 / 18%), 0 2px 6px oklch(0 0 0 / 12%);
+  opacity: 0.72;
+  transform: translate(calc(var(--stack-index) * 6px), calc(var(--stack-index) * 6px));
+}
+
 .task-drag-ghost {
   pointer-events: none;
   cursor: grabbing;
+  /* Translucent so the sidebar project underneath stays readable while the
+     preview is over it. */
+  opacity: 0.72;
 }
 
 .task-drag-ghost::before {
-  background: var(--card);
+  background: color-mix(in oklch, var(--card) 88%, transparent);
   box-shadow: 0 8px 24px oklch(0 0 0 / 18%), 0 2px 6px oklch(0 0 0 / 12%);
 }
 
@@ -368,11 +404,14 @@
     min-height: 2.75rem;
   }
 
+  /* The completion checkbox is square by design and already carries a 44px
+     touch area through its ::after, so the blanket minimum would only
+     stretch it into a tall rectangle. */
   .project-sidebar a,
-  .project-sidebar button,
+  .project-sidebar button:not(.task-checkbox),
   .project-sidebar form,
   .task-dialog a,
-  .task-dialog button {
+  .task-dialog button:not(.task-checkbox) {
     min-height: 2.75rem;
   }
 }

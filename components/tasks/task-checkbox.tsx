@@ -3,6 +3,7 @@
 import { Check } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { playCompletionSound } from "@/lib/completion-sound";
 import { priorityColors, priorityFill } from "./priority";
 
 export function TaskCheckbox({
@@ -10,19 +11,31 @@ export function TaskCheckbox({
   checked,
   onToggle,
   celebrating = false,
+  selectMode = false,
 }: {
   priority: number;
   checked: boolean;
   onToggle: () => void;
   celebrating?: boolean;
+  /** In selection mode the same box ticks a task into the selection. */
+  selectMode?: boolean;
 }) {
   return (
     <button
       type="button"
-      aria-label={checked ? "Mark incomplete" : "Mark complete"}
-      onClick={onToggle}
+      aria-label={
+        selectMode
+          ? checked ? "Deselect task" : "Select task"
+          : checked ? "Mark incomplete" : "Mark complete"
+      }
+      onClick={() => {
+        // Every checkbox in the app is this one, so ticking anything pops —
+        // except when it is only gathering a selection.
+        if (!selectMode && !checked) playCompletionSound();
+        onToggle();
+      }}
       className={cn(
-        "group/checkbox relative mt-0.5 flex size-5 shrink-0 self-start items-center justify-center rounded-[6px] border-2 transition-all after:absolute after:-inset-3 hover:scale-[1.04] sm:mt-0",
+        "task-checkbox group/checkbox relative mt-0.5 flex size-5 shrink-0 self-start items-center justify-center rounded-[6px] border-2 transition-all after:absolute after:-inset-3 hover:scale-[1.04] sm:mt-0",
         celebrating && "task-checkbox-completing",
         checked
           ? priorityFill[priority]

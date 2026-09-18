@@ -40,6 +40,7 @@ export function TaskGroup({
   onSubtaskAdded,
   onOpenDetail,
   onSelectionToggle,
+  onSelectionStart,
   onToggleTaskCollapsed,
   onRenameSection,
   onDeleteSection,
@@ -74,6 +75,7 @@ export function TaskGroup({
   onSubtaskAdded: () => void;
   onOpenDetail: (task: TaskWithLabels) => void;
   onSelectionToggle: (task: TaskWithLabels) => void;
+  onSelectionStart: (task: TaskWithLabels) => void;
   onToggleTaskCollapsed: (taskId: string) => void;
   onRenameSection: (section: Section, name: string) => void;
   onDeleteSection: (section: Section) => void;
@@ -156,7 +158,9 @@ export function TaskGroup({
                 onOpenDetail={onOpenDetail}
                 selecting={selecting}
                 selected={selectedTaskIds.includes(task.id)}
+                selectionCount={selectedTaskIds.length}
                 onSelectionToggle={onSelectionToggle}
+                onSelectionStart={onSelectionStart}
                 draggable={draggable}
                 draggedDescendant={task.id !== activeTaskId && draggedIds.has(task.id)}
                 collapsed={collapsedTaskIds.has(task.id)}

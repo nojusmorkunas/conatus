@@ -6,6 +6,7 @@ import {
   ArrowUp,
   Bell,
   CalendarDays,
+  Check,
   ChevronRight,
   Copy,
   Ellipsis,
@@ -44,6 +45,13 @@ import { AssigneeChip, DeadlineChip, DueChip, DurationChip } from "./task-chips"
 import { AssigneeEditor, DueEditor } from "./task-editors";
 import type { Label, ProjectMember, TaskWithLabels } from "./types";
 
+// Anything here handles its own click, so the row must keep out of the way.
+// Menus are portalled out of the row in the DOM but still inside it in the
+// React tree, so their clicks bubble here: without the menu selectors, picking
+// "Move to…" or a label would also open the task behind the menu.
+const ROW_CONTROLS =
+  "button, input, a, textarea, select, [data-slot=dropdown-menu-content], [role=menuitem], [role=menuitemcheckbox], [role=menuitemradio], [role=dialog]";
+
 function TaskRowComponent({
   task,
   allTasks,
@@ -67,6 +75,8 @@ function TaskRowComponent({
   selecting = false,
   selected = false,
   onSelectionToggle,
+  onSelectionStart,
+  selectionCount = 1,
   draggable = false,
   draggedDescendant = false,
   collapsed = false,
@@ -101,12 +111,17 @@ function TaskRowComponent({
   selecting?: boolean;
   selected?: boolean;
   onSelectionToggle?: (task: TaskWithLabels) => void;
+  /** Ctrl/Cmd-click, or a press and hold on touch, starts selecting here. */
+  onSelectionStart?: (task: TaskWithLabels) => void;
+  /** How many tasks are selected, so a selected row's menu can say so. */
+  selectionCount?: number;
   draggable?: boolean;
   draggedDescendant?: boolean;
   collapsed?: boolean;
   onToggleCollapsed?: (taskId: string) => void;
   onError?: () => void;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const [addingSubtask, setAddingSubtask] = useState(false);
   const [addingTask, setAddingTask] = useState<"above" | "below" | null>(null);
   const [editingDue, setEditingDue] = useState(false);
@@ -114,6 +129,8 @@ function TaskRowComponent({
   const [isCompleting, setIsCompleting] = useState(false);
   const [completionHeight, setCompletionHeight] = useState<number | null>(null);
   const completionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const heldOpen = useRef(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useDraggable({
     id: task.id,
@@ -141,12 +158,26 @@ function TaskRowComponent({
 
   useEffect(() => () => {
     if (completionTimer.current) clearTimeout(completionTimer.current);
+    if (holdTimer.current) clearTimeout(holdTimer.current);
   }, []);
+
+  // Press and hold to start selecting. A draggable row leaves this to the drag
+  // sensor instead — it claims the same gesture at 250ms — and picks the hold
+  // up when the drag ends without having moved.
+  const holdToSelect = Boolean(onSelectionStart) && !draggable && !selecting;
+
+  function cancelHold() {
+    if (!holdTimer.current) return;
+    clearTimeout(holdTimer.current);
+    holdTimer.current = null;
+  }
 
   // A repeating task is not leaving the list: completing it moves it to its
   // next due date. The row's collapse animation would play it out and then
   // snap it back, so it only gets the checkbox celebration.
   const repeats = Boolean(task.recurrence && task.dueDate);
+  // Everything the menu does to a selected row it does to the selection.
+  const menuTaskCount = selecting && selected ? selectionCount : 1;
 
   function handleToggle() {
     if (task.isCompleted) {
@@ -208,22 +239,30 @@ function TaskRowComponent({
           // Only real controls opt out of row-drag. The row itself carries
           // role="button" from dnd-kit attributes, so a [role=button] check
           // would match every press and kill dragging entirely.
-          const control = (event.target as Element).closest?.(
-            "button, input, a, textarea, select",
-          );
+          const control = (event.target as Element).closest?.(ROW_CONTROLS);
           if (control && control !== event.currentTarget) return;
           listeners?.onMouseDown?.(event);
         }}
         onTouchStart={(event) => {
-          const control = (event.target as Element).closest?.(
-            "button, input, a, textarea, select",
-          );
+          const control = (event.target as Element).closest?.(ROW_CONTROLS);
           if (control && control !== event.currentTarget) return;
+          if (holdToSelect) {
+            heldOpen.current = false;
+            holdTimer.current = setTimeout(() => {
+              holdTimer.current = null;
+              heldOpen.current = true;
+              onSelectionStart?.(task);
+            }, 450);
+          }
           listeners?.onTouchStart?.(event);
         }}
+        onTouchMove={cancelHold}
+        onTouchEnd={cancelHold}
+        onTouchCancel={cancelHold}
         className={cn(
           "task-row group relative mb-0.5 flex items-start gap-2 py-2.5 pr-2",
           selecting && "cursor-pointer",
+          selecting && selected && "is-selected",
           draggable && "touch-pan-y select-none cursor-pointer",
           isDragging && "is-dragging cursor-grabbing",
           draggedDescendant && "is-drag-descendant",
@@ -236,14 +275,27 @@ function TaskRowComponent({
             onSelectionToggle?.(task);
             return;
           }
+          // The tap that ended a press-and-hold already did its job.
+          if (heldOpen.current) {
+            heldOpen.current = false;
+            return;
+          }
           // Click anywhere opens the task; real controls (checkbox, menus,
           // links) handle their own clicks. After a real drag dnd-kit swallows
           // the trailing click, so dropping a task never opens it.
-          const control = (event.target as Element).closest?.(
-            "button, input, a, textarea, select",
-          );
+          const control = (event.target as Element).closest?.(ROW_CONTROLS);
           if (control) return;
+          if ((event.ctrlKey || event.metaKey) && onSelectionStart) {
+            onSelectionStart(task);
+            return;
+          }
           onOpenDetail(task);
+        }}
+        onContextMenu={(event) => {
+          // The row's own menu is the task menu, so the browser's is not needed.
+          if ((event.target as Element).closest?.("input, textarea, a")) return;
+          event.preventDefault();
+          setMenuOpen(true);
         }}
         onKeyDown={(event) => {
           if (event.target !== event.currentTarget || selecting) return;
@@ -266,23 +318,13 @@ function TaskRowComponent({
             <GripVertical aria-hidden className="size-4" />
           </button>
         )}
-        {selecting ? (
-          <input
-            type="checkbox"
-            aria-label={selected ? "Deselect task" : "Select task"}
-            checked={selected}
-            className="mt-0.5 size-5 shrink-0 accent-primary sm:mt-0"
-            onClick={(event) => event.stopPropagation()}
-            onChange={() => onSelectionToggle?.(task)}
-          />
-        ) : (
-          <TaskCheckbox
-            priority={task.priority}
-            checked={task.isCompleted || isCompleting}
-            celebrating={isCompleting}
-            onToggle={handleToggle}
-          />
-        )}
+        <TaskCheckbox
+          priority={task.priority}
+          checked={selecting ? selected : task.isCompleted || isCompleting}
+          celebrating={!selecting && isCompleting}
+          selectMode={selecting}
+          onToggle={selecting ? () => onSelectionToggle?.(task) : handleToggle}
+        />
 
         <TaskRowDetails task={task} directChildren={directChildren} members={members}
           currentUserId={currentUserId} today={today} dateFormat={dateFormat} />
@@ -290,7 +332,7 @@ function TaskRowComponent({
         <div
           className={cn(
             "task-row-actions absolute top-1.5 right-1.5 flex items-center gap-0.5",
-            !selecting && "rounded-md bg-muted px-0.5 py-0.5 opacity-100 shadow-sm ring-1 ring-border/80 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100",
+            "rounded-md bg-muted px-0.5 py-0.5 opacity-100 shadow-sm ring-1 ring-border/80 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100",
           )}
         >
           {directChildren.length > 0 && (
@@ -306,10 +348,13 @@ function TaskRowComponent({
               <ChevronRight className={cn("size-3 transition-transform", !collapsed && "rotate-90")} />
             </button>
           )}
-          {!selecting && (
-            <TaskContextMenu
+          <TaskContextMenu
               task={task}
               today={today}
+              open={menuOpen}
+              onOpenChange={setMenuOpen}
+              taskCount={menuTaskCount}
+              onComplete={() => onToggle(task)}
               onAddAbove={() => setAddingTask("above")}
               onAddBelow={() => setAddingTask("below")}
               onAddSubtask={() => setAddingSubtask(true)}
@@ -328,7 +373,6 @@ function TaskRowComponent({
               onDuplicate={() => onDuplicate?.(task)}
               onDelete={() => onDelete(task)}
             />
-          )}
         </div>
       </div>
 
@@ -416,6 +460,7 @@ export const TaskRow = memo(TaskRowComponent, (prev, next) =>
   prev.dateFormat === next.dateFormat &&
   prev.selecting === next.selecting &&
   prev.selected === next.selected &&
+  prev.selectionCount === next.selectionCount &&
   prev.draggable === next.draggable &&
   prev.collapsed === next.collapsed &&
   prev.draggedDescendant === next.draggedDescendant,
@@ -504,6 +549,10 @@ function TaskContent({ task }: { task: TaskWithLabels }) {
 function TaskContextMenu({
   task,
   today,
+  open,
+  onOpenChange,
+  taskCount,
+  onComplete,
   onAddAbove,
   onAddBelow,
   onAddSubtask,
@@ -524,6 +573,11 @@ function TaskContextMenu({
 }: {
   task: TaskWithLabels;
   today: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** More than one when the row stands for a selection. */
+  taskCount: number;
+  onComplete: () => void;
   onAddAbove: () => void;
   onAddBelow: () => void;
   onAddSubtask: () => void;
@@ -542,8 +596,11 @@ function TaskContextMenu({
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  // Adding a task next to "these seven", opening them, or copying a link to
+  // them means nothing. What is left applies to one task or to many alike.
+  const many = taskCount > 1;
+  const setOpen = onOpenChange;
 
   function run(action: () => void) {
     action();
@@ -557,7 +614,7 @@ function TaskContextMenu({
   }
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger
         render={
           <Button
@@ -571,12 +628,16 @@ function TaskContextMenu({
         }
       />
       <DropdownMenuContent align="end" className="w-56" onPointerDown={(event) => event.stopPropagation()}>
-        <DropdownMenuItem onClick={() => run(onAddAbove)}><ArrowUp />Add task above</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => run(onAddBelow)}><ArrowDown />Add task below</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => run(onAddSubtask)}><Plus />Add subtask</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => run(onEdit)}><Pencil />Open</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => run(onSetDue)}><CalendarDays />Set date…</DropdownMenuItem>
-        {canAssign && <DropdownMenuItem onClick={() => run(onAssign)}><UserPlus />Assign…</DropdownMenuItem>}
+        {many && <p className="px-1.5 py-1 text-xs text-muted-foreground">{taskCount} tasks selected</p>}
+        {many && <DropdownMenuItem onClick={() => run(onComplete)}><Check />Complete</DropdownMenuItem>}
+        {!many && <>
+          <DropdownMenuItem onClick={() => run(onAddAbove)}><ArrowUp />Add task above</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => run(onAddBelow)}><ArrowDown />Add task below</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => run(onAddSubtask)}><Plus />Add subtask</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => run(onEdit)}><Pencil />Open</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => run(onSetDue)}><CalendarDays />Set date…</DropdownMenuItem>
+          {canAssign && <DropdownMenuItem onClick={() => run(onAssign)}><UserPlus />Assign…</DropdownMenuItem>}
+        </>}
         <DropdownMenuSub>
           <DropdownMenuSubTrigger><Tag />Labels</DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="w-52">
@@ -622,8 +683,10 @@ function TaskContextMenu({
           ))}
         </div>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => run(onDeadline)}><CalendarDays />Deadline</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => run(onReminders)}><Bell />Reminders</DropdownMenuItem>
+        {!many && <>
+          <DropdownMenuItem onClick={() => run(onDeadline)}><CalendarDays />Deadline</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => run(onReminders)}><Bell />Reminders</DropdownMenuItem>
+        </>}
         <DropdownMenuSub onOpenChange={(nextOpen) => { if (nextOpen) void loadProjects(); }}>
           <DropdownMenuSubTrigger><FolderInput />Move to…</DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="w-52">
@@ -635,9 +698,9 @@ function TaskContextMenu({
         </DropdownMenuSub>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => run(onDuplicate)}><Copy />Duplicate</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => run(() => {
+        {!many && <DropdownMenuItem onClick={() => run(() => {
           void navigator.clipboard.writeText(`${location.origin}/projects/${task.projectId}?task=${task.id}`);
-        })}><Link />Copy link to task</DropdownMenuItem>
+        })}><Link />Copy link to task</DropdownMenuItem>}
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onClick={() => run(onDelete)}><Trash2 />Move to Trash</DropdownMenuItem>
       </DropdownMenuContent>

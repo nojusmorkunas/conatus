@@ -13,11 +13,13 @@ import {
   type SettingsInput,
 } from "@/lib/validation";
 import { activityGraphSourceOptions } from "@/lib/activity-sources";
+import { defaultStartPage, startPageViews } from "@/lib/start-page";
 import { api, jsonInit } from "@/lib/api-client";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { CompletionSoundToggle } from "@/components/completion-sound-toggle";
 import { toastError } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import {
@@ -58,11 +60,13 @@ function formatTokenDate(value: string) {
 
 export function SettingsForm({
   defaults,
+  projects,
   icalToken,
   initialApiTokens,
   initialWebhooks,
 }: {
   defaults: SettingsInput;
+  projects: { id: string; name: string }[];
   icalToken: string | null;
   initialApiTokens: ApiToken[];
   initialWebhooks: Webhook[];
@@ -89,6 +93,11 @@ export function SettingsForm({
   } | null>(null);
   const [webhookCopied, setWebhookCopied] = useState(false);
   const [creatingWebhook, setCreatingWebhook] = useState(false);
+  // Select shows a raw value unless it is given the value/label pairs.
+  const startPageOptions = [
+    ...startPageViews.map((view) => ({ value: view.value, label: view.label })),
+    ...projects.map((project) => ({ value: project.id, label: project.name })),
+  ];
   const { control, handleSubmit, formState } = useForm<SettingsInput>({
     resolver: zodResolver(settingsSchema),
     defaultValues: defaults,
@@ -361,6 +370,31 @@ export function SettingsForm({
         </Field>
 
         <Field>
+          <FieldLabel>Start page</FieldLabel>
+          <Controller
+            control={control}
+            name="startPage"
+            render={({ field }) => (
+              <>
+                <Select items={startPageOptions} value={field.value ?? defaultStartPage} onValueChange={field.onChange}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {startPageOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FieldDescription>Where the app opens.</FieldDescription>
+              </>
+            )}
+          />
+        </Field>
+
+        <Field>
           <FieldLabel>Activity graph</FieldLabel>
           <Controller
             control={control}
@@ -412,10 +446,17 @@ export function SettingsForm({
 
       <section id="appearance" aria-labelledby="appearance-heading" className="scroll-mt-6 rounded-md border p-5">
         <h2 id="appearance-heading" className="mb-4 scroll-mt-6 text-lg font-semibold">Appearance</h2>
-        <Field>
-          <FieldLabel>Theme</FieldLabel>
-          <ThemeToggle />
-        </Field>
+        <FieldGroup>
+          <Field>
+            <FieldLabel>Theme</FieldLabel>
+            <ThemeToggle />
+          </Field>
+          <Field>
+            <FieldLabel>Completion sound</FieldLabel>
+            <CompletionSoundToggle />
+            <FieldDescription>Plays when you tick a task off. This device only.</FieldDescription>
+          </Field>
+        </FieldGroup>
       </section>
 
       <section id="calendar-feed" aria-labelledby="calendar-feed-heading" className="scroll-mt-6 rounded-md border p-5">
@@ -618,6 +659,15 @@ export function SettingsForm({
               </p>
               <Link href="/settings/import" className={cn(buttonVariants({ variant: "default" }), "mt-3")}>
                 Import from Todoist
+              </Link>
+            </div>
+            <div>
+              <p className="mb-2 text-sm font-medium">Deleted items</p>
+              <p className="mb-2 text-sm text-muted-foreground">
+                Projects and tasks you delete stay in Trash until you restore them.
+              </p>
+              <Link href="/trash" className={buttonVariants({ variant: "outline" })}>
+                Open Trash
               </Link>
             </div>
             <div>

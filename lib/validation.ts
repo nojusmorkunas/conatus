@@ -4,6 +4,7 @@ import { z } from "zod";
 import { parseRecurrence } from "./recurrence";
 import { parseFilter } from "./filter";
 import { activityGraphSources } from "./activity-sources";
+import { startPageViewValues } from "./start-page";
 
 export const dateFormats = [
   "yyyy-MM-dd",
@@ -99,6 +100,10 @@ export const settingsSchema = z.object({
   weekStart: z.number().int().min(0).max(6),
   dailyGoal: z.number().int().min(1).max(100),
   activityGraphSource: z.enum(activityGraphSources),
+  // A view key or the id of a project to open on; see lib/start-page. Optional
+  // so older clients — the API, the MCP server — can keep PATCHing settings
+  // with the fields they know about.
+  startPage: z.union([z.enum(startPageViewValues), z.uuid()]).optional(),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -26,12 +26,13 @@ import { generateKeyBetween } from "fractional-indexing";
 import { TaskDragPreview } from "./task-row";
 import { taskCollisionDetection, taskDropAnimation, taskKeyboardCoordinates } from "./task-drag";
 import { jsonInit } from "@/lib/api-client";
+import { truncate } from "@/lib/utils";
 import { projectTaskDrop, type TaskDropProjection, type TaskDropTarget } from "@/lib/task-drop";
 import { TaskModal } from "./task-modal";
 import { TaskGroup } from "./task-group";
 import { CreateSectionForm } from "./create-section-form";
-import { BulkToolbar } from "./bulk-toolbar";
 import { usePendingAction } from "@/lib/use-pending-action";
+import { useTaskSelection } from "@/lib/use-task-selection";
 import { completeRecurring } from "@/lib/recurring-complete";
 import { compareTasks, type SortBy } from "@/lib/task-sort";
 import {
@@ -39,9 +40,41 @@ import {
   subtreeIds,
   taskDepth,
 } from "@/lib/task-tree";
-import type { Label, Project, ProjectMember, Section, TaskWithLabels } from "./types";
+import type { Label, ProjectMember, Section, TaskWithLabels } from "./types";
 
 export type { ProjectMember, TaskWithLabels };
+
+// The sidebar runs its own DndContext for reordering projects, and dnd-kit
+// cannot drop across contexts. Hit-testing the row under the pointer moves a
+// task into a project without merging the two drag systems.
+function sidebarProjectRowAt(point: { x: number; y: number } | null) {
+  if (!point) return null;
+  // The drag overlay follows the pointer and still takes hits, so the whole
+  // stack under the point is searched rather than just the topmost element.
+  for (const element of document.elementsFromPoint(point.x, point.y)) {
+    const row = element.closest<HTMLElement>("[data-project-id], [data-favorite-project-id]");
+    if (row) return row;
+  }
+  return null;
+}
+
+function projectIdOf(row: HTMLElement | null) {
+  return row?.dataset.projectId ?? row?.dataset.favoriteProjectId ?? null;
+}
+
+function projectNameOf(row: HTMLElement | null) {
+  return row?.dataset.projectName ?? row?.dataset.favoriteProjectName ?? "the project";
+}
+
+// A press and hold that never moved is a request to select, not to reorder.
+// Only touch gets here: the mouse sensor needs 5px of travel to start at all.
+function heldInPlace(event: DragEndEvent) {
+  return (
+    event.activatorEvent.type === "touchstart" &&
+    Math.abs(event.delta.x) < 6 &&
+    Math.abs(event.delta.y) < 6
+  );
+}
 
 export function TaskList({
   projectId,
@@ -75,15 +108,22 @@ export function TaskList({
   const projectionRef = useRef<TaskDropProjection | null>(null);
   const dropContext = useRef<{ target: TaskDropTarget; visibleIds: Set<string> } | null>(null);
   const indentWidth = useRef(28);
+  const sidebarDropRow = useRef<HTMLElement | null>(null);
+  const pointer = useRef<{ x: number; y: number } | null>(null);
   const moveQueue = useRef(Promise.resolve());
   const moveRevision = useRef(0);
   const moveFailed = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(initialDetailTaskId ?? null);
-  const [selecting, setSelecting] = useState(false);
-  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
   const [collapsedTaskIds, setCollapsedTaskIds] = useState<Set<string>>(() => new Set());
-  const [projects, setProjects] = useState<Project[]>([]);
+  const {
+    selecting,
+    selectedIds: selectedTaskIds,
+    start: startSelecting,
+    toggle: toggleTaskSelection,
+    exit: exitSelection,
+    run: runOnSelection,
+  } = useTaskSelection();
   const { pending, schedule, undo } = usePendingAction();
   const router = useRouter();
   // Mouse dragging stays quick, while touch requires an intentional hold.
@@ -137,54 +177,6 @@ export function TaskList({
     return ok;
   }
 
-  async function loadProjects() {
-    const response = await fetch("/api/projects");
-    if (response.ok) {
-      setProjects(await response.json());
-    } else {
-      setError("That didn't work. Try again.");
-    }
-  }
-
-  function exitSelectMode() {
-    setSelecting(false);
-    setSelectedTaskIds([]);
-  }
-
-  function toggleTaskSelection(task: TaskWithLabels) {
-    setSelectedTaskIds((current) =>
-      current.includes(task.id)
-        ? current.filter((id) => id !== task.id)
-        : [...current, task.id],
-    );
-  }
-
-  useEffect(() => {
-    if (!selecting) return;
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") exitSelectMode();
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selecting]);
-
-  useEffect(() => {
-    function onToggleSelectMode() {
-      if (selecting) {
-        exitSelectMode();
-        return;
-      }
-
-      setSelecting(true);
-      void loadProjects();
-    }
-
-    window.addEventListener("task-select:toggle", onToggleSelectMode);
-    return () => window.removeEventListener("task-select:toggle", onToggleSelectMode);
-  }, [selecting]);
-
   async function toggleComplete(task: TaskWithLabels) {
     const completed = !task.isCompleted;
     if (!completed) {
@@ -215,7 +207,7 @@ export function TaskList({
         ),
       );
       schedule(
-        `Completed "${task.content}"`,
+        `Completed "${truncate(task.content)}"`,
         // Already written, so the toast only has an inverse left to offer.
         () => {},
         () => {
@@ -239,7 +231,7 @@ export function TaskList({
       ),
     );
     schedule(
-      `Completed "${task.content}"`,
+      `Completed "${truncate(task.content)}"`,
       async () => {
         const ok = await withError(() =>
           fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", { completed: true })),
@@ -254,7 +246,7 @@ export function TaskList({
     const previousTasks = tasks;
     setTasks((current) => current.filter((existing) => existing.id !== task.id));
     schedule(
-      `Moved "${task.content}" to Trash`,
+      `Moved "${truncate(task.content)}" to Trash`,
       async () => {
         await withError(() =>
           fetch(`/api/tasks/${task.id}`, { method: "DELETE" }),
@@ -288,8 +280,54 @@ export function TaskList({
     if (ok) await refresh();
   }
 
+  // Selecting a task selects what hangs off it. The clicked task comes first
+  // so the hook knows which one was ticked.
+  function selectionIdsFor(task: TaskWithLabels) {
+    return [task.id, ...[...subtreeIds(tasks, task.id)].filter((id) => id !== task.id)];
+  }
+
+  // A row inside the selection speaks for all of it: the menu, and a drag.
+  function actsOnSelection(task: TaskWithLabels) {
+    return selecting && selectedTaskIds.length > 1 && selectedTaskIds.includes(task.id);
+  }
+
+  // Dragging any one of the selected tasks takes the rest with it.
+  async function moveSelectedTasks(targetProjectId: string) {
+    const ok = await bulkAction((task) => patchTask(task.id, { projectId: targetProjectId }));
+    router.refresh();
+    return ok;
+  }
+
+  async function dropOnProject(task: TaskWithLabels, targetProjectId: string, projectName: string) {
+    const moved = actsOnSelection(task)
+      ? tasks.filter((candidate) => selectedTaskIds.includes(candidate.id))
+      : [task];
+    // Where each task sat, so undo can put it back in its section rather than
+    // only in this project. Its place in the order is not restored: a project
+    // move appends, and the server has no memory of the old position.
+    const origin = moved.map((item) => ({ id: item.id, sectionId: item.sectionId }));
+    const ok = actsOnSelection(task)
+      ? await moveSelectedTasks(targetProjectId)
+      : await moveTask(task, targetProjectId);
+    if (!ok) return;
+
+    schedule(
+      `${moved.length} ${moved.length === 1 ? "task" : "tasks"} added to ${projectName}`,
+      // The move is already written, so the toast only has an inverse to offer.
+      () => {},
+      () => {
+        void Promise.all(
+          origin.map((item) => patchTask(item.id, { projectId, sectionId: item.sectionId })),
+        ).then(async () => {
+          await refresh();
+          router.refresh();
+        });
+      },
+    );
+  }
+
   async function moveTask(task: TaskWithLabels, targetProjectId: string) {
-    if (targetProjectId === task.projectId) return;
+    if (targetProjectId === task.projectId) return false;
     const ok = await withError(() => patchTask(task.id, { projectId: targetProjectId }));
     if (ok) {
       await refresh();
@@ -297,10 +335,12 @@ export function TaskList({
       // the task leaving one project and joining another.
       router.refresh();
     }
+    return ok;
   }
 
-  async function duplicateTask(task: TaskWithLabels) {
-    setError(null);
+  // Copying labels needs a second request, so the caller gets whichever
+  // response decides the outcome.
+  async function duplicateRequest(task: TaskWithLabels) {
     const response = await fetch("/api/tasks", jsonInit("POST", {
           projectId: task.projectId,
           sectionId: task.sectionId,
@@ -315,16 +355,29 @@ export function TaskList({
         recurrence: task.recurrence,
         afterId: task.id,
       }));
-    if (!response.ok) {
-      setError("That didn't work. Try again.");
-      return;
-    }
+    if (!response.ok || !task.labels.length) return response;
     const duplicate: { id: string } = await response.json();
-    if (task.labels.length) {
-      const copiedLabels = await patchTask(duplicate.id, { labelIds: task.labels.map((label) => label.id) });
-      if (!copiedLabels.ok) setError("That didn't work. Try again.");
-    }
+    return patchTask(duplicate.id, { labelIds: task.labels.map((label) => label.id) });
+  }
+
+  async function duplicateTask(task: TaskWithLabels) {
+    setError(null);
+    const response = await duplicateRequest(task);
+    if (!response.ok) setError("That didn't work. Try again.");
     await refresh();
+  }
+
+  // The menu reports the clicked row's new label list; the rest of the
+  // selection gets the same labels added or removed, keeping their own.
+  function changeSelectionLabels(task: TaskWithLabels, labelIds: string[]) {
+    const added = labelIds.filter((id) => !task.labels.some((label) => label.id === id));
+    const removed = task.labels.filter((label) => !labelIds.includes(label.id)).map((label) => label.id);
+    return bulkAction((selected) =>
+      patchTask(selected.id, {
+        labelIds: [...new Set([...selected.labels.map((label) => label.id), ...added])]
+          .filter((id) => !removed.includes(id)),
+      }),
+    );
   }
 
   async function changeLabels(task: TaskWithLabels, labelIds: string[]) {
@@ -344,39 +397,24 @@ export function TaskList({
     if (ok) await refresh();
   }
 
-  async function bulkAction(
-    selectedTasks: TaskWithLabels[],
-    action: (task: TaskWithLabels) => Promise<Response>,
-  ) {
-    if (selectedTasks.length === 0) return;
-
-    let succeeded = false;
+  async function bulkAction(action: (task: TaskWithLabels) => Promise<Response>) {
     setError(null);
-    try {
-      // ponytail: per-task fanout, batch endpoint when N gets large.
-      const responses = await Promise.all(selectedTasks.map(action));
-      succeeded = responses.every((response) => response.ok);
-      if (!succeeded) setError("Some updates failed.");
-    } catch {
-      setError("Some updates failed.");
-    } finally {
-      await refresh();
-      if (succeeded) exitSelectMode();
-    }
+    const byId = new Map(tasks.map((task) => [task.id, task]));
+    const ok = await runOnSelection(
+      (taskId) => action(byId.get(taskId)!),
+      refresh,
+    );
+    if (!ok) setError("Some updates failed.");
+    return ok;
   }
 
   function patchTask(taskId: string, body: object) {
     return fetch(`/api/tasks/${taskId}`, jsonInit("PATCH", body));
   }
 
-  function selectedTasks() {
-    return tasks.filter((task) => selectedTaskIds.includes(task.id));
-  }
-
   function completeSelectedTasks() {
-    const affectedTasks = selectedTasks();
-    if (affectedTasks.length === 0) return;
-    const affectedIds = new Set(affectedTasks.map((task) => task.id));
+    if (selectedTaskIds.length === 0) return;
+    const affectedIds = new Set(selectedTaskIds);
     const previousTasks = tasks;
     setTasks((current) =>
       current.map((task) =>
@@ -384,21 +422,20 @@ export function TaskList({
       ),
     );
     schedule(
-      `Completed ${affectedTasks.length} tasks`,
-      () => bulkAction(affectedTasks, (task) => patchTask(task.id, { completed: true })),
+      `Completed ${affectedIds.size} tasks`,
+      () => bulkAction((task) => patchTask(task.id, { completed: true })),
       () => setTasks(previousTasks),
     );
   }
 
   function deleteSelectedTasks() {
-    const affectedTasks = selectedTasks();
-    if (affectedTasks.length === 0) return;
-    const affectedIds = new Set(affectedTasks.map((task) => task.id));
+    if (selectedTaskIds.length === 0) return;
+    const affectedIds = new Set(selectedTaskIds);
     const previousTasks = tasks;
     setTasks((current) => current.filter((task) => !affectedIds.has(task.id)));
     schedule(
-      `Moved ${affectedTasks.length} tasks to Trash`,
-      () => bulkAction(affectedTasks, (task) => fetch(`/api/tasks/${task.id}`, { method: "DELETE" })),
+      `Moved ${affectedIds.size} tasks to Trash`,
+      () => bulkAction((task) => fetch(`/api/tasks/${task.id}`, { method: "DELETE" })),
       () => setTasks(previousTasks),
     );
   }
@@ -417,9 +454,26 @@ export function TaskList({
   const flatOrder = groups.flatMap((group) => roots(group.id).map((task) => task.id));
   const detailIndex = detailTaskId ? flatOrder.indexOf(detailTaskId) : -1;
   const activeTask = tasks.find((task) => task.id === activeId) ?? null;
+  const draggingSelection = Boolean(activeTask && selectedTaskIds.includes(activeTask.id));
+  const draggedCount = draggingSelection ? selectedTaskIds.length : 1;
   const activeDepth = activeTask ? taskDepth(tasks, activeTask.id) : 0;
   const activeSection = orderedSections.find((section) => section.id === activeId) ?? null;
   const draggedIds = useMemo(() => activeId ? subtreeIds(tasks, activeId) : new Set<string>(), [tasks, activeId]);
+
+  // dnd-kit reports how far a drag has travelled, but that figure is batched
+  // and can lag the release. Where the pointer actually is decides the drop.
+  useEffect(() => {
+    if (!activeId) return;
+    function track(event: PointerEvent) {
+      pointer.current = { x: event.clientX, y: event.clientY };
+    }
+    window.addEventListener("pointermove", track, true);
+    window.addEventListener("pointerup", track, true);
+    return () => {
+      window.removeEventListener("pointermove", track, true);
+      window.removeEventListener("pointerup", track, true);
+    };
+  }, [activeId]);
 
   useEffect(() => {
     if (!activeId) return;
@@ -427,6 +481,17 @@ export function TaskList({
     document.body.style.cursor = "grabbing";
     return () => { document.body.style.cursor = previous; };
   }, [activeId]);
+
+  // Marks the sidebar row directly rather than lifting drag state into the
+  // layout: the sidebar does not re-render during a task drag, so the
+  // attribute survives until it is cleared here.
+  function highlightSidebarDrop(point: { x: number; y: number } | null) {
+    const row = sidebarProjectRowAt(point);
+    if (row === sidebarDropRow.current) return;
+    sidebarDropRow.current?.removeAttribute("data-task-drop-target");
+    sidebarDropRow.current = row;
+    row?.setAttribute("data-task-drop-target", "");
+  }
 
   function toggleTaskCollapsed(taskId: string) {
     setCollapsedTaskIds((current) => {
@@ -442,6 +507,46 @@ export function TaskList({
       .flatMap((sectionId) => flattenTaskGroup(tasks, sectionId)),
     [tasks, orderedSections],
   );
+
+  // Only the top of a selected branch moves: its subtasks come along with it,
+  // and moving them too would flatten them into the drop target.
+  function selectionRoots() {
+    const selected = new Set(selectedTaskIds);
+    const byId = new Map(tasks.map((task) => [task.id, task]));
+    const rowOrder = new Map(flatTasks.map((task, index) => [task.id, index]));
+    return selectedTaskIds
+      .filter((id) => {
+        let parentId = byId.get(id)?.parentId ?? null;
+        while (parentId) {
+          if (selected.has(parentId)) return false;
+          parentId = byId.get(parentId)?.parentId ?? null;
+        }
+        return true;
+      })
+      .sort((a, b) => (rowOrder.get(a) ?? 0) - (rowOrder.get(b) ?? 0));
+  }
+
+  // A drop inside the list puts the whole selection at the drop point, in the
+  // order the rows appear now. Each task lands after the previous one, so the
+  // group keeps its shape instead of arriving reversed.
+  async function moveSelectionTo(target: TaskDropProjection) {
+    setError(null);
+    let afterId = target.afterId;
+    for (const id of selectionRoots()) {
+      const response = await patchTask(id, {
+        sectionId: target.sectionId,
+        parentId: target.parentId,
+        afterId,
+      });
+      if (!response.ok) {
+        setError("Some updates failed.");
+        break;
+      }
+      afterId = id;
+    }
+    await refresh();
+    exitSelection();
+  }
 
   function updateProjection(next: TaskDropProjection | null) {
     const current = projectionRef.current;
@@ -609,25 +714,44 @@ export function TaskList({
             indentWidth.current = parseFloat(getComputedStyle(node).getPropertyValue("--task-indent-step")) || 28;
           }
           setActiveId(String(event.active.id));
+          pointer.current = null;
           updateProjection(null);
         }}
         onDragMove={(event) => {
-          if (!selecting && sortBy === "manual") updateProjection(dragProjection(event));
+          highlightSidebarDrop(pointer.current);
+          if (sortBy === "manual") updateProjection(dragProjection(event));
         }}
         onDragOver={(event) => {
-          if (!selecting && sortBy === "manual") updateProjection(dragProjection(event));
+          if (sortBy === "manual") updateProjection(dragProjection(event));
         }}
         onDragEnd={(event) => {
           setActiveId(null);
+          // Read where the pointer was released, not the last highlight: a drag
+          // that crosses the sidebar and comes back may fire no further move.
+          const droppedRow = sidebarProjectRowAt(pointer.current);
+          const droppedOnProjectId = projectIdOf(droppedRow);
+          highlightSidebarDrop(null);
+          const task = tasks.find((candidate) => candidate.id === event.active.id);
           if (orderedSections.some((section) => section.id === event.active.id)) {
             void handleSectionDragEnd(event);
-          } else if (!selecting && sortBy === "manual") {
-            void handleTaskDragEnd(event);
+          } else if (task && droppedOnProjectId) {
+            void dropOnProject(task, droppedOnProjectId, projectNameOf(droppedRow));
+          } else if (task && !selecting && heldInPlace(event)) {
+            startSelecting(selectionIdsFor(task));
+          } else if (task && sortBy === "manual") {
+            // A selection lands as a group; anything else reorders on its own.
+            const target = projectionRef.current;
+            if (actsOnSelection(task)) {
+              if (target) void moveSelectionTo(target);
+            } else {
+              void handleTaskDragEnd(event);
+            }
           }
           updateProjection(null);
         }}
         onDragCancel={() => {
           setActiveId(null);
+          highlightSidebarDrop(null);
           updateProjection(null);
         }}
         accessibility={{
@@ -659,24 +783,41 @@ export function TaskList({
                 today={today}
                 dateFormat={dateFormat}
                 selecting={selecting}
-                draggable={!selecting && sortBy === "manual"}
+                draggable={sortBy === "manual"}
                 activeTaskId={activeTask?.id ?? null}
                 draggedIds={draggedIds}
                 projection={projection}
                 collapsedTaskIds={collapsedTaskIds}
                 selectedTaskIds={selectedTaskIds}
-                onToggle={toggleComplete}
-                onDelete={deleteTask}
-                onLabelsChange={changeLabels}
+                onToggle={(task) => actsOnSelection(task) ? completeSelectedTasks() : toggleComplete(task)}
+                onDelete={(task) => actsOnSelection(task) ? deleteSelectedTasks() : deleteTask(task)}
+                onLabelsChange={(task, labelIds) =>
+                  actsOnSelection(task) ? changeSelectionLabels(task, labelIds) : changeLabels(task, labelIds)
+                }
                 onAssigneeChange={changeAssignee}
                 onDueChange={changeDue}
-                onQuickDueChange={quickChangeDue}
-                onPriorityChange={changePriority}
-                onMove={moveTask}
-                onDuplicate={duplicateTask}
+                onQuickDueChange={(task, dueDate) =>
+                  actsOnSelection(task)
+                    ? void bulkAction((selected) => patchTask(selected.id, { dueDate }))
+                    : quickChangeDue(task, dueDate)
+                }
+                onPriorityChange={(task, priority) =>
+                  actsOnSelection(task)
+                    ? void bulkAction((selected) => patchTask(selected.id, { priority }))
+                    : changePriority(task, priority)
+                }
+                onMove={(task, targetProjectId) =>
+                  actsOnSelection(task) ? void moveSelectedTasks(targetProjectId) : moveTask(task, targetProjectId)
+                }
+                onDuplicate={(task) =>
+                  actsOnSelection(task)
+                    ? void bulkAction((selected) => duplicateRequest(selected))
+                    : duplicateTask(task)
+                }
                 onSubtaskAdded={refresh}
                 onOpenDetail={(task) => setDetailTaskId(task.id)}
-                onSelectionToggle={toggleTaskSelection}
+                onSelectionToggle={(task) => toggleTaskSelection(selectionIdsFor(task))}
+                onSelectionStart={(task) => startSelecting(selectionIdsFor(task))}
                 onToggleTaskCollapsed={toggleTaskCollapsed}
                 onRenameSection={(section, name) =>
                   mutateSection(() => fetch(`/api/sections/${section.id}`, jsonInit("PATCH", { name })))
@@ -702,8 +843,25 @@ export function TaskList({
           zIndex={50}
         >
           {activeTask ? (
-            <TaskDragPreview task={activeTask} allTasks={tasks} depth={activeDepth}
-              members={members} currentUserId={currentUserId} today={today} dateFormat={dateFormat} />
+            <div className="task-drag-stack">
+              {Array.from({ length: Math.min(draggedCount, 3) - 1 }, (_, index) => (
+                <span
+                  key={index}
+                  aria-hidden
+                  className="task-drag-stack-layer"
+                  style={{ "--stack-index": Math.min(draggedCount, 3) - 1 - index } as CSSProperties}
+                />
+              ))}
+              <TaskDragPreview task={activeTask} allTasks={tasks} depth={activeDepth}
+                members={members} currentUserId={currentUserId} today={today} dateFormat={dateFormat} />
+              {draggedCount > 3 && (
+                // Sits on the right: dropping onto the sidebar puts the left
+                // edge of the preview off-screen.
+                <span className="absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground shadow">
+                  {draggedCount}
+                </span>
+              )}
+            </div>
           ) : activeSection ? (
             <div className="cursor-grabbing rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-bold shadow-xl ring-1 ring-black/5">
               {activeSection.name}
@@ -713,34 +871,6 @@ export function TaskList({
       </DndContext>
 
       {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
-
-      {selectedTaskIds.length > 0 && (
-        <BulkToolbar
-          count={selectedTaskIds.length}
-          projects={projects}
-          labels={labels}
-          onComplete={completeSelectedTasks}
-          onDelete={deleteSelectedTasks}
-          onMove={(targetProjectId) =>
-            void bulkAction(selectedTasks(), (task) =>
-              patchTask(task.id, { projectId: targetProjectId }),
-            ).then(() => router.refresh())
-          }
-          onPriority={(priority) =>
-            void bulkAction(selectedTasks(), (task) => patchTask(task.id, { priority }))
-          }
-          onDueDate={(dueDate) =>
-            void bulkAction(selectedTasks(), (task) => patchTask(task.id, { dueDate }))
-          }
-          onLabel={(labelId) =>
-            void bulkAction(selectedTasks(), (task) =>
-              patchTask(task.id, {
-                labelIds: [...new Set([...task.labels.map((label) => label.id), labelId])],
-              }),
-            )
-          }
-        />
-      )}
 
       {pending && (
         <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-foreground px-4 py-2 text-sm text-background shadow-lg">

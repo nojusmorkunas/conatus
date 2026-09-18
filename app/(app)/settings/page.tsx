@@ -3,6 +3,7 @@ import { and, desc, eq, gt, isNull } from "drizzle-orm";
 
 import { requireSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { accessibleProjects } from "@/lib/db/access";
 import { apiTokens, registrationInvites, users, webhooks } from "@/lib/db/schema";
 import type { SettingsInput } from "@/lib/validation";
 import { AccountSettings } from "@/components/account/account-settings";
@@ -22,6 +23,7 @@ export default async function SettingsPage() {
       weekStart: users.weekStart,
       dailyGoal: users.dailyGoal,
       activityGraphSource: users.activityGraphSource,
+      startPage: users.startPage,
       icalToken: users.icalToken,
       username: users.username,
       passwordHash: users.passwordHash,
@@ -29,6 +31,8 @@ export default async function SettingsPage() {
     })
     .from(users)
     .where(eq(users.id, sessionUser.id));
+
+  const userProjects = await accessibleProjects(sessionUser.id);
 
   const tokens = await db
     .select({
@@ -130,7 +134,12 @@ export default async function SettingsPage() {
               dailyGoal: user.dailyGoal,
               activityGraphSource:
                 user.activityGraphSource as SettingsInput["activityGraphSource"],
+              startPage: user.startPage,
             }}
+            projects={userProjects.map((project) => ({
+              id: project.id,
+              name: project.isInbox && !project.shared ? "Inbox" : project.name,
+            }))}
             icalToken={user.icalToken}
             initialApiTokens={tokens.map((token) => ({
               ...token,

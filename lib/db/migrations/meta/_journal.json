@@ -267,6 +267,13 @@
       "when": 1785045820225,
       "tag": "0037_closed_black_bolt",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1789721275282,
+      "tag": "0038_start_page",
+      "breakpoints": true
     }
   ]
 }

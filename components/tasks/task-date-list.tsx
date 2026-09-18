@@ -8,7 +8,9 @@ import { TaskModal } from "./task-modal";
 import { TaskRow } from "./task-row";
 import type { Label, TaskWithLabels } from "./types";
 import { jsonInit } from "@/lib/api-client";
+import { truncate } from "@/lib/utils";
 import { usePendingAction } from "@/lib/use-pending-action";
+import { useTaskSelection } from "@/lib/use-task-selection";
 import { completeRecurring } from "@/lib/recurring-complete";
 import { EmptyState } from "@/components/ui/empty-state";
 
@@ -34,6 +36,13 @@ export function TaskDateList({
   const [error, setError] = useState<string | null>(null);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const { pending, schedule, undo } = usePendingAction();
+  const {
+    selecting,
+    selectedIds,
+    start: startSelecting,
+    toggle: toggleSelection,
+    run: runOnSelection,
+  } = useTaskSelection();
 
   const [syncedFrom, setSyncedFrom] = useState(initialGroups);
   if (initialGroups !== syncedFrom) {
@@ -86,7 +95,7 @@ export function TaskDateList({
       // of these date groups entirely, which local state cannot work out.
       router.refresh();
       schedule(
-        `Completed "${task.content}"`,
+        `Completed "${truncate(task.content)}"`,
         // Already written, so the toast only has an inverse left to offer.
         () => {},
         () => {
@@ -108,7 +117,7 @@ export function TaskDateList({
       })),
     );
     schedule(
-      `Completed "${task.content}"`,
+      `Completed "${truncate(task.content)}"`,
       () => patch(task.id, { completed: true }),
       () => setGroups(previousGroups),
     );
@@ -121,7 +130,7 @@ export function TaskDateList({
       tasks: group.tasks.filter((existing) => existing.id !== task.id),
     })));
     schedule(
-      `Moved "${task.content}" to Trash`,
+      `Moved "${truncate(task.content)}" to Trash`,
       () => withError(() => fetch(`/api/tasks/${task.id}`, { method: "DELETE" })),
       () => setGroups(previousGroups),
     );
@@ -146,6 +155,40 @@ export function TaskDateList({
     const duplicate: { id: string } = await response.json();
     if (task.labels.length) await patch(duplicate.id, { labelIds: task.labels.map((label) => label.id) });
     router.refresh();
+  }
+
+  const allTasks = groups.flatMap((group) => group.tasks);
+
+  async function bulkAction(action: (task: TaskWithLabels) => Promise<Response>) {
+    setError(null);
+    const byId = new Map(allTasks.map((task) => [task.id, task]));
+    const ok = await runOnSelection(
+      (taskId) => action(byId.get(taskId)!),
+      () => router.refresh(),
+    );
+    if (!ok) setError("Some updates failed.");
+    return ok;
+  }
+
+  function patchSelected(body: Record<string, unknown>) {
+    void bulkAction((task) => fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", body)));
+  }
+
+  // A row inside the selection speaks for all of it.
+  function actsOnSelection(task: TaskWithLabels) {
+    return selecting && selectedIds.length > 1 && selectedIds.includes(task.id);
+  }
+
+  // Same labels added or removed across the selection, keeping their own.
+  function changeSelectionLabels(task: TaskWithLabels, labelIds: string[]) {
+    const added = labelIds.filter((id) => !task.labels.some((label) => label.id === id));
+    const removed = task.labels.filter((label) => !labelIds.includes(label.id)).map((label) => label.id);
+    void bulkAction((selected) =>
+      fetch(`/api/tasks/${selected.id}`, jsonInit("PATCH", {
+        labelIds: [...new Set([...selected.labels.map((label) => label.id), ...added])]
+          .filter((id) => !removed.includes(id)),
+      })),
+    );
   }
 
   const visibleGroups = groups
@@ -181,18 +224,37 @@ export function TaskDateList({
               depth={0}
               today={today}
               dateFormat={dateFormat}
-              onToggle={toggleComplete}
-              onDelete={deleteTask}
-              onLabelsChange={(target, labelIds) => patch(target.id, { labelIds })}
+              onToggle={(target) => actsOnSelection(target) ? patchSelected({ completed: true }) : toggleComplete(target)}
+              onDelete={(target) =>
+                actsOnSelection(target)
+                  ? void bulkAction((selected) => fetch(`/api/tasks/${selected.id}`, { method: "DELETE" }))
+                  : deleteTask(target)
+              }
+              onLabelsChange={(target, labelIds) =>
+                actsOnSelection(target)
+                  ? changeSelectionLabels(target, labelIds)
+                  : void patch(target.id, { labelIds })
+              }
               onDueChange={(target, dueDate, dueTime, deadlineDate, durationMinutes) =>
                 patch(target.id, { dueDate, dueTime, deadlineDate, durationMinutes })
               }
-              onQuickDueChange={(target, dueDate) => patch(target.id, { dueDate })}
-              onPriorityChange={(target, priority) => patch(target.id, { priority })}
-              onMove={(target, projectId) => patch(target.id, { projectId })}
+              onQuickDueChange={(target, dueDate) =>
+                actsOnSelection(target) ? patchSelected({ dueDate }) : void patch(target.id, { dueDate })
+              }
+              onPriorityChange={(target, priority) =>
+                actsOnSelection(target) ? patchSelected({ priority }) : void patch(target.id, { priority })
+              }
+              onMove={(target, projectId) =>
+                actsOnSelection(target) ? patchSelected({ projectId }) : void patch(target.id, { projectId })
+              }
               onDuplicate={duplicateTask}
               onSubtaskAdded={() => router.refresh()}
               onOpenDetail={(task) => setDetailTaskId(task.id)}
+              selecting={selecting}
+              selected={selectedIds.includes(task.id)}
+              selectionCount={selectedIds.length}
+              onSelectionToggle={(target) => toggleSelection([target.id])}
+              onSelectionStart={(target) => startSelecting([target.id])}
               onError={() => setError("That didn't work. Try again.")}
             />
           ))}

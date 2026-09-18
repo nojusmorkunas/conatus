@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Repeat2 } from "lucide-react";
+import { CircleHelp, Repeat2 } from "lucide-react";
 import { jsonInit } from "@/lib/api-client";
 import { calendarOccurrences, type CalendarOccurrence } from "@/lib/calendar";
 import { useRouter } from "next/navigation";
@@ -20,6 +20,7 @@ import {
 import type { tasks as tasksTable } from "@/lib/db/schema";
 import { addDays, formatDate, monthGridStart } from "@/lib/dates";
 import { priorityColors } from "@/components/tasks/priority";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 type StoredTask = typeof tasksTable.$inferSelect;
@@ -130,7 +131,9 @@ export function CalendarView({
             {view === "month" ? month : `${formatDate(week, dateFormat)} – ${formatDate(addDays(week, 6), dateFormat)}`}
           </span>
         </div>
-        <div className="flex items-center gap-1 rounded-md border border-border p-0.5 text-sm">
+        <div className="flex items-center gap-2">
+          <RepeatHelp />
+          <div className="flex items-center gap-1 rounded-md border border-border p-0.5 text-sm">
           <Link
             href={`/calendar?view=month&month=${month}`}
             className={cn("inline-flex min-h-11 items-center rounded px-2 py-1 sm:min-h-0", view === "month" && "bg-muted font-medium")}
@@ -143,17 +146,12 @@ export function CalendarView({
           >
             Week
           </Link>
+          </div>
         </div>
       </div>
 
       {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
 
-      {occurrences.some((task) => task.isProjection) && (
-        <p className="text-xs text-muted-foreground">
-          Repeat icons mark recurring tasks. Future repeats are previews; open one to edit the task.
-          {tasks.some((task) => task.recurrence?.startsWith("every!")) && " Completion-based repeats assume completion on the due date."}
-        </p>
-      )}
       <DndContext id="calendar-view" sensors={sensors} onDragEnd={handleDragEnd}>
         {view === "month" ? (
           <MonthGrid month={month} tasks={occurrences} today={today} weekStart={weekStart} />
@@ -162,6 +160,41 @@ export function CalendarView({
         )}
       </DndContext>
     </div>
+  );
+}
+
+// The calendar draws repeats it cannot otherwise explain: rows that have no
+// task behind them yet. Hover, tap or focus the icon to find out why.
+function RepeatHelp() {
+  return (
+    <Popover>
+      <PopoverTrigger
+        openOnHover
+        delay={120}
+        aria-label="How repeating tasks are shown"
+        className="flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:size-8"
+      >
+        <CircleHelp className="size-4" aria-hidden />
+      </PopoverTrigger>
+      <PopoverContent align="end" className="text-sm">
+        <p className="font-medium">Repeating tasks</p>
+        <ul className="mt-2 space-y-2 text-muted-foreground">
+          <li className="flex gap-2">
+            <Repeat2 className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+            <span>This icon marks a task that repeats.</span>
+          </li>
+          <li>
+            Later repeats are previews of dates still to come. Open one and you
+            are editing the task itself, not that date.
+          </li>
+          <li>
+            A repeat that counts from completion, written{" "}
+            <code className="rounded bg-muted px-1 py-0.5 text-xs">every!</code>, is
+            drawn as if you finish it on its due date.
+          </li>
+        </ul>
+      </PopoverContent>
+    </Popover>
   );
 }
 
