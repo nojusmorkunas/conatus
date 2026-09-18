@@ -2,20 +2,12 @@
 
 import { useEffect, useState } from "react";
 
-import type { Project } from "@/components/tasks/types";
-
 // Selection mode, shared by every list that can act on several tasks at once.
 // The lists differ in how they reload afterwards, so running the requests is
 // here and the reload is the caller's.
 export function useTaskSelection() {
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-
-  async function loadProjects() {
-    const response = await fetch("/api/projects");
-    if (response.ok) setProjects(await response.json());
-  }
 
   function exit() {
     setSelecting(false);
@@ -25,7 +17,6 @@ export function useTaskSelection() {
   function start(taskId: string) {
     setSelecting(true);
     setSelectedIds([taskId]);
-    void loadProjects();
   }
 
   function toggle(taskId: string) {
@@ -62,6 +53,24 @@ export function useTaskSelection() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [selecting]);
 
+  // A press on empty page space — the gutter beside the list, the margin under
+  // it — means "never mind". Rows, menus, dialogs, the sidebar and any real
+  // control keep their own click.
+  useEffect(() => {
+    if (!selecting) return;
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target as Element | null;
+      if (
+        target?.closest?.(
+          "[data-task-id], [data-slot=dropdown-menu-content], [role=dialog], .project-sidebar, button, input, a, textarea, select",
+        )
+      ) return;
+      exit();
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [selecting]);
+
   useEffect(() => {
     function onToggleSelectMode() {
       if (selecting) {
@@ -69,11 +78,10 @@ export function useTaskSelection() {
         return;
       }
       setSelecting(true);
-      void loadProjects();
     }
     window.addEventListener("task-select:toggle", onToggleSelectMode);
     return () => window.removeEventListener("task-select:toggle", onToggleSelectMode);
   }, [selecting]);
 
-  return { selecting, selectedIds, projects, start, toggle, exit, run };
+  return { selecting, selectedIds, start, toggle, exit, run };
 }

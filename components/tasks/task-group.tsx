@@ -158,6 +158,7 @@ export function TaskGroup({
                 onOpenDetail={onOpenDetail}
                 selecting={selecting}
                 selected={selectedTaskIds.includes(task.id)}
+                selectionCount={selectedTaskIds.length}
                 onSelectionToggle={onSelectionToggle}
                 onSelectionStart={onSelectionStart}
                 draggable={draggable}

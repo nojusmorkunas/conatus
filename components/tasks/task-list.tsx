@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -31,7 +31,6 @@ import { projectTaskDrop, type TaskDropProjection, type TaskDropTarget } from "@
 import { TaskModal } from "./task-modal";
 import { TaskGroup } from "./task-group";
 import { CreateSectionForm } from "./create-section-form";
-import { BulkToolbar } from "./bulk-toolbar";
 import { usePendingAction } from "@/lib/use-pending-action";
 import { useTaskSelection } from "@/lib/use-task-selection";
 import { completeRecurring } from "@/lib/recurring-complete";
@@ -124,7 +123,6 @@ export function TaskList({
   const {
     selecting,
     selectedIds: selectedTaskIds,
-    projects,
     start: startSelecting,
     toggle: toggleTaskSelection,
     run: runOnSelection,
@@ -285,6 +283,11 @@ export function TaskList({
     if (ok) await refresh();
   }
 
+  // A row inside the selection speaks for all of it: the menu, and a drag.
+  function actsOnSelection(task: TaskWithLabels) {
+    return selecting && selectedTaskIds.length > 1 && selectedTaskIds.includes(task.id);
+  }
+
   // Dragging any one of the selected tasks takes the rest with it.
   function moveSelectedTasks(targetProjectId: string) {
     return bulkAction((task) => patchTask(task.id, { projectId: targetProjectId })).then(() =>
@@ -303,8 +306,9 @@ export function TaskList({
     }
   }
 
-  async function duplicateTask(task: TaskWithLabels) {
-    setError(null);
+  // Copying labels needs a second request, so the caller gets whichever
+  // response decides the outcome.
+  async function duplicateRequest(task: TaskWithLabels) {
     const response = await fetch("/api/tasks", jsonInit("POST", {
           projectId: task.projectId,
           sectionId: task.sectionId,
@@ -319,16 +323,29 @@ export function TaskList({
         recurrence: task.recurrence,
         afterId: task.id,
       }));
-    if (!response.ok) {
-      setError("That didn't work. Try again.");
-      return;
-    }
+    if (!response.ok || !task.labels.length) return response;
     const duplicate: { id: string } = await response.json();
-    if (task.labels.length) {
-      const copiedLabels = await patchTask(duplicate.id, { labelIds: task.labels.map((label) => label.id) });
-      if (!copiedLabels.ok) setError("That didn't work. Try again.");
-    }
+    return patchTask(duplicate.id, { labelIds: task.labels.map((label) => label.id) });
+  }
+
+  async function duplicateTask(task: TaskWithLabels) {
+    setError(null);
+    const response = await duplicateRequest(task);
+    if (!response.ok) setError("That didn't work. Try again.");
     await refresh();
+  }
+
+  // The menu reports the clicked row's new label list; the rest of the
+  // selection gets the same labels added or removed, keeping their own.
+  function changeSelectionLabels(task: TaskWithLabels, labelIds: string[]) {
+    const added = labelIds.filter((id) => !task.labels.some((label) => label.id === id));
+    const removed = task.labels.filter((label) => !labelIds.includes(label.id)).map((label) => label.id);
+    return bulkAction((selected) =>
+      patchTask(selected.id, {
+        labelIds: [...new Set([...selected.labels.map((label) => label.id), ...added])]
+          .filter((id) => !removed.includes(id)),
+      }),
+    );
   }
 
   async function changeLabels(task: TaskWithLabels, labelIds: string[]) {
@@ -621,7 +638,9 @@ export function TaskList({
         }}
         onDragEnd={(event) => {
           setActiveId(null);
-          const droppedOnProjectId = projectIdOf(sidebarDropRow.current);
+          // Read the release point, not the last highlight: a drag that passes
+          // over the sidebar and comes back may never fire another move.
+          const droppedOnProjectId = projectIdOf(sidebarProjectRowAt(dropPoint(event)));
           highlightSidebarDrop(null);
           const task = tasks.find((candidate) => candidate.id === event.active.id);
           if (orderedSections.some((section) => section.id === event.active.id)) {
@@ -676,15 +695,31 @@ export function TaskList({
                 projection={projection}
                 collapsedTaskIds={collapsedTaskIds}
                 selectedTaskIds={selectedTaskIds}
-                onToggle={toggleComplete}
-                onDelete={deleteTask}
-                onLabelsChange={changeLabels}
+                onToggle={(task) => actsOnSelection(task) ? completeSelectedTasks() : toggleComplete(task)}
+                onDelete={(task) => actsOnSelection(task) ? deleteSelectedTasks() : deleteTask(task)}
+                onLabelsChange={(task, labelIds) =>
+                  actsOnSelection(task) ? changeSelectionLabels(task, labelIds) : changeLabels(task, labelIds)
+                }
                 onAssigneeChange={changeAssignee}
                 onDueChange={changeDue}
-                onQuickDueChange={quickChangeDue}
-                onPriorityChange={changePriority}
-                onMove={moveTask}
-                onDuplicate={duplicateTask}
+                onQuickDueChange={(task, dueDate) =>
+                  actsOnSelection(task)
+                    ? void bulkAction((selected) => patchTask(selected.id, { dueDate }))
+                    : quickChangeDue(task, dueDate)
+                }
+                onPriorityChange={(task, priority) =>
+                  actsOnSelection(task)
+                    ? void bulkAction((selected) => patchTask(selected.id, { priority }))
+                    : changePriority(task, priority)
+                }
+                onMove={(task, targetProjectId) =>
+                  actsOnSelection(task) ? void moveSelectedTasks(targetProjectId) : moveTask(task, targetProjectId)
+                }
+                onDuplicate={(task) =>
+                  actsOnSelection(task)
+                    ? void bulkAction((selected) => duplicateRequest(selected))
+                    : duplicateTask(task)
+                }
                 onSubtaskAdded={refresh}
                 onOpenDetail={(task) => setDetailTaskId(task.id)}
                 onSelectionToggle={(task) => toggleTaskSelection(task.id)}
@@ -714,10 +749,18 @@ export function TaskList({
           zIndex={50}
         >
           {activeTask ? (
-            <div className="relative">
+            <div className="task-drag-stack">
+              {Array.from({ length: Math.min(draggedCount, 3) - 1 }, (_, index) => (
+                <span
+                  key={index}
+                  aria-hidden
+                  className="task-drag-stack-layer"
+                  style={{ "--stack-index": Math.min(draggedCount, 3) - 1 - index } as CSSProperties}
+                />
+              ))}
               <TaskDragPreview task={activeTask} allTasks={tasks} depth={activeDepth}
                 members={members} currentUserId={currentUserId} today={today} dateFormat={dateFormat} />
-              {draggedCount > 1 && (
+              {draggedCount > 3 && (
                 <span className="absolute -top-2 -left-2 flex size-6 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground shadow">
                   {draggedCount}
                 </span>
@@ -732,34 +775,6 @@ export function TaskList({
       </DndContext>
 
       {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
-
-      {selectedTaskIds.length > 0 && (
-        <BulkToolbar
-          count={selectedTaskIds.length}
-          projects={projects}
-          labels={labels}
-          onComplete={completeSelectedTasks}
-          onDelete={deleteSelectedTasks}
-          onMove={(targetProjectId) =>
-            void bulkAction((task) =>
-              patchTask(task.id, { projectId: targetProjectId }),
-            ).then(() => router.refresh())
-          }
-          onPriority={(priority) =>
-            void bulkAction((task) => patchTask(task.id, { priority }))
-          }
-          onDueDate={(dueDate) =>
-            void bulkAction((task) => patchTask(task.id, { dueDate }))
-          }
-          onLabel={(labelId) =>
-            void bulkAction((task) =>
-              patchTask(task.id, {
-                labelIds: [...new Set([...task.labels.map((label) => label.id), labelId])],
-              }),
-            )
-          }
-        />
-      )}
 
       {pending && (
         <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-foreground px-4 py-2 text-sm text-background shadow-lg">

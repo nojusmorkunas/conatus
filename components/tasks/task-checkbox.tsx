@@ -11,19 +11,27 @@ export function TaskCheckbox({
   checked,
   onToggle,
   celebrating = false,
+  selectMode = false,
 }: {
   priority: number;
   checked: boolean;
   onToggle: () => void;
   celebrating?: boolean;
+  /** In selection mode the same box ticks a task into the selection. */
+  selectMode?: boolean;
 }) {
   return (
     <button
       type="button"
-      aria-label={checked ? "Mark incomplete" : "Mark complete"}
+      aria-label={
+        selectMode
+          ? checked ? "Deselect task" : "Select task"
+          : checked ? "Mark incomplete" : "Mark complete"
+      }
       onClick={() => {
-        // Every checkbox in the app is this one, so ticking anything pops.
-        if (!checked) playCompletionSound();
+        // Every checkbox in the app is this one, so ticking anything pops —
+        // except when it is only gathering a selection.
+        if (!selectMode && !checked) playCompletionSound();
         onToggle();
       }}
       className={cn(

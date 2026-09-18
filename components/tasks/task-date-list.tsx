@@ -11,7 +11,6 @@ import { jsonInit } from "@/lib/api-client";
 import { truncate } from "@/lib/utils";
 import { usePendingAction } from "@/lib/use-pending-action";
 import { useTaskSelection } from "@/lib/use-task-selection";
-import { BulkToolbar } from "./bulk-toolbar";
 import { completeRecurring } from "@/lib/recurring-complete";
 import { EmptyState } from "@/components/ui/empty-state";
 
@@ -40,7 +39,6 @@ export function TaskDateList({
   const {
     selecting,
     selectedIds,
-    projects,
     start: startSelecting,
     toggle: toggleSelection,
     run: runOnSelection,
@@ -176,6 +174,23 @@ export function TaskDateList({
     void bulkAction((task) => fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", body)));
   }
 
+  // A row inside the selection speaks for all of it.
+  function actsOnSelection(task: TaskWithLabels) {
+    return selecting && selectedIds.length > 1 && selectedIds.includes(task.id);
+  }
+
+  // Same labels added or removed across the selection, keeping their own.
+  function changeSelectionLabels(task: TaskWithLabels, labelIds: string[]) {
+    const added = labelIds.filter((id) => !task.labels.some((label) => label.id === id));
+    const removed = task.labels.filter((label) => !labelIds.includes(label.id)).map((label) => label.id);
+    void bulkAction((selected) =>
+      fetch(`/api/tasks/${selected.id}`, jsonInit("PATCH", {
+        labelIds: [...new Set([...selected.labels.map((label) => label.id), ...added])]
+          .filter((id) => !removed.includes(id)),
+      })),
+    );
+  }
+
   const visibleGroups = groups
     .map((group) => ({
       ...group,
@@ -209,20 +224,35 @@ export function TaskDateList({
               depth={0}
               today={today}
               dateFormat={dateFormat}
-              onToggle={toggleComplete}
-              onDelete={deleteTask}
-              onLabelsChange={(target, labelIds) => patch(target.id, { labelIds })}
+              onToggle={(target) => actsOnSelection(target) ? patchSelected({ completed: true }) : toggleComplete(target)}
+              onDelete={(target) =>
+                actsOnSelection(target)
+                  ? void bulkAction((selected) => fetch(`/api/tasks/${selected.id}`, { method: "DELETE" }))
+                  : deleteTask(target)
+              }
+              onLabelsChange={(target, labelIds) =>
+                actsOnSelection(target)
+                  ? changeSelectionLabels(target, labelIds)
+                  : void patch(target.id, { labelIds })
+              }
               onDueChange={(target, dueDate, dueTime, deadlineDate, durationMinutes) =>
                 patch(target.id, { dueDate, dueTime, deadlineDate, durationMinutes })
               }
-              onQuickDueChange={(target, dueDate) => patch(target.id, { dueDate })}
-              onPriorityChange={(target, priority) => patch(target.id, { priority })}
-              onMove={(target, projectId) => patch(target.id, { projectId })}
+              onQuickDueChange={(target, dueDate) =>
+                actsOnSelection(target) ? patchSelected({ dueDate }) : void patch(target.id, { dueDate })
+              }
+              onPriorityChange={(target, priority) =>
+                actsOnSelection(target) ? patchSelected({ priority }) : void patch(target.id, { priority })
+              }
+              onMove={(target, projectId) =>
+                actsOnSelection(target) ? patchSelected({ projectId }) : void patch(target.id, { projectId })
+              }
               onDuplicate={duplicateTask}
               onSubtaskAdded={() => router.refresh()}
               onOpenDetail={(task) => setDetailTaskId(task.id)}
               selecting={selecting}
               selected={selectedIds.includes(task.id)}
+              selectionCount={selectedIds.length}
               onSelectionToggle={(target) => toggleSelection(target.id)}
               onSelectionStart={(target) => startSelecting(target.id)}
               onError={() => setError("That didn't work. Try again.")}
@@ -232,26 +262,6 @@ export function TaskDateList({
       ))}
 
       {error && <p className="text-xs text-destructive">{error}</p>}
-
-      {selectedIds.length > 0 && (
-        <BulkToolbar
-          count={selectedIds.length}
-          projects={projects}
-          labels={labels}
-          onComplete={() => patchSelected({ completed: true })}
-          onDelete={() => void bulkAction((task) => fetch(`/api/tasks/${task.id}`, { method: "DELETE" }))}
-          onMove={(projectId) => patchSelected({ projectId })}
-          onPriority={(priority) => patchSelected({ priority })}
-          onDueDate={(dueDate) => patchSelected({ dueDate })}
-          onLabel={(labelId) =>
-            void bulkAction((task) =>
-              fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", {
-                labelIds: [...new Set([...task.labels.map((label) => label.id), labelId])],
-              })),
-            )
-          }
-        />
-      )}
 
       {pending && (
         <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-foreground px-4 py-2 text-sm text-background shadow-lg">
