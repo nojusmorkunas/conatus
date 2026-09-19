@@ -6,6 +6,12 @@
 
 <p align="center"><em>Every goal starts with a next step.</em></p>
 
+<p align="center">
+  <a href="https://github.com/nojusmorkunas/conatus/releases/latest"><img src="https://img.shields.io/github/v/release/nojusmorkunas/conatus" alt="Latest release"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/github/license/nojusmorkunas/conatus" alt="License"></a>
+  <a href="https://github.com/nojusmorkunas/conatus/stargazers"><img src="https://img.shields.io/github/stars/nojusmorkunas/conatus" alt="Stars"></a>
+</p>
+
 Conatus is a self-hosted task manager for projects, recurring work, reminders and collaboration inspired by Todoist.
 
 - Organize work with projects, sections, labels and priorities
