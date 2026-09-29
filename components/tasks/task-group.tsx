@@ -1,6 +1,12 @@
 "use client";
 
-import { Fragment, useMemo, useSyncExternalStore, type CSSProperties } from "react";
+import {
+  Fragment,
+  useMemo,
+  useSyncExternalStore,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { TaskDropProjection } from "@/lib/task-drop";
 
@@ -45,6 +51,7 @@ export function TaskGroup({
   onRenameSection,
   onDeleteSection,
   onError,
+  footer,
 }: {
   id: string | null;
   section?: Section;
@@ -80,6 +87,7 @@ export function TaskGroup({
   onRenameSection: (section: Section, name: string) => void;
   onDeleteSection: (section: Section) => void;
   onError: () => void;
+  footer?: ReactNode;
 }) {
   const collapsed = useSyncExternalStore(
     (callback) => {
@@ -183,6 +191,7 @@ export function TaskGroup({
             onError={onError}
           />
         </div>
+        {footer}
       </>}
       {collapsed && drop && <TaskDropIndicator projection={drop} />}
     </div>

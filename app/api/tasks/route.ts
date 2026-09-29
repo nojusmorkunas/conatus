@@ -1,11 +1,13 @@
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { generateKeyBetween } from "fractional-indexing";
+import { z } from "zod";
 
 import { invalid, notFound, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { isProjectMember, requireProjectAccess } from "@/lib/db/access";
 import { logActivity } from "@/lib/db/activity";
+import { loadProjectTasks } from "@/lib/db/project-tasks";
 import { sections, tasks } from "@/lib/db/schema";
 import { withCommentCounts, withLabels } from "@/lib/db/task-labels";
 import { taskCreateSchema } from "@/lib/validation";
@@ -14,17 +16,34 @@ export async function GET(request: Request) {
   const user = await requireUser("tasks:read");
   if (!user) return unauthorized();
 
-  const projectId = new URL(request.url).searchParams.get("projectId");
+  const searchParams = new URL(request.url).searchParams;
+  const projectId = searchParams.get("projectId");
   if (!projectId) {
     return Response.json({ error: "projectId is required" }, { status: 400 });
   }
 
+  const parentId = searchParams.get("parentId");
+  const parsedParentId = parentId === null ? null : z.uuid().safeParse(parentId);
+  if (parsedParentId && !parsedParentId.success) {
+    return Response.json({ error: "Invalid parentId" }, { status: 400 });
+  }
+
   if (!(await requireProjectAccess(user.id, projectId))) return notFound();
+
+  if (!parsedParentId) {
+    return Response.json(await loadProjectTasks(projectId, user.id));
+  }
 
   const projectTasks = await db
     .select()
     .from(tasks)
-    .where(and(eq(tasks.projectId, projectId), isNull(tasks.deletedAt)))
+    .where(
+      and(
+        eq(tasks.projectId, projectId),
+        eq(tasks.parentId, parsedParentId.data),
+        isNull(tasks.deletedAt),
+      ),
+    )
     .orderBy(tasks.order);
 
   return Response.json(

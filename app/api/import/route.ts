@@ -138,7 +138,11 @@ export async function POST(request: Request) {
             recurrence: task.recurrence,
             recurrenceEndDate: task.recurrenceEndDate,
             isCompleted: task.isCompleted,
-            completedAt: task.completedAt ? new Date(task.completedAt) : null,
+            completedAt: task.completedAt
+              ? new Date(task.completedAt)
+              : task.isCompleted
+                ? new Date()
+                : null,
             order: task.order,
           })),
         )

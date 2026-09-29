@@ -27,6 +27,7 @@ export function ProjectView({
   labels,
   today,
   dateFormat,
+  timezone,
   initialDetailTaskId,
 }: {
   project: Project;
@@ -39,6 +40,7 @@ export function ProjectView({
   labels: Label[];
   today: string;
   dateFormat: string;
+  timezone: string;
   initialDetailTaskId?: string;
 }) {
   // Lazy initializer only runs on the client during hydration, so this
@@ -56,6 +58,11 @@ export function ProjectView({
       ? stored
       : "manual";
   });
+  const [showCompleted, setShowCompleted] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      localStorage.getItem(`show-completed:${project.id}`) === "true",
+  );
   const [, setOpenTaskCount] = useState(
     () => tasks.filter((task) => !task.isCompleted).length,
   );
@@ -71,6 +78,11 @@ export function ProjectView({
     localStorage.setItem(`sort:${project.id}`, next);
   }
 
+  function changeShowCompleted(next: boolean) {
+    setShowCompleted(next);
+    localStorage.setItem(`show-completed:${project.id}`, String(next));
+  }
+
   return (
     <div className="mx-auto w-full max-w-4xl px-3 pb-10 sm:px-6 md:px-8 lg:pl-10">
       <ProjectHeader
@@ -81,8 +93,10 @@ export function ProjectView({
         projectCommentCount={projectCommentCount}
         view={view}
         sortBy={sortBy}
+        showCompleted={showCompleted}
         onViewChange={switchView}
         onSortChange={changeSort}
+        onShowCompletedChange={changeShowCompleted}
       />
 
       {view === "list" ? (
@@ -95,7 +109,9 @@ export function ProjectView({
           currentUserId={currentUserId}
           today={today}
           dateFormat={dateFormat}
+          timezone={timezone}
           sortBy={sortBy}
+          showCompleted={showCompleted}
           initialDetailTaskId={initialDetailTaskId}
           onOpenCountChange={setOpenTaskCount}
         />
@@ -109,6 +125,8 @@ export function ProjectView({
           currentUserId={currentUserId}
           today={today}
           dateFormat={dateFormat}
+          timezone={timezone}
+          showCompleted={showCompleted}
           onOpenCountChange={setOpenTaskCount}
         />
       )}

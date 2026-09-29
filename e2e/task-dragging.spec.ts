@@ -319,7 +319,7 @@ test("ordinary clicks and controls still work, and automatic sorting disables dr
   await expect(page.getByRole("menu")).toBeVisible();
   await expect(page.locator(".task-drag-ghost")).toHaveCount(0);
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "Sort tasks", exact: true }).click();
+  await page.getByRole("button", { name: "Display options", exact: true }).click();
   await page.getByRole("menuitemcheckbox", { name: "Priority", exact: true }).click();
   await expect(page.getByRole("button", { name: "Move Beta", exact: true })).toHaveCount(0);
   await page.keyboard.press("Escape");

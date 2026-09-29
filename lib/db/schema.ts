@@ -1,6 +1,7 @@
 import {
   type AnyPgColumn,
   boolean,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -229,53 +230,64 @@ export const labels = pgTable("labels", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-export const tasks = pgTable("tasks", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  projectId: uuid("project_id")
-    .notNull()
-    .references(() => projects.id, { onDelete: "cascade" }),
-  assigneeId: uuid("assignee_id").references(() => users.id, {
-    onDelete: "set null",
-  }),
-  sectionId: uuid("section_id").references(() => sections.id, {
-    onDelete: "cascade",
-  }),
-  parentId: uuid("parent_id").references(
-    (): AnyPgColumn => tasks.id,
-    { onDelete: "cascade" },
-  ),
-  content: text("content").notNull(),
-  description: text("description"),
-  // 1 = P1 (most urgent) through 4 = P4 (default, no priority set).
-  priority: integer("priority").notNull().default(4),
-  // 'YYYY-MM-DD' / 'HH:mm' as text: date-only comparisons against the
-  // user's "today" stay timezone-trivial. dueTime requires dueDate
-  // (enforced at validation).
-  dueDate: text("due_date"),
-  dueTime: text("due_time"),
-  // 'YYYY-MM-DD'. Independent of dueDate: due = when to work on it,
-  // deadline = must-finish-by. Never derived from or synced to dueDate.
-  deadlineDate: text("deadline_date"),
-  // Canonical rule string from parseRecurrence ("every day", "every 2 weeks",
-  // "every monday"). Requires dueDate; clearing dueDate clears this too.
-  recurrence: text("recurrence"),
-  // Inclusive final occurrence for a recurring task. When completing an
-  // occurrence would advance past this date, the task is completed normally.
-  recurrenceEndDate: text("recurrence_end_date"),
-  // Estimated length in minutes, independent of dueDate/dueTime. Used by
-  // the calendar layout to size blocks.
-  durationMinutes: integer("duration_minutes"),
-  isCompleted: boolean("is_completed").notNull().default(false),
-  completedAt: timestamp("completed_at"),
-  // A task (and its subtree) can be restored from Trash.
-  deletedAt: timestamp("deleted_at"),
-  order: text("order").notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+export const tasks = pgTable(
+  "tasks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    assigneeId: uuid("assignee_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    sectionId: uuid("section_id").references(() => sections.id, {
+      onDelete: "cascade",
+    }),
+    parentId: uuid("parent_id").references(
+      (): AnyPgColumn => tasks.id,
+      { onDelete: "cascade" },
+    ),
+    content: text("content").notNull(),
+    description: text("description"),
+    // 1 = P1 (most urgent) through 4 = P4 (default, no priority set).
+    priority: integer("priority").notNull().default(4),
+    // 'YYYY-MM-DD' / 'HH:mm' as text: date-only comparisons against the
+    // user's "today" stay timezone-trivial. dueTime requires dueDate
+    // (enforced at validation).
+    dueDate: text("due_date"),
+    dueTime: text("due_time"),
+    // 'YYYY-MM-DD'. Independent of dueDate: due = when to work on it,
+    // deadline = must-finish-by. Never derived from or synced to dueDate.
+    deadlineDate: text("deadline_date"),
+    // Canonical rule string from parseRecurrence ("every day", "every 2 weeks",
+    // "every monday"). Requires dueDate; clearing dueDate clears this too.
+    recurrence: text("recurrence"),
+    // Inclusive final occurrence for a recurring task. When completing an
+    // occurrence would advance past this date, the task is completed normally.
+    recurrenceEndDate: text("recurrence_end_date"),
+    // Estimated length in minutes, independent of dueDate/dueTime. Used by
+    // the calendar layout to size blocks.
+    durationMinutes: integer("duration_minutes"),
+    isCompleted: boolean("is_completed").notNull().default(false),
+    completedAt: timestamp("completed_at"),
+    // A task (and its subtree) can be restored from Trash.
+    deletedAt: timestamp("deleted_at"),
+    order: text("order").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("tasks_project_completed_idx").on(
+      table.projectId,
+      table.isCompleted,
+      table.completedAt.desc(),
+      table.id,
+    ),
+  ],
+);
 
 export const taskLabels = pgTable(
   "task_labels",

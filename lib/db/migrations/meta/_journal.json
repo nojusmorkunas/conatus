@@ -274,6 +274,13 @@
       "when": 1789721275282,
       "tag": "0038_start_page",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1790675020921,
+      "tag": "0039_absurd_hobgoblin",
+      "breakpoints": true
     }
   ]
 }

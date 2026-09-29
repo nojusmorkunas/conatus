@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   DndContext,
@@ -30,6 +30,10 @@ import { LabelChip } from "@/components/labels/label-chip";
 import { TaskAddForm } from "@/components/tasks/task-add-form";
 import { TaskCheckbox } from "@/components/tasks/task-checkbox";
 import {
+  CompletedTasks,
+  useCompletedHistory,
+} from "@/components/tasks/completed-tasks";
+import {
   AssigneeChip,
   DeadlineChip,
   DueChip,
@@ -49,6 +53,8 @@ export function Board({
   currentUserId,
   today,
   dateFormat,
+  timezone,
+  showCompleted,
   onOpenCountChange,
 }: {
   projectId: string;
@@ -59,10 +65,15 @@ export function Board({
   currentUserId: string;
   today: string;
   dateFormat: string;
+  timezone: string;
+  showCompleted: boolean;
   onOpenCountChange: (count: number) => void;
 }) {
   const [tasks, setTasks] = useState(initialTasks);
   const [error, setError] = useState<string | null>(null);
+  const history = useCompletedHistory(projectId, () =>
+    setError("That didn't work. Try again."),
+  );
   // Touch cards drag only after a hold; swipes keep scrolling the board.
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
@@ -97,6 +108,14 @@ export function Board({
     return true;
   }
 
+  async function restoreCompleted(task: TaskWithLabels) {
+    const ok = await history.restore(task, setTasks);
+    if (!ok) {
+      setError("That didn't work. Try again.");
+      await refresh();
+    }
+  }
+
   async function toggleComplete(task: TaskWithLabels) {
     // A recurring task stays on the board with a new due date, so it never gets
     // the optimistic `isCompleted` that would card-flicker it out and back.
@@ -107,22 +126,32 @@ export function Board({
         setError("That didn't work. Try again.");
         return;
       }
+      const completedTask = { ...task, ...result.updated };
       setTasks((current) =>
         current.map((existing) =>
-          existing.id === task.id ? { ...existing, ...result.updated } : existing,
+          existing.id === task.id ? completedTask : existing,
         ),
       );
+      if (completedTask.isCompleted && completedTask.parentId === null) {
+        history.add(completedTask);
+      }
       return;
     }
 
+    const completedTask = {
+      ...task,
+      isCompleted: true,
+      completedAt: new Date(),
+    };
     setTasks((current) =>
       current.map((existing) =>
-        existing.id === task.id ? { ...existing, isCompleted: true } : existing,
+        existing.id === task.id ? completedTask : existing,
       ),
     );
     const ok = await withError(() =>
       fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", { completed: true })),
     );
+    if (ok && completedTask.parentId === null) history.add(completedTask);
     if (!ok) await refresh();
   }
 
@@ -203,6 +232,17 @@ export function Board({
               onToggle={toggleComplete}
               onCreated={refresh}
               onError={() => setError("That didn't work. Try again.")}
+              footer={showCompleted ? (
+                <CompletedTasks
+                  sectionId={column.id}
+                  stateTasks={tasks}
+                  history={history}
+                  today={today}
+                  dateFormat={dateFormat}
+                  timezone={timezone}
+                  onRestore={restoreCompleted}
+                />
+              ) : undefined}
             />
           ))}
         </div>
@@ -226,6 +266,7 @@ function Column({
   onToggle,
   onCreated,
   onError,
+  footer,
 }: {
   id: string | null;
   name: string;
@@ -239,6 +280,7 @@ function Column({
   onToggle: (task: TaskWithLabels) => void;
   onCreated: () => void;
   onError: () => void;
+  footer?: ReactNode;
 }) {
   const { setNodeRef } = useDroppable({ id: id ? `column:${id}` : "column:none" });
 
@@ -275,6 +317,7 @@ function Column({
         onCreated={onCreated}
         onError={onError}
       />
+      {footer}
     </div>
   );
 }

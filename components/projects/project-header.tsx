@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowUpDown,
   Download,
   Ellipsis,
   Folder,
@@ -13,6 +12,7 @@ import {
   Menu,
   MessageSquare,
   Pencil,
+  SlidersHorizontal,
   Star,
   Trash2,
   Users,
@@ -55,8 +55,10 @@ export function ProjectHeader({
   projectCommentCount,
   view,
   sortBy,
+  showCompleted,
   onViewChange,
   onSortChange,
+  onShowCompletedChange,
 }: {
   project: Project;
   role: "owner" | "editor";
@@ -65,8 +67,10 @@ export function ProjectHeader({
   projectCommentCount: number;
   view: "list" | "board";
   sortBy: SortBy;
+  showCompleted: boolean;
   onViewChange: (view: "list" | "board") => void;
   onSortChange: (sort: SortBy) => void;
+  onShowCompletedChange: (showCompleted: boolean) => void;
 }) {
   const router = useRouter();
   const [sharingOpen, setSharingOpen] = useState(false);
@@ -215,40 +219,49 @@ export function ProjectHeader({
             </Button>
           </div>
 
-          {view === "list" && (
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Sort tasks"
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Display options"
+                >
+                  <SlidersHorizontal />
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuCheckboxItem
+                checked={showCompleted}
+                onClick={() => onShowCompletedChange(!showCompleted)}
               >
-                <ArrowUpDown />
-              </Button>
-            }
-          />
-          <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel>Sort tasks</DropdownMenuLabel>
-                  {([
-                    ["manual", "Manual"],
-                    ["due", "Due date"],
-                    ["priority", "Priority"],
-                    ["name", "Name"],
-                  ] as const).map(([value, label]) => (
-                    <DropdownMenuCheckboxItem
-                      key={value}
-                      checked={sortBy === value}
-                      onClick={() => onSortChange(value)}
-                    >
-                      {label}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-          )}
+                Show completed
+              </DropdownMenuCheckboxItem>
+              {view === "list" && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>Sort tasks</DropdownMenuLabel>
+                    {([
+                      ["manual", "Manual"],
+                      ["due", "Due date"],
+                      ["priority", "Priority"],
+                      ["name", "Name"],
+                    ] as const).map(([value, label]) => (
+                      <DropdownMenuCheckboxItem
+                        key={value}
+                        checked={sortBy === value}
+                        onClick={() => onSortChange(value)}
+                      >
+                        {label}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </DropdownMenuGroup>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
         <Button
           variant="ghost"

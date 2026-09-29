@@ -31,7 +31,7 @@ function formatSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function TaskModal({ task, labels, members = [], currentUserId, today, dateFormat, onClose, onChanged, onDelete, onPrev, onNext }: {
+export function TaskModal({ task, labels, members = [], currentUserId, today, dateFormat, onClose, onChanged, onCompletionChanged, onDelete, onPrev, onNext }: {
   task: TaskWithLabels;
   labels: Label[];
   members?: ProjectMember[];
@@ -40,6 +40,7 @@ export function TaskModal({ task, labels, members = [], currentUserId, today, da
   dateFormat: string;
   onClose: () => void;
   onChanged: () => void;
+  onCompletionChanged?: (task: TaskWithLabels) => void;
   onDelete: (task: TaskWithLabels) => void;
   onPrev?: () => void;
   onNext?: () => void;
@@ -48,7 +49,7 @@ export function TaskModal({ task, labels, members = [], currentUserId, today, da
   const [comments, setComments] = useState<Comment[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
-  const [projectTasks, setProjectTasks] = useState<TaskWithLabels[]>([]);
+  const [subtasks, setSubtasks] = useState<TaskWithLabels[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -85,7 +86,13 @@ export function TaskModal({ task, labels, members = [], currentUserId, today, da
   }
   async function patch(body: object) {
     const response = await withError(() => fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", body)));
-    if (response) onChanged();
+    if (response) {
+      if ("completed" in body && onCompletionChanged) {
+        const updated = await response.clone().json() as Partial<TaskWithLabels>;
+        onCompletionChanged({ ...task, ...updated });
+      }
+      onChanged();
+    }
     return response;
   }
   async function changeProject(projectId: string | null) {
@@ -94,9 +101,11 @@ export function TaskModal({ task, labels, members = [], currentUserId, today, da
     // Re-run the server layout so the sidebar's per-project counts update.
     if (response) router.refresh();
   }
-  async function fetchProjectTasks() {
-    const response = await fetch(`/api/tasks?projectId=${task.projectId}`);
-    if (response.ok) setProjectTasks(await response.json());
+  async function fetchSubtasks() {
+    const response = await fetch(
+      `/api/tasks?projectId=${task.projectId}&parentId=${task.id}`,
+    );
+    if (response.ok) setSubtasks(await response.json());
   }
 
   useEffect(() => { void fetch("/api/projects").then((r) => r.ok ? r.json() : []).then(setProjects); }, []);
@@ -104,7 +113,7 @@ export function TaskModal({ task, labels, members = [], currentUserId, today, da
     void fetch(`/api/comments?taskId=${task.id}`).then((r) => r.ok ? r.json() : []).then(setComments);
     void fetch(`/api/attachments?taskId=${task.id}`).then((r) => r.ok ? r.json() : []).then(setAttachments);
     void fetch(`/api/reminders?taskId=${task.id}`).then((r) => r.ok ? r.json() : []).then(setReminders);
-    void fetch(`/api/tasks?projectId=${task.projectId}`).then((r) => r.ok ? r.json() : []).then(setProjectTasks);
+    void fetch(`/api/tasks?projectId=${task.projectId}&parentId=${task.id}`).then((r) => r.ok ? r.json() : []).then(setSubtasks);
   }, [task.id]); // eslint-disable-line react-hooks/exhaustive-deps -- fetches intentionally reset by task id
   useEffect(() => {
     const previouslyFocused = document.activeElement instanceof HTMLElement
@@ -150,7 +159,6 @@ export function TaskModal({ task, labels, members = [], currentUserId, today, da
     };
   }, []);
 
-  const subtasks = projectTasks.filter((candidate) => candidate.parentId === task.id).sort((a, b) => a.order < b.order ? -1 : 1);
   const done = subtasks.filter((subtask) => subtask.isCompleted).length;
   const projectName = projects.find((project) => project.id === task.projectId)?.name ?? "Project";
   const currentMember = members.find((member) => member.id === currentUserId);
@@ -158,7 +166,7 @@ export function TaskModal({ task, labels, members = [], currentUserId, today, da
 
   async function saveTitle() { setEditingTitle(false); const content = title.trim(); if (content && content !== task.content) await patch({ content }); else setTitle(task.content); }
   async function saveDescription() { setEditingDescription(false); if (description !== (task.description ?? "")) await patch({ description: description || null }); }
-  async function toggleSubtask(subtask: TaskWithLabels) { const response = await withError(() => fetch(`/api/tasks/${subtask.id}`, jsonInit("PATCH", { completed: !subtask.isCompleted }))); if (response) { await fetchProjectTasks(); onChanged(); } }
+  async function toggleSubtask(subtask: TaskWithLabels) { const response = await withError(() => fetch(`/api/tasks/${subtask.id}`, jsonInit("PATCH", { completed: !subtask.isCompleted }))); if (response) { await fetchSubtasks(); onChanged(); } }
   async function addComment(content: string) { const response = await withError(() => fetch("/api/comments", jsonInit("POST", { taskId: task.id, content }))); if (response) { const comment = await response.json(); setComments((current) => [...current, comment]); onChanged(); } }
   async function editComment(comment: Comment, content: string) { const response = await withError(() => fetch(`/api/comments/${comment.id}`, jsonInit("PATCH", { content }))); if (response) { const updated = await response.json(); setComments((current) => current.map((item) => item.id === updated.id ? updated : item)); onChanged(); } }
   async function deleteComment(comment: Comment) { const response = await withError(() => fetch(`/api/comments/${comment.id}`, { method: "DELETE" })); if (response) { setComments((current) => current.filter((item) => item.id !== comment.id)); onChanged(); } }
@@ -180,7 +188,7 @@ export function TaskModal({ task, labels, members = [], currentUserId, today, da
         <div className="flex-1 px-3 py-4 sm:px-4 md:overflow-y-auto">
           <div className="flex items-start gap-3"><TaskCheckbox priority={task.priority} checked={task.isCompleted} onToggle={() => void patch({ completed: !task.isCompleted })} />{editingTitle ? <Input id="task-dialog-title" autoFocus value={title} onChange={(e) => setTitle(e.target.value)} onBlur={() => void saveTitle()} onKeyDown={(e) => { if (e.key === "Enter") void saveTitle(); }} className="text-lg font-semibold" /> : <button id="task-dialog-title" type="button" className={cn("w-full cursor-text select-text text-left text-lg font-semibold", task.isCompleted && "text-muted-foreground line-through")} onClick={() => { if (!window.getSelection()?.toString()) setEditingTitle(true); }}>{task.content}</button>}</div>
           <div className="ml-9 mt-2">{editingDescription ? <Textarea autoFocus value={description} onChange={(e) => setDescription(e.target.value)} onBlur={() => void saveDescription()} /> : <button type="button" className={cn("cursor-text select-text whitespace-pre-wrap text-left text-base sm:text-sm", task.description ? "text-muted-foreground" : "text-muted-foreground/60")} onClick={() => { if (!window.getSelection()?.toString()) setEditingDescription(true); }}>{task.description || "Description"}</button>}</div>
-          <section className="mt-6"><div className="flex items-center gap-1"><Button type="button" variant="ghost" size="icon-xs" aria-label="Toggle sub-tasks" onClick={() => setSubtasksOpen((value) => !value)}>{subtasksOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}</Button><h3 className="text-base font-medium sm:text-sm">Sub-tasks</h3>{subtasks.length > 0 && <span className="text-base text-muted-foreground sm:text-sm">{done}/{subtasks.length}</span>}</div>{subtasksOpen && <><div>{subtasks.map((subtask) => <div key={subtask.id} className="flex items-center gap-2 border-b py-2"><TaskCheckbox priority={subtask.priority} checked={subtask.isCompleted} onToggle={() => void toggleSubtask(subtask)} /><span className={cn("text-base sm:text-sm", subtask.isCompleted && "line-through text-muted-foreground")}>{subtask.content}</span></div>)}</div><TaskAddForm projectId={task.projectId} sectionId={task.sectionId} parentId={task.id} today={today} labels={labels} onCreated={() => { void fetchProjectTasks(); onChanged(); }} onError={() => setError("That didn't work. Try again.")} /></>}</section>
+          <section className="mt-6"><div className="flex items-center gap-1"><Button type="button" variant="ghost" size="icon-xs" aria-label="Toggle sub-tasks" onClick={() => setSubtasksOpen((value) => !value)}>{subtasksOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}</Button><h3 className="text-base font-medium sm:text-sm">Sub-tasks</h3>{subtasks.length > 0 && <span className="text-base text-muted-foreground sm:text-sm">{done}/{subtasks.length}</span>}</div>{subtasksOpen && <><div>{subtasks.map((subtask) => <div key={subtask.id} className="flex items-center gap-2 border-b py-2"><TaskCheckbox priority={subtask.priority} checked={subtask.isCompleted} onToggle={() => void toggleSubtask(subtask)} /><span className={cn("text-base sm:text-sm", subtask.isCompleted && "line-through text-muted-foreground")}>{subtask.content}</span></div>)}</div><TaskAddForm projectId={task.projectId} sectionId={task.sectionId} parentId={task.id} today={today} labels={labels} onCreated={() => { void fetchSubtasks(); onChanged(); }} onError={() => setError("That didn't work. Try again.")} /></>}</section>
           <section className="mt-6"><h3 className="text-base font-medium sm:text-sm">Comments {comments.length > 0 && <span className="text-muted-foreground">{comments.length}</span>}</h3>{attachments.map((attachment) => <div key={attachment.id} className="group flex items-center justify-between gap-2 rounded-md p-2 hover:bg-muted/50"><a href={`/api/attachments/${attachment.id}`} className="truncate text-base underline-offset-2 hover:underline sm:text-sm">{attachment.filename}</a><div className="flex shrink-0 items-center gap-2"><span className="text-xs text-muted-foreground">{formatSize(attachment.size)}</span><Button variant="ghost" size="icon-xs" aria-label="Delete attachment" className="opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100" onClick={() => void deleteAttachment(attachment)}><Trash2 className="size-3.5" /></Button></div></div>)}{comments.map((comment) => <CommentRow key={comment.id} comment={comment} author={members.find((member) => member.id === comment.userId)?.username} canEdit={comment.userId === currentUserId} onEdit={(content) => void editComment(comment, content)} onDelete={() => void deleteComment(comment)} />)}</section>
           <CommentInput avatar={avatar} onSubmit={(content) => void addComment(content)} onAttachment={(file) => void uploadFile(file)} uploading={uploading} fileInputRef={fileInputRef} />
           {error && <p className="mt-2 text-xs text-destructive">{error}</p>}

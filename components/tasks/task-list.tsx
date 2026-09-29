@@ -30,6 +30,7 @@ import { truncate } from "@/lib/utils";
 import { projectTaskDrop, type TaskDropProjection, type TaskDropTarget } from "@/lib/task-drop";
 import { TaskModal } from "./task-modal";
 import { TaskGroup } from "./task-group";
+import { CompletedTasks, useCompletedHistory } from "./completed-tasks";
 import { CreateSectionForm } from "./create-section-form";
 import { usePendingAction } from "@/lib/use-pending-action";
 import { useTaskSelection } from "@/lib/use-task-selection";
@@ -85,7 +86,9 @@ export function TaskList({
   currentUserId,
   today,
   dateFormat,
+  timezone,
   sortBy,
+  showCompleted,
   initialDetailTaskId,
   onOpenCountChange,
 }: {
@@ -97,7 +100,9 @@ export function TaskList({
   currentUserId: string;
   today: string;
   dateFormat: string;
+  timezone: string;
   sortBy: SortBy;
+  showCompleted: boolean;
   initialDetailTaskId?: string;
   onOpenCountChange: (count: number) => void;
 }) {
@@ -114,6 +119,9 @@ export function TaskList({
   const moveRevision = useRef(0);
   const moveFailed = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  const history = useCompletedHistory(projectId, () =>
+    setError("That didn't work. Try again."),
+  );
   const [detailTaskId, setDetailTaskId] = useState<string | null>(initialDetailTaskId ?? null);
   const [collapsedTaskIds, setCollapsedTaskIds] = useState<Set<string>>(() => new Set());
   const {
@@ -171,6 +179,31 @@ export function TaskList({
     return true;
   }
 
+  async function restoreCompleted(task: TaskWithLabels) {
+    const ok = await history.restore(task, setTasks);
+    if (!ok) {
+      setError("That didn't work. Try again.");
+      await refresh();
+    }
+  }
+
+  function syncModalCompletion(task: TaskWithLabels) {
+    if (task.isCompleted) {
+      setTasks((current) =>
+        current.map((existing) => existing.id === task.id ? task : existing),
+      );
+      if (task.parentId === null) history.add(task);
+      return;
+    }
+
+    history.remove(task.id);
+    setTasks((current) =>
+      current.some((existing) => existing.id === task.id)
+        ? current.map((existing) => existing.id === task.id ? task : existing)
+        : [...current, task],
+    );
+  }
+
   async function mutateSection(action: () => Promise<Response>) {
     const ok = await withError(action);
     if (ok) router.refresh();
@@ -182,7 +215,9 @@ export function TaskList({
     if (!completed) {
       setTasks((current) =>
         current.map((existing) =>
-          existing.id === task.id ? { ...existing, isCompleted: false } : existing,
+          existing.id === task.id
+            ? { ...existing, isCompleted: false, completedAt: null }
+            : existing,
         ),
       );
       const ok = await withError(() =>
@@ -201,21 +236,29 @@ export function TaskList({
       }
       // The advanced row carries no labels, so spreading it over the existing
       // task keeps the ones already on screen.
+      const completedTask = { ...task, ...result.updated };
       setTasks((current) =>
         current.map((existing) =>
-          existing.id === task.id ? { ...existing, ...result.updated } : existing,
+          existing.id === task.id ? completedTask : existing,
         ),
       );
+      if (completedTask.isCompleted && completedTask.parentId === null) {
+        history.add(completedTask);
+      }
       schedule(
         `Completed "${truncate(task.content)}"`,
         // Already written, so the toast only has an inverse left to offer.
         () => {},
         () => {
+          if (completedTask.isCompleted) history.remove(task.id);
           setTasks((current) =>
             current.map((existing) => (existing.id === task.id ? task : existing)),
           );
           void withError(() => patchTask(task.id, result.undo)).then((ok) => {
-            if (!ok) void refresh();
+            if (!ok) {
+              if (completedTask.isCompleted) history.add(completedTask);
+              void refresh();
+            }
           });
         },
       );
@@ -223,10 +266,15 @@ export function TaskList({
     }
 
     const previousTasks = tasks;
+    const completedTask = {
+      ...task,
+      isCompleted: true,
+      completedAt: new Date(),
+    };
     setTasks((current) =>
       current.map((existing) =>
         existing.id === task.id
-          ? { ...existing, isCompleted: true }
+          ? completedTask
           : existing,
       ),
     );
@@ -236,6 +284,7 @@ export function TaskList({
         const ok = await withError(() =>
           fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", { completed: true })),
         );
+        if (ok && completedTask.parentId === null) history.add(completedTask);
         if (!ok) await refresh();
       },
       () => setTasks(previousTasks),
@@ -248,9 +297,10 @@ export function TaskList({
     schedule(
       `Moved "${truncate(task.content)}" to Trash`,
       async () => {
-        await withError(() =>
+        const ok = await withError(() =>
           fetch(`/api/tasks/${task.id}`, { method: "DELETE" }),
         );
+        if (ok) history.remove(task.id);
         await refresh();
       },
       () => setTasks(previousTasks),
@@ -416,14 +466,34 @@ export function TaskList({
     if (selectedTaskIds.length === 0) return;
     const affectedIds = new Set(selectedTaskIds);
     const previousTasks = tasks;
+    const completedAt = new Date();
     setTasks((current) =>
       current.map((task) =>
-        affectedIds.has(task.id) ? { ...task, isCompleted: true } : task,
+        affectedIds.has(task.id)
+          ? { ...task, isCompleted: true, completedAt }
+          : task,
       ),
     );
     schedule(
       `Completed ${affectedIds.size} tasks`,
-      () => bulkAction((task) => patchTask(task.id, { completed: true })),
+      async () => {
+        const committed: TaskWithLabels[] = [];
+        try {
+          await bulkAction(async (task) => {
+            const response = await patchTask(task.id, { completed: true });
+            if (response.ok && task.parentId === null) {
+              const updated = await response.json() as Partial<TaskWithLabels>;
+              const completedTask = { ...task, ...updated };
+              if (completedTask.isCompleted && completedTask.completedAt) {
+                committed.push(completedTask);
+              }
+            }
+            return response;
+          });
+        } finally {
+          committed.forEach((task) => history.add(task));
+        }
+      },
       () => setTasks(previousTasks),
     );
   }
@@ -435,7 +505,12 @@ export function TaskList({
     setTasks((current) => current.filter((task) => !affectedIds.has(task.id)));
     schedule(
       `Moved ${affectedIds.size} tasks to Trash`,
-      () => bulkAction((task) => fetch(`/api/tasks/${task.id}`, { method: "DELETE" })),
+      async () => {
+        await bulkAction((task) =>
+          fetch(`/api/tasks/${task.id}`, { method: "DELETE" }),
+        );
+        affectedIds.forEach((id) => history.remove(id));
+      },
       () => setTasks(previousTasks),
     );
   }
@@ -450,7 +525,9 @@ export function TaskList({
     { id: null, name: null },
     ...orderedSections.map((section) => ({ id: section.id, name: section.name })),
   ];
-  const detailTask = detailTaskId ? tasks.find((task) => task.id === detailTaskId) ?? null : null;
+  const detailTask = detailTaskId
+    ? tasks.find((task) => task.id === detailTaskId) ?? history.find(detailTaskId) ?? null
+    : null;
   const flatOrder = groups.flatMap((group) => roots(group.id).map((task) => task.id));
   const detailIndex = detailTaskId ? flatOrder.indexOf(detailTaskId) : -1;
   const activeTask = tasks.find((task) => task.id === activeId) ?? null;
@@ -826,6 +903,19 @@ export function TaskList({
                   mutateSection(() => fetch(`/api/sections/${section.id}`, { method: "DELETE" }))
                 }
                 onError={() => setError("That didn't work. Try again.")}
+                footer={showCompleted ? (
+                  <CompletedTasks
+                    sectionId={group.id}
+                    stateTasks={tasks}
+                    history={history}
+                    today={today}
+                    dateFormat={dateFormat}
+                    timezone={timezone}
+                    onRestore={restoreCompleted}
+                    onOpen={(task) => setDetailTaskId(task.id)}
+                    indented
+                  />
+                ) : undefined}
               />
               {!selecting && (
                 <CreateSectionForm
@@ -895,6 +985,7 @@ export function TaskList({
             refresh();
           }}
           onChanged={refresh}
+          onCompletionChanged={syncModalCompletion}
           onDelete={deleteTask}
           onPrev={detailIndex > 0 ? () => setDetailTaskId(flatOrder[detailIndex - 1]) : undefined}
           onNext={detailIndex !== -1 && detailIndex < flatOrder.length - 1 ? () => setDetailTaskId(flatOrder[detailIndex + 1]) : undefined}

@@ -77,6 +77,14 @@ function increasingKeys() {
   };
 }
 
+function completedHistoryCount(): number {
+  const value = Number(process.env.SEED_COMPLETED_HISTORY ?? "0");
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error("SEED_COMPLETED_HISTORY must be a non-negative integer.");
+  }
+  return value;
+}
+
 function validRecurrence(text: string): string {
   const rule = parseRecurrence(text);
   if (!rule) throw new Error(`Invalid seed recurrence: ${text}`);
@@ -90,6 +98,7 @@ function validFilter(query: string): string {
 }
 
 async function seed(tx: Tx) {
+  const requestedHistoryTasks = completedHistoryCount();
   let [owner] = await tx.select().from(users).where(eq(users.username, username)).limit(1);
   const createdOwner = !owner;
   if (!owner) {
@@ -185,6 +194,10 @@ async function seed(tx: Tx) {
       .onConflictDoNothing();
   }
 
+  const releaseHistory = requestedHistoryTasks > 0
+    ? await addProject({ name: "Release History", icon: "launch", color: "red", isFavorite: false })
+    : null;
+
   const sectionMap = new Map<string, string>();
   let sectionCount = 0;
   async function addSections(project: Project, names: string[]) {
@@ -201,6 +214,9 @@ async function seed(tx: Tx) {
   await addSections(planning, ["Ideas", "Drafting", "Approved"]);
   await addSections(roadmap, ["Next up", "In flight", "Shipped"]);
   await addSections(home, ["This weekend", "Someday"]);
+  if (releaseHistory) {
+    await addSections(releaseHistory, ["Frontend", "Backend", "Infrastructure"]);
+  }
 
   const labelOrder = increasingKeys();
   const labelRows = await tx.insert(labels).values([
@@ -241,6 +257,146 @@ async function seed(tx: Tx) {
   }
   const sec = (project: Project, name: string) => sectionMap.get(`${project.name}/${name}`)!;
   const done = (daysAgo: number) => ({ isCompleted: true, completedAt: atOffset(-daysAgo * 24) });
+
+  let historyTasks = 0;
+  if (releaseHistory) {
+    const releaseHistoryId = releaseHistory.id;
+    const historySections = [
+      null,
+      sec(releaseHistory, "Frontend"),
+      sec(releaseHistory, "Backend"),
+      sec(releaseHistory, "Infrastructure"),
+    ];
+    const historyOrders = historySections.map(() => increasingKeys());
+    const historyAnchor = Date.now();
+    const historySpan = 400 * 86_400_000;
+    const verbs = [
+      "Ship", "Polish", "Document", "Validate", "Automate", "Refactor",
+      "Harden", "Launch", "Review", "Tune",
+    ];
+    const subjects = [
+      "account settings", "billing alerts", "dashboard filters", "email digests",
+      "mobile navigation", "onboarding flow", "release pipeline", "search results",
+      "team permissions", "usage reports",
+    ];
+    const historyRows: (typeof tasks.$inferInsert)[] = Array.from(
+      { length: requestedHistoryTasks },
+      (_, index) => {
+        const sectionIndex = index % historySections.length;
+        const completedAt = new Date(
+          historyAnchor
+            - Math.floor(((index + 1) * historySpan) / (requestedHistoryTasks + 1))
+            - index,
+        );
+        return {
+          userId: owner.id,
+          projectId: releaseHistoryId,
+          sectionId: historySections[sectionIndex],
+          content: `${verbs[index % verbs.length]} ${subjects[Math.floor(index / verbs.length) % subjects.length]} #${index + 1}`,
+          description: (index + 1) % 5 === 0
+            ? "Completed during the staged v2 rollout."
+            : null,
+          priority: (index % 4) + 1,
+          isCompleted: true,
+          completedAt,
+          order: historyOrders[sectionIndex](),
+        };
+      },
+    );
+
+    for (let start = 0; start < historyRows.length; start += 100) {
+      const chunk = historyRows.slice(start, start + 100);
+      await tx.insert(tasks).values(chunk);
+      historyTasks += chunk.length;
+    }
+    historySections.forEach((sectionId, index) => {
+      const sibling = `${releaseHistoryId}:${sectionId ?? "none"}:root`;
+      taskOrders.set(sibling, historyOrders[index]);
+    });
+
+    async function addHistoryTask(input: Omit<TaskInput, "projectId">) {
+      const task = await addTask({ ...input, projectId: releaseHistoryId });
+      historyTasks++;
+      return task;
+    }
+    const completedAgo = (days: number, milliseconds: number) =>
+      new Date(historyAnchor - days * 86_400_000 - milliseconds);
+
+    await addHistoryTask({
+      sectionId: sec(releaseHistory, "Frontend"),
+      content: "Audit the v2 accessibility pass",
+      priority: 2,
+    });
+    await addHistoryTask({
+      sectionId: sec(releaseHistory, "Backend"),
+      content: "Confirm the API rollout window",
+      priority: 1,
+    });
+    await addHistoryTask({
+      sectionId: sec(releaseHistory, "Infrastructure"),
+      content: "Schedule the production readiness review",
+      priority: 3,
+    });
+
+    const launchChecklist = await addHistoryTask({
+      sectionId: sec(releaseHistory, "Frontend"),
+      content: "Prepare v2 launch checklist",
+      priority: 1,
+    });
+    await addHistoryTask({
+      parentId: launchChecklist.id,
+      content: "Verify responsive release banners",
+      isCompleted: true,
+      completedAt: completedAgo(8, 101),
+    });
+    await addHistoryTask({
+      parentId: launchChecklist.id,
+      content: "Approve the launch-day copy",
+      isCompleted: true,
+      completedAt: completedAgo(7, 202),
+    });
+    await addHistoryTask({
+      parentId: launchChecklist.id,
+      content: "Check analytics event coverage",
+      isCompleted: true,
+      completedAt: completedAgo(6, 303),
+    });
+    await addHistoryTask({
+      parentId: launchChecklist.id,
+      content: "Test the upgrade notification",
+      isCompleted: true,
+      completedAt: completedAgo(5, 404),
+    });
+    await addHistoryTask({
+      parentId: launchChecklist.id,
+      content: "Record the launch walkthrough",
+      priority: 2,
+    });
+    await addHistoryTask({
+      parentId: launchChecklist.id,
+      content: "Brief the support rotation",
+      priority: 2,
+    });
+
+    const releaseNotes = await addHistoryTask({
+      sectionId: sec(releaseHistory, "Backend"),
+      content: "Publish the v1 migration guide",
+      isCompleted: true,
+      completedAt: completedAgo(21, 505),
+    });
+    await addHistoryTask({
+      parentId: releaseNotes.id,
+      content: "Archive deprecated API examples",
+      isCompleted: true,
+      completedAt: completedAgo(23, 606),
+    });
+    await addHistoryTask({
+      parentId: releaseNotes.id,
+      content: "Link the final compatibility matrix",
+      isCompleted: true,
+      completedAt: completedAgo(22, 707),
+    });
+  }
 
   await addTask({ projectId: inbox.id, content: "Reply to the venue proposal", description: "Confirm headcount and ask about the vegetarian menu.", priority: 1, dueDate: d(-2), dueTime: "09:00", labels: ["urgent", "quick-win"] });
   await addTask({ projectId: inbox.id, content: "Book dentist appointment", priority: 2, dueDate: d(0), dueTime: "11:30", durationMinutes: 15, labels: ["quick-win"] });
@@ -353,6 +509,7 @@ async function seed(tx: Tx) {
     projects: createdProjects.length + preservedIds.length,
     sections: sectionCount,
     tasks: taskRows.size,
+    historyTasks,
     completedTasks: [...taskRows.values()].filter((task) => task.isCompleted).length,
     trashedTasks: [...taskRows.values()].filter((task) => task.deletedAt).length,
     recurringTasks: [...taskRows.values()].filter((task) => task.recurrence).length,

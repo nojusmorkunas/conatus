@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation";
-import { and, count, eq, isNull } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { requireProjectAccess } from "@/lib/db/access";
-import { comments, labels, projectCollaborators, sections, tasks, users } from "@/lib/db/schema";
-import { withCommentCounts, withLabels } from "@/lib/db/task-labels";
+import { comments, labels, projectCollaborators, sections, users } from "@/lib/db/schema";
+import { loadProjectTasks } from "@/lib/db/project-tasks";
 import { todayInTimezone } from "@/lib/dates";
 import { ProjectView } from "@/components/projects/project-view";
 
@@ -47,11 +47,7 @@ export default async function ProjectPage({
     .where(and(eq(sections.projectId, id), eq(sections.isArchived, false)))
     .orderBy(sections.order);
 
-  const projectTasks = await db
-    .select()
-    .from(tasks)
-    .where(and(eq(tasks.projectId, id), isNull(tasks.deletedAt)))
-    .orderBy(tasks.order);
+  const projectTasks = await loadProjectTasks(id, user.id, initialDetailTaskId);
 
   const userLabels = await db
     .select()
@@ -71,16 +67,18 @@ export default async function ProjectPage({
 
   return (
     <ProjectView
+      key={project.id}
       project={project}
       role={access.role}
       members={members}
       currentUserId={user.id}
       projectCommentCount={projectCommentCount.count}
       sections={projectSections}
-      tasks={await withCommentCounts(await withLabels(projectTasks, user.id))}
+      tasks={projectTasks}
       labels={userLabels}
       today={todayInTimezone(settings.timezone)}
       dateFormat={settings.dateFormat}
+      timezone={settings.timezone}
       initialDetailTaskId={initialDetailTaskId}
     />
   );
