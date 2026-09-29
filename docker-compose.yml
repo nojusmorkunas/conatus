@@ -18,10 +18,9 @@ services:
       start_period: 10s
 
   minio:
-    # MinIO stopped publishing to Docker Hub, so minio/minio no longer pulls.
-    # Pinned because the console this file exposes on 9001 was dropped from
-    # later releases.
-    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
+    # MinIO no longer publishes images anywhere. SILO is a maintained MinIO
+    # fork with the same on-disk format, so existing minio-data volumes work.
+    image: pgsty/silo:RELEASE.2026-09-16T00-00-00Z
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
