@@ -9,7 +9,7 @@ import type { filters as filtersTable, labels as labelsTable } from "@/lib/db/sc
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ProjectColorPicker } from "@/components/projects/project-color-picker";
-import { ProjectColorDot } from "@/components/projects/project-color-dot";
+import { LabelRow } from "@/components/labels/label-sidebar-section";
 
 type FilterItem = typeof filtersTable.$inferSelect;
 type LabelItem = typeof labelsTable.$inferSelect;
@@ -92,6 +92,12 @@ export function FiltersLabelsManager({
     } finally {
       setSaving(false);
     }
+  }
+
+  async function refreshLabels() {
+    const response = await fetch("/api/labels");
+    if (response.ok) setLabels(await response.json());
+    window.dispatchEvent(new Event("sidebar:labels:refresh"));
   }
 
   return (
@@ -194,12 +200,14 @@ export function FiltersLabelsManager({
         {labels.length === 0 ? (
           <p className="text-sm text-muted-foreground">No labels yet.</p>
         ) : (
-          <div className="divide-y rounded-md border">
+          <div className="rounded-md border">
             {labels.map((label) => (
-              <div key={label.id} className="flex h-10 items-center gap-2 px-3 text-sm">
-                <ProjectColorDot color={label.color} />
-                {label.name}
-              </div>
+              <LabelRow
+                key={label.id}
+                label={label}
+                onChanged={refreshLabels}
+                className="h-10 rounded-none border-0 border-b border-border pl-1.5 pr-2 last:border-b-0 hover:bg-muted focus-within:bg-muted"
+              />
             ))}
           </div>
         )}

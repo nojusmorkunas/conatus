@@ -24,9 +24,11 @@ type Label = typeof labelsTable.$inferSelect;
 export function LabelRow({
   label,
   onChanged,
+  className,
 }: {
   label: Label;
   onChanged: () => void;
+  className?: string;
 }) {
   const [renaming, setRenaming] = useState(false);
   const [recoloring, setRecoloring] = useState(false);
@@ -90,6 +92,7 @@ export function LabelRow({
     <div
       className={cn(
         "group flex h-9 shrink-0 items-center gap-2 rounded-lg border border-transparent py-1 pr-1.5 pl-2 text-sm transition-all hover:bg-background/65 focus-within:bg-background/65",
+        className,
       )}
     >
       <Link

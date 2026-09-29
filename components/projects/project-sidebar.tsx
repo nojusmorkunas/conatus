@@ -189,6 +189,22 @@ export function ProjectSidebar({
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    async function refreshLabels() {
+      const response = await fetch("/api/labels");
+      if (active && response.ok) setFavoriteLabels(await response.json());
+    }
+    function onLabelsChanged() {
+      void refreshLabels();
+    }
+    window.addEventListener("sidebar:labels:refresh", onLabelsChanged);
+    return () => {
+      active = false;
+      window.removeEventListener("sidebar:labels:refresh", onLabelsChanged);
+    };
+  }, []);
+
   function setSidebarCollapsed(value: boolean) {
     setCollapsed(value);
     localStorage.setItem("sidebar:collapsed", String(value));
