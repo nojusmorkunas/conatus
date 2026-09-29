@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import Link from "next/link";
-import { Filter, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 
 import { jsonInit } from "@/lib/api-client";
 import type { filters as filtersTable, labels as labelsTable } from "@/lib/db/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ProjectColorPicker } from "@/components/projects/project-color-picker";
+import { FilterRow } from "@/components/filters/filter-sidebar-section";
 import { LabelRow } from "@/components/labels/label-sidebar-section";
 
 type FilterItem = typeof filtersTable.$inferSelect;
@@ -94,10 +94,16 @@ export function FiltersLabelsManager({
     }
   }
 
+  async function refreshFilters() {
+    const response = await fetch("/api/filters");
+    if (response.ok) setFilters(await response.json());
+    window.dispatchEvent(new Event("sidebar:favorites:refresh"));
+  }
+
   async function refreshLabels() {
     const response = await fetch("/api/labels");
     if (response.ok) setLabels(await response.json());
-    window.dispatchEvent(new Event("sidebar:labels:refresh"));
+    window.dispatchEvent(new Event("sidebar:favorites:refresh"));
   }
 
   return (
@@ -148,16 +154,15 @@ export function FiltersLabelsManager({
         {filters.length === 0 ? (
           <p className="text-sm text-muted-foreground">No filters yet.</p>
         ) : (
-          <div className="divide-y rounded-md border">
+          <div className="rounded-md border">
             {filters.map((filter) => (
-              <Link
+              <FilterRow
                 key={filter.id}
-                href={`/filters/${filter.id}`}
-                className="flex h-10 items-center gap-2 px-3 text-sm hover:bg-muted"
-              >
-                <Filter className="size-4 text-muted-foreground" />
-                {filter.name}
-              </Link>
+                filter={filter}
+                onChanged={refreshFilters}
+                menuAlwaysVisible
+                className="h-10 rounded-none border-0 border-b border-border pl-1.5 pr-2 last:border-b-0 hover:bg-muted focus-within:bg-muted"
+              />
             ))}
           </div>
         )}
@@ -206,6 +211,7 @@ export function FiltersLabelsManager({
                 key={label.id}
                 label={label}
                 onChanged={refreshLabels}
+                menuAlwaysVisible
                 className="h-10 rounded-none border-0 border-b border-border pl-1.5 pr-2 last:border-b-0 hover:bg-muted focus-within:bg-muted"
               />
             ))}

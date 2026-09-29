@@ -191,17 +191,21 @@ export function ProjectSidebar({
 
   useEffect(() => {
     let active = true;
-    async function refreshLabels() {
-      const response = await fetch("/api/labels");
-      if (active && response.ok) setFavoriteLabels(await response.json());
+    async function refreshPinned() {
+      const [labelsResponse, filtersResponse] = await Promise.all([
+        fetch("/api/labels"),
+        fetch("/api/filters"),
+      ]);
+      if (active && labelsResponse.ok) setFavoriteLabels(await labelsResponse.json());
+      if (active && filtersResponse.ok) setFavoriteFilters(await filtersResponse.json());
     }
-    function onLabelsChanged() {
-      void refreshLabels();
+    function onFavoritesChanged() {
+      void refreshPinned();
     }
-    window.addEventListener("sidebar:labels:refresh", onLabelsChanged);
+    window.addEventListener("sidebar:favorites:refresh", onFavoritesChanged);
     return () => {
       active = false;
-      window.removeEventListener("sidebar:labels:refresh", onLabelsChanged);
+      window.removeEventListener("sidebar:favorites:refresh", onFavoritesChanged);
     };
   }, []);
 

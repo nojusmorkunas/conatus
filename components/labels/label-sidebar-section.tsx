@@ -25,10 +25,12 @@ export function LabelRow({
   label,
   onChanged,
   className,
+  menuAlwaysVisible = false,
 }: {
   label: Label;
   onChanged: () => void;
   className?: string;
+  menuAlwaysVisible?: boolean;
 }) {
   const [renaming, setRenaming] = useState(false);
   const [recoloring, setRecoloring] = useState(false);
@@ -110,7 +112,10 @@ export function LabelRow({
             <Button
               variant="ghost"
               size="icon-xs"
-              className="!min-h-0 opacity-100 hover:bg-background md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 dark:hover:bg-background"
+              className={cn(
+                "!min-h-0 opacity-100 hover:bg-background dark:hover:bg-background",
+                !menuAlwaysVisible && "md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100",
+              )}
               aria-label={`More options for ${label.name}`}
             >
               <MoreHorizontal />
