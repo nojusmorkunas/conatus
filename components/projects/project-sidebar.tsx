@@ -74,6 +74,7 @@ export function ProjectSidebar({
   userName,
   hasAvatar,
   avatarVersion,
+  appVersion,
   inboxProjectId,
   today,
   labels,
@@ -87,6 +88,7 @@ export function ProjectSidebar({
   userName: string | null;
   hasAvatar: boolean;
   avatarVersion: string;
+  appVersion: string;
   inboxProjectId: string | null;
   today: string;
   labels: { id: string; name: string }[];
@@ -678,7 +680,7 @@ export function ProjectSidebar({
               <DropdownMenuItem onClick={() => signOut({ callbackUrl: "/login" })}>
                 <LogOut /> Log out
               </DropdownMenuItem>
-              <p className="px-2 py-1.5 text-xs text-muted-foreground">v1.1.0</p>
+              <p className="px-2 py-1.5 text-xs text-muted-foreground">v{appVersion}</p>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

@@ -9,6 +9,8 @@ import { ProjectSidebar } from "@/components/projects/project-sidebar";
 import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
 import { Toaster } from "@/components/ui/toast";
 import { todayInTimezone } from "@/lib/dates";
+// Read on the server so the client bundle carries the version string, not the whole package.json.
+import { version } from "@/package.json";
 
 export default async function AppLayout({
   children,
@@ -74,6 +76,7 @@ export default async function AppLayout({
         userName={account.name}
         hasAvatar={!!account.image}
         avatarVersion={String(account.updatedAt.getTime())}
+        appVersion={version}
         inboxProjectId={inboxProjectId}
         today={today}
         labels={userLabels}
