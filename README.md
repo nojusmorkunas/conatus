@@ -13,27 +13,39 @@
   <a href="https://github.com/nojusmorkunas/conatus/stargazers"><img src="https://img.shields.io/github/stars/nojusmorkunas/conatus" alt="Stars"></a>
 </p>
 
-Conatus is a self-hosted task manager for projects, recurring work, reminders and collaboration inspired by Todoist.
-
-- Organize work with projects, sections, labels and priorities
-- Schedule recurring tasks, due dates, deadlines and reminders
-- Collaborate through comments, file attachments and shared projects
-- Import Todoist tasks and work from calendar, list or board views
-- Connect through API tokens and webhooks
-
-Type dates, times, durations, reminders, and repeats directly into a task name.
-See the [natural-language entry guide](./docs/natural-language.md) for supported
-phrases and scheduling conventions.
-
 <p align="center">
-  <img src="./public/project_view.png" alt="Conatus project view" width="100%">
+  <a href="https://demo.useconatus.com"><strong>Try the demo</strong></a> (<code>demo</code> / <code>demo</code>) ·
+  <a href="https://useconatus.com">Website</a> ·
+  <a href="https://useconatus.com/getting-started/install/">Docs</a> ·
+  <a href="https://useconatus.com/todoist-alternative/">Compared with Todoist</a>
 </p>
 
+Conatus is a self-hosted task manager inspired by Todoist. It runs on your own server with Docker Compose, with tasks in PostgreSQL and files in S3 storage you control. AI agents can read, create, reschedule and complete your tasks through the [MCP server](https://github.com/nojusmorkunas/conatus-mcp), and your own scripts can use the REST API and webhooks. Conatus is free and open source under the AGPL.
+
 <p align="center">
-  <img src="./public/task_view.png" alt="Conatus task details view" width="100%">
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="./docs/screenshots/today-light.png">
+    <img src="./docs/screenshots/today.png" alt="The Conatus Today view with overdue and scheduled tasks, priorities, durations and labels, next to the project sidebar" width="100%">
+  </picture>
 </p>
 
-## Deploy Conatus
+- Projects with sections, sub-tasks, labels, four priorities and saved filters
+- Recurring tasks with due dates, separate deadlines, durations and reminders
+- [Quick add](./docs/natural-language.md) that reads dates, repeats, `p1`, `#project` and `@label` straight from the task name
+- List, board and calendar views, plus an iCal feed for your calendar app
+- Shared projects with comments, assignees and file attachments
+- Todoist import from an API token or a backup file
+- A REST API with scoped tokens, signed webhooks and an MCP server for AI agents
+- Daily database backups from the first boot
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="./docs/screenshots/task-light.png">
+    <img src="./docs/screenshots/task.png" alt="A Conatus task with sub-tasks, a comment, a file attachment, deadline, duration, priority and labels" width="720">
+  </picture>
+</p>
+
+## Deploy
 
 ### 1. Get the Compose file and environment template
 
@@ -47,11 +59,11 @@ curl -o .env https://raw.githubusercontent.com/nojusmorkunas/conatus/main/.env.e
 
 ### 2. Edit your credentials
 
-Open `.env` and set these values:
+Open `.env` and replace every `replace-with-...` value with your own:
 
 ```env
-# Use latest for the current stable release, or pin an exact version such as
-# 1.1.0 when reproducible upgrades matter.
+# latest follows the newest stable release. Pin an exact version without the
+# leading "v" to upgrade only when you choose.
 CONATUS_VERSION=latest
 CONATUS_PORT=4399
 
@@ -69,8 +81,7 @@ CONATUS_ADMIN_USERNAME=admin
 CONATUS_ADMIN_PASSWORD=replace-with-a-long-random-password
 ```
 
-If you use a domain or reverse proxy, also set `AUTH_URL` and
-`PUBLIC_BASE_URL` to the external HTTPS address.
+If you use a domain or reverse proxy, also set `AUTH_URL` and `PUBLIC_BASE_URL` to the external HTTPS address. The [reverse proxy guide](https://useconatus.com/getting-started/reverse-proxy/) has Caddy and nginx configs.
 
 ### 3. Start Conatus
 
@@ -78,100 +89,40 @@ If you use a domain or reverse proxy, also set `AUTH_URL` and
 docker compose up -d
 ```
 
-Docker Compose automatically pulls the Conatus application, operations,
-PostgreSQL and MinIO images. Open [http://localhost:4399](http://localhost:4399)
-and sign in with the administrator credentials from `.env`.
+Docker Compose pulls the Conatus application, operations, PostgreSQL and Silo images. Silo stores attachments and is a maintained fork of MinIO. Open [http://localhost:4399](http://localhost:4399) and sign in with the administrator credentials from `.env`, then remove `CONATUS_ADMIN_USERNAME` and `CONATUS_ADMIN_PASSWORD` from `.env`.
 
-After the first login, remove `CONATUS_ADMIN_USERNAME` and
-`CONATUS_ADMIN_PASSWORD` from `.env`.
+### Upgrading
 
-For upgrades, update `CONATUS_VERSION` then run `docker compose up -d` again.
-Migrations run automatically before the application starts, and upgrading from
-any earlier published release is supported. Back up the database first, because
-some migrations require a restore to roll back safely.
-
-## API and MCP access
-
-Create a scoped access token in Settings. The token is shown only once,
-so copy it before leaving the page. Send it as a bearer token to any protected
-v1 API route:
+Set `CONATUS_VERSION` to the new release, then run:
 
 ```bash
-curl -H "Authorization: Bearer tdm_..." "http://localhost:4399/api/v1/tasks?completed=false"
+docker compose pull
+docker compose up -d
 ```
 
-Tokens can be reviewed and revoked from Settings.
+Migrations run automatically before the application starts, and you can upgrade from any earlier published release. Back up the database first, since some migrations need a restore to roll back. See the [upgrade guide](https://useconatus.com/getting-started/upgrading/).
 
-The OpenAPI 3.1 description is served at `/api/v1/openapi.json`. Mutating task
-creation endpoints accept `Idempotency-Key` while list endpoints use opaque cursor
-pagination.
+## Documentation
 
-The MCP server is developed and released separately at
-[nojusmorkunas/conatus-mcp](https://github.com/nojusmorkunas/conatus-mcp).
-It provides local stdio and remote Streamable HTTP transports so MCP-compatible
-AI agents can manage tasks without direct database access. Remote mode supports
-OAuth discovery, dynamic client registration, browser approval, S256 PKCE,
-refresh-token rotation plus a static bearer fallback. A typical deployment uses
-`tasks.example.com` for this app and `mcp.example.com/mcp` for the MCP sidecar.
+The full documentation is at [useconatus.com](https://useconatus.com/getting-started/install/):
 
-The `mcp` Compose profile runs it as a sidecar from the published image; see that
-repository's README for client configuration and `CONATUS_MCP_VERSION` in
-`.env.example` to pin a version.
-
-## Webhooks
-
-Add HTTPS (or localhost) endpoints in Settings to receive `task.created`,
-`task.completed`, `task.uncompleted`, `task.deleted`, `comment.added`,
-`project.created`, `project.archived` and `project.deleted` events. Each POST body
-is `{ type, taskContent, projectId, projectName, occurredAt }`. Verify the
-`X-Webhook-Signature` header by computing an HMAC-SHA256 of the raw request body
-with the webhook secret, which is shown only once when the endpoint is created.
-
-## Database migrations
-
-```bash
-npm run db:generate   # generate a migration from lib/db/schema.ts
-npm run db:migrate     # apply migrations
-npm run db:studio      # browse the database
-```
-
-## Backups
-
-The `backup` service in `docker-compose.yml` dumps the database on a timer
-into the `backups` volume, keeping the newest `BACKUP_KEEP` dumps (default
-7, every `BACKUP_INTERVAL` seconds, default 86400/daily). Override either
-via env vars.
-
-Restore a dump:
-
-```bash
-docker compose exec -T db pg_restore -U app -d app --clean --if-exists < /path/to/app-<timestamp>.dump
-```
-
-Manual dump:
-
-```bash
-docker compose exec db pg_dump -U app -Fc app > backup.dump
-```
-
-## Scaling
-
-Rate limits (registration, password reset, the public error-reporting endpoint,
-etc.) are counted in memory inside each `app` container, not shared across
-containers. If you scale the `app` service to more than one replica, each
-replica enforces the limit independently, so the effective limit is the
-configured value multiplied by the replica count.
+- [Environment variables](https://useconatus.com/configuration/environment/)
+- [Backups and restore](https://useconatus.com/configuration/backups/)
+- [Users, registration and rate limits](https://useconatus.com/administration/users/)
+- [REST API](https://useconatus.com/integrations/api/). The OpenAPI 3.1 description is at `/api/v1/openapi.json`
+- [Webhooks](https://useconatus.com/integrations/webhooks/)
+- [MCP server](https://useconatus.com/integrations/mcp/)
+- [Migrating from Todoist](https://useconatus.com/migrate-from-todoist/)
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for local setup and verification
-steps.
+Questions and ideas go in [Discussions](https://github.com/nojusmorkunas/conatus/discussions) and bugs in [Issues](https://github.com/nojusmorkunas/conatus/issues). See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for local setup, database migrations and the checks a pull request needs to pass.
 
 ## License
 
-AGPL-3.0-or-later. See `LICENSE`.
+AGPL-3.0-or-later. See [`LICENSE`](./LICENSE).
 
-## Star History
+## Star history
 
 <a href="https://www.star-history.com/?repos=nojusmorkunas%2Fconatus&type=date&releases=&legend=bottom-right">
  <picture>
