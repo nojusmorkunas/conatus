@@ -35,6 +35,21 @@ gated on `NODE_ENV`, so never set it on a machine others can reach.
 
 ## Required checks
 
+> [!IMPORTANT]
+> Make sure you've followed the [Development Setup](#development-setup) instructions above to setup
+> a database and export `DATABASE_URL`. It is required for the `build` and `test:e2e`
+> targets.
+
+> [!IMPORTANT]
+> The e2e tests require a working playwright setup along with browsers. You may need
+> to run the following before e2e tests will pass:
+>
+> ```
+> npx playwright install
+> ```
+>
+> This may also require installing OS dependencies.
+
 Run the application checks:
 
 ```bash

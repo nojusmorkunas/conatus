@@ -8,7 +8,7 @@ export const s3 =
   new Client({
     endPoint: process.env.S3_ENDPOINT!,
     port: Number(process.env.S3_PORT),
-    useSSL: false,
+    useSSL: process.env.S3_USE_SSL === "1",
     accessKey: process.env.S3_ACCESS_KEY!,
     secretKey: process.env.S3_SECRET_KEY!,
   });
