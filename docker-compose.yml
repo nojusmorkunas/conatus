@@ -104,8 +104,10 @@ services:
       REGISTRATION_MODE: ${REGISTRATION_MODE:-invite-only}
       # Local development only: disables rate limiting and opens registration.
       CONATUS_DEV_MODE: ${CONATUS_DEV_MODE:-0}
-      S3_ENDPOINT: minio
-      S3_PORT: 9000
+      # The bundled Silo unless .env points at an external S3 server.
+      S3_ENDPOINT: ${CONATUS_S3_ENDPOINT:-minio}
+      S3_PORT: ${CONATUS_S3_PORT:-9000}
+      S3_USE_SSL: ${CONATUS_S3_USE_SSL:-0}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in .env}
       S3_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env}
       S3_BUCKET: ${S3_BUCKET:-attachments}
