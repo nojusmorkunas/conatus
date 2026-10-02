@@ -13,10 +13,10 @@ npm run dev
 ```
 
 Point `DATABASE_URL` at a development PostgreSQL instance. Attachments require
-MinIO. Email is optional.
+S3-compatible storage such as Silo. Email is optional.
 
 For a local Docker-backed development stack, run `npm run dev:local`. It starts
-PostgreSQL, MinIO and Mailpit when needed, applies migrations, then starts the
+PostgreSQL, Silo and Mailpit when needed, applies migrations, then starts the
 Next.js development server.
 
 Registration is invite-only. On an empty database, `/register` allows the

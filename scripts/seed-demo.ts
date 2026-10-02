@@ -526,7 +526,7 @@ async function seed(tx: Tx) {
 }
 
 // ponytail: the bucket write is best-effort. `db:seed` was pure Drizzle and ran
-// against a bare Postgres; making MinIO mandatory would break that for anyone
+// against a bare Postgres; making object storage mandatory would break that for anyone
 // not running the full stack. Without it the task still shows its attachment
 // row — only the download 404s. The import is dynamic because lib/storage.ts
 // builds a MinIO client from S3_* at module load and would throw on the way in.
@@ -549,7 +549,7 @@ async function main() {
   console.log("Demo data seeded successfully:");
   for (const [key, value] of Object.entries(summary)) console.log(`  ${key}: ${value}`);
   const stored = await putAttachment(upload.key);
-  console.log(`  attachmentObject: ${stored ? "written to MinIO" : "missing (MinIO unreachable)"}`);
+  console.log(`  attachmentObject: ${stored ? "written to storage" : "missing (storage unreachable)"}`);
 }
 
 main().then(() => process.exit(0)).catch((error: unknown) => {

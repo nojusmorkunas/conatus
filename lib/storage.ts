@@ -27,8 +27,8 @@ export function ensureBucket() {
       if (!exists) return s3.makeBucket(BUCKET);
     })
     .catch((error) => {
-      // Two requests racing to create the bucket on first use; MinIO
-      // returns an "already owned by you" error for the loser.
+      // Two requests racing to create the bucket on first use; the S3
+      // server returns an "already owned by you" error for the loser.
       if (error?.code === "BucketAlreadyOwnedByYou") return;
       bucketReady = null;
       throw error;
