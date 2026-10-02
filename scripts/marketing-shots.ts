@@ -3,7 +3,7 @@
  *
  * Run against a seeded dev server:
  *
- *   npm run dev:local        # Postgres + MinIO + migrations + next dev
+ *   npm run dev:local        # Postgres + Silo + migrations + next dev
  *   npm run db:seed
  *   npx tsx scripts/marketing-shots.ts
  *
@@ -17,7 +17,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
-import { chromium, type Locator, type Page } from "@playwright/test";
+import { chromium, type Browser, type Locator, type Page } from "@playwright/test";
 
 const baseURL = process.env.SHOTS_BASE_URL ?? "http://localhost:3000";
 const username = process.env.SEED_USERNAME ?? "admin";
@@ -125,14 +125,16 @@ async function stubImportPreview(page: Page) {
   );
 }
 
-async function main() {
-  const browser = await chromium.launch();
+async function capture(browser: Browser, scheme: "dark" | "light") {
+  // Dark keeps the original names; light gets a suffix so the site can swap
+  // each shot with its own theme.
+  const file = (name: string) => `${name}${scheme === "dark" ? "" : "-light"}.png`;
 
   async function openPage(viewport: { width: number; height: number }) {
     const context = await browser.newContext({
       viewport,
       deviceScaleFactor: 2,
-      colorScheme: "dark",
+      colorScheme: scheme,
       reducedMotion: "reduce",
     });
     // Blinking carets and half-finished transitions are the two things that
@@ -147,14 +149,20 @@ async function main() {
     return page;
   }
 
-  console.log(`Capturing to ${outDir}`);
+  console.log(`Capturing ${scheme} to ${outDir}`);
 
   // --- Hero: the whole application window -------------------------------
   const hero = await openPage(HERO_VIEWPORT);
   await hero.goto(`${baseURL}/today`);
   await hero.getByText("Build responsive homepage prototype").waitFor();
+  // The dark class lands after hydration, not with the server HTML, and the
+  // hero is the first page a cold dev server compiles.
+  await hero.waitForFunction(
+    (dark) => document.documentElement.classList.contains("dark") === dark,
+    scheme === "dark",
+  );
   await hero.mouse.move(HERO_VIEWPORT.width - 1, HERO_VIEWPORT.height - 1);
-  await save("app_window.png", await hero.screenshot());
+  await save(file("app_window"), await hero.screenshot());
   await hero.context().close();
 
   const page = await openPage(CROP_VIEWPORT);
@@ -175,7 +183,7 @@ async function main() {
   await page.getByText("Build responsive homepage prototype").waitFor();
   await parkPointer();
   await save(
-    "sections.png",
+    file("sections"),
     await shotRegion(page, main_, 620, page.getByText("Backlog", { exact: true }).first()),
   );
 
@@ -192,7 +200,7 @@ async function main() {
   // Opening the panel focuses its close button, which draws a focus ring.
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await parkPointer();
-  await save("task_comments.png", await shotRegion(page, modal, 560));
+  await save(file("task_comments"), await shotRegion(page, modal, 560));
 
   // --- Recurrence and deadlines -----------------------------------------
   // Drop the ?task= param: the open panel's backdrop swallows sidebar clicks.
@@ -201,7 +209,7 @@ async function main() {
   await page.waitForURL(/\/projects\//);
   await page.getByText("Weekly meal planning").waitFor();
   await parkPointer();
-  await save("recurrence.png", await shotRegion(page, main_, 560));
+  await save(file("recurrence"), await shotRegion(page, main_, 560));
 
   // --- Todoist import -----------------------------------------------------
   await stubImportPreview(page);
@@ -214,10 +222,16 @@ async function main() {
   // max-w-4xl content column. Anchor on the step indicator to skip the page
   // heading and open on the part that shows what an import actually does.
   await save(
-    "todoist_import.png",
+    file("todoist_import"),
     await shotRegion(page, page.locator("main").last(), 600, page.getByText("Connect or upload")),
   );
 
+  await page.context().close();
+}
+
+async function main() {
+  const browser = await chromium.launch();
+  for (const scheme of ["dark", "light"] as const) await capture(browser, scheme);
   await browser.close();
 }
 
