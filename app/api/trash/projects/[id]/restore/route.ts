@@ -3,6 +3,7 @@ import { eq, inArray } from "drizzle-orm";
 import { notFound, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { allowedProjectIds } from "@/lib/db/access";
 import { projects } from "@/lib/db/schema";
 
 export async function POST(
@@ -25,6 +26,9 @@ export async function POST(
     .where(eq(projects.userId, user.id));
   const root = owned.find((candidate) => candidate.id === id);
   if (!root?.deletedAt) return notFound();
+  const allowed = await allowedProjectIds(user);
+  if (allowed && !allowed.has(id)) return notFound();
+
   if (root.parentId && owned.find((candidate) => candidate.id === root.parentId)?.deletedAt) {
     return Response.json({ error: "Restore the parent project first" }, { status: 400 });
   }

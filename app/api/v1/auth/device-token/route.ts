@@ -1,7 +1,8 @@
 import { eq } from "drizzle-orm";
 
 import { invalid } from "@/lib/api/responses";
-import { agentTokenScopes, generateAgentToken } from "@/lib/auth/api-token";
+import { generateAgentToken } from "@/lib/auth/api-token";
+import { agentTokenScopes } from "@/lib/token-access";
 import {
   LOGIN_RETRY_AFTER_SECONDS,
   checkLoginRateLimit,

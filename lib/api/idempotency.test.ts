@@ -9,7 +9,7 @@ describe("withIdempotency boundary behavior", () => {
     const handler = vi.fn(async () => Response.json({ created: true }, { status: 201 }));
     const response = await withIdempotency(
       new Request("https://example.test/api/v1/tasks", { method: "POST", body: "{}" }),
-      { userId: "user", operation: "tasks.create" },
+      { userId: "user", tokenId: null, operation: "tasks.create" },
       handler,
     );
     expect(response.status).toBe(201);
@@ -24,7 +24,7 @@ describe("withIdempotency boundary behavior", () => {
         headers: { "Idempotency-Key": key },
         body: "{}",
       }),
-      { userId: "user", operation: "tasks.create" },
+      { userId: "user", tokenId: null, operation: "tasks.create" },
       handler,
     );
     expect(response.status).toBe(400);

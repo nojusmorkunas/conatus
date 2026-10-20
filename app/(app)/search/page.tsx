@@ -56,7 +56,7 @@ export default async function SearchPage({
   }
 
   const [projectIds, settings] = await Promise.all([
-    accessibleProjectIds(user.id),
+    accessibleProjectIds(user),
     db
       .select({ timezone: users.timezone, dateFormat: users.dateFormat })
       .from(users)

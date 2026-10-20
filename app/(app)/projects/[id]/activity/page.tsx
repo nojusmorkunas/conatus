@@ -20,7 +20,7 @@ export default async function ProjectActivityPage({
   if (!user) return null;
 
   const { id } = await params;
-  const access = await requireProjectAccess(user.id, id);
+  const access = await requireProjectAccess(user, id);
   if (!access) notFound();
   const project = access.project;
 

@@ -21,7 +21,7 @@ export default async function AppLayout({
   if (!user) redirect("/login");
 
   const [userProjects, userLabels, userFilters, [account]] = await Promise.all([
-    accessibleProjects(user.id),
+    accessibleProjects(user),
     db
       .select()
       .from(labels)

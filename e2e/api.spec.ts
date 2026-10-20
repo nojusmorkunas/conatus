@@ -11,7 +11,7 @@ test("scoped v1 API supports context, idempotent creation, listing and scope den
   expect(projectId).toBeTruthy();
 
   const tokenResponse = await page.request.post("/api/tokens", {
-    data: { name: "E2E API", scopes: ["tasks:read", "tasks:write"], expiresInDays: 1 },
+    data: { name: "E2E API", scopes: ["tasks:read", "tasks:write"], expiresAt: new Date(Date.now() + 86_400_000).toISOString() },
   });
   expect(tokenResponse.status()).toBe(201);
   const { token } = await tokenResponse.json() as { token: string };
@@ -61,7 +61,7 @@ test("NLP reminders use the account time zone and remain idempotent", async ({ p
   const settings = await page.request.patch("/api/settings", { data: { timezone: "Europe/Amsterdam", dateFormat: "dd/MM/yyyy", weekStart: 1, dailyGoal: 5, activityGraphSource: "completed" } });
   expect(settings.ok()).toBeTruthy();
   const tokenResponse = await page.request.post("/api/tokens", {
-    data: { name: "NLP API", scopes: ["tasks:read", "tasks:write", "reminders:read", "reminders:write"], expiresInDays: 1 },
+    data: { name: "NLP API", scopes: ["tasks:read", "tasks:write", "reminders:read", "reminders:write"], expiresAt: new Date(Date.now() + 86_400_000).toISOString() },
   });
   expect(tokenResponse.status()).toBe(201);
   const { token } = await tokenResponse.json();

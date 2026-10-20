@@ -28,7 +28,7 @@ export default async function TodayPage() {
         .from(tasks)
         .where(
           and(
-            inArray(tasks.projectId, await accessibleProjectIds(user.id)),
+            inArray(tasks.projectId, await accessibleProjectIds(user)),
             eq(tasks.isCompleted, false),
             isNull(tasks.deletedAt),
             lte(tasks.dueDate, today),

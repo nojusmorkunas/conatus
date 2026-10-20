@@ -4,7 +4,7 @@ import { generateKeyBetween } from "fractional-indexing";
 import { invalid, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { accessibleProjects } from "@/lib/db/access";
+import { accessibleProjects, requireProjectAccess } from "@/lib/db/access";
 import { logActivity } from "@/lib/db/activity";
 import { validateProjectParent } from "@/lib/db/project-parent";
 import { projects } from "@/lib/db/schema";
@@ -17,7 +17,7 @@ export async function GET() {
   const user = await requireUser("projects:read");
   if (!user) return unauthorized();
 
-  return Response.json(await accessibleProjects(user.id));
+  return Response.json(await accessibleProjects(user));
 }
 
 export async function POST(request: Request) {
@@ -27,6 +27,10 @@ export async function POST(request: Request) {
   const parsed = projectCreateSchema.safeParse(await request.json());
   if (!parsed.success) {
     return invalid(parsed.error);
+  }
+
+  if (user.projectIds !== null && (!parsed.data.parentId || !(await requireProjectAccess(user, parsed.data.parentId)))) {
+    return Response.json({ error: "This token can only create projects inside the projects it can access" }, { status: 403 });
   }
 
   if (parsed.data.parentId) {

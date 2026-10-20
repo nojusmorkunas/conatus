@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   const user = await requireUser("projects:read");
   if (!user) return unauthorized();
 
-  const accessibleIds = await accessibleProjectIds(user.id);
+  const accessibleIds = await accessibleProjectIds(user);
   if (!accessibleIds.length) return Response.json([]);
 
   // Filtering by an inaccessible project is a probe for its existence, so it
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
 
   const { projectId, name, afterId } = parsed.data;
 
-  if (!(await requireProjectAccess(user.id, projectId))) return notFound();
+  if (!(await requireProjectAccess(user, projectId))) return notFound();
 
   const siblings = await db
     .select({ id: sections.id, order: sections.order })

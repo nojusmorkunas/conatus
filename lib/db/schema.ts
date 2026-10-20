@@ -60,6 +60,8 @@ export const apiTokens = pgTable("api_tokens", {
     .$type<string[]>()
     .notNull()
     .default(sql`'["legacy:full"]'::jsonb`),
+  // null means every project the user can reach, including future ones.
+  projectIds: jsonb("project_ids").$type<string[]>(),
   expiresAt: timestamp("expires_at"),
   revokedAt: timestamp("revoked_at"),
   lastUsedAt: timestamp("last_used_at"),

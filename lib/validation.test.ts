@@ -1,6 +1,8 @@
 import { expect, test } from "vitest";
 
 import {
+  apiTokenCreateSchema,
+  apiTokenUpdateSchema,
   projectCreateSchema,
   projectUpdateSchema,
   commentCreateSchema,
@@ -160,4 +162,32 @@ test("comment creation rejects both parents", () => {
 
 test("comment creation rejects an absent parent", () => {
   expect(commentCreateSchema.safeParse({ content: "Comment" }).success).toBe(false);
+});
+
+test.each([
+  { scopes: [] },
+  { scopes: ["unknown:read"] },
+  { projectIds: [] },
+  { projectIds: ["not-a-uuid"] },
+  { expiresAt: new Date(Date.now() - 3_600_000).toISOString() },
+])("token creation and updates reject invalid access settings: %j", (fields) => {
+  expect(apiTokenCreateSchema.safeParse({ name: "Token", ...fields }).success).toBe(false);
+  expect(apiTokenUpdateSchema.safeParse(fields).success).toBe(false);
+});
+
+test("token project limits and expiry accept null", () => {
+  const fields = { projectIds: null, expiresAt: null };
+  expect(apiTokenCreateSchema.parse({ name: "Token", ...fields })).toEqual({ name: "Token", ...fields });
+  expect(apiTokenUpdateSchema.parse(fields)).toEqual(fields);
+});
+
+test("token expiry accepts ISO dates with Z or a numeric offset", () => {
+  for (const expiresAt of [new Date(Date.now() + 86_400_000).toISOString(), "2099-01-01T12:00:00+01:00"]) {
+    expect(apiTokenCreateSchema.safeParse({ name: "Token", expiresAt }).success).toBe(true);
+    expect(apiTokenUpdateSchema.safeParse({ expiresAt }).success).toBe(true);
+  }
+});
+
+test("token updates reject empty changes", () => {
+  expect(apiTokenUpdateSchema.safeParse({}).success).toBe(false);
 });

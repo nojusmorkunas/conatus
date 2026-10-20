@@ -5,16 +5,16 @@ import { eq } from "drizzle-orm";
 import { notFound, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { requireTaskAccess } from "@/lib/db/access";
+import { type ProjectActor, requireTaskAccess } from "@/lib/db/access";
 import { attachments } from "@/lib/db/schema";
 import { BUCKET, ensureBucket, s3 } from "@/lib/storage";
 
-async function accessibleAttachment(userId: string, attachmentId: string) {
+async function accessibleAttachment(user: ProjectActor, attachmentId: string) {
   const [attachment] = await db
     .select()
     .from(attachments)
     .where(eq(attachments.id, attachmentId));
-  if (!attachment || !(await requireTaskAccess(userId, attachment.taskId))) {
+  if (!attachment || !(await requireTaskAccess(user, attachment.taskId))) {
     return undefined;
   }
   return attachment;
@@ -28,7 +28,7 @@ export async function GET(
   if (!user) return unauthorized();
 
   const { id } = await params;
-  const attachment = await accessibleAttachment(user.id, id);
+  const attachment = await accessibleAttachment(user, id);
   if (!attachment) return notFound();
 
   await ensureBucket();
@@ -52,7 +52,7 @@ export async function DELETE(
   if (!user) return unauthorized();
 
   const { id } = await params;
-  const attachment = await accessibleAttachment(user.id, id);
+  const attachment = await accessibleAttachment(user, id);
   if (!attachment) return notFound();
 
   await ensureBucket();

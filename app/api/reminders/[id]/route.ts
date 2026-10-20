@@ -3,14 +3,18 @@ import { and, eq } from "drizzle-orm";
 import { invalid, notFound, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { type ProjectActor, requireTaskAccess } from "@/lib/db/access";
 import { reminders } from "@/lib/db/schema";
 import { reminderUpdateSchema } from "@/lib/validation";
 
-async function ownedReminder(userId: string, reminderId: string) {
+async function ownedReminder(user: ProjectActor, reminderId: string) {
   const [reminder] = await db
     .select()
     .from(reminders)
-    .where(and(eq(reminders.id, reminderId), eq(reminders.userId, userId)));
+    .where(and(eq(reminders.id, reminderId), eq(reminders.userId, user.id)));
+  if (reminder && user.projectIds !== null && !(await requireTaskAccess(user, reminder.taskId))) {
+    return undefined;
+  }
   return reminder;
 }
 
@@ -22,7 +26,7 @@ export async function PATCH(
   if (!user) return unauthorized();
 
   const { id } = await params;
-  const reminder = await ownedReminder(user.id, id);
+  const reminder = await ownedReminder(user, id);
   if (!reminder) return notFound();
 
   const parsed = reminderUpdateSchema.safeParse(await request.json());
@@ -47,7 +51,7 @@ export async function DELETE(
   if (!user) return unauthorized();
 
   const { id } = await params;
-  const reminder = await ownedReminder(user.id, id);
+  const reminder = await ownedReminder(user, id);
   if (!reminder) return notFound();
 
   await db.delete(reminders).where(eq(reminders.id, id));

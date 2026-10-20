@@ -43,7 +43,7 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const user = await requireUser("labels:write");
+  const user = await requireUser("labels:delete");
   if (!user) return unauthorized();
 
   const { id } = await params;

@@ -32,7 +32,7 @@ export default async function SettingsPage() {
     .from(users)
     .where(eq(users.id, sessionUser.id));
 
-  const userProjects = await accessibleProjects(sessionUser.id);
+  const userProjects = await accessibleProjects(sessionUser);
 
   const tokens = await db
     .select({

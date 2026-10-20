@@ -32,7 +32,7 @@ export default async function CompletedPage() {
     .innerJoin(projects, eq(projects.id, tasks.projectId))
     .where(
       and(
-        inArray(tasks.projectId, await accessibleProjectIds(user.id)),
+        inArray(tasks.projectId, await accessibleProjectIds(user)),
         eq(tasks.isCompleted, true),
         isNull(tasks.deletedAt),
       ),

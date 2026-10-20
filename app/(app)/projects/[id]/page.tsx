@@ -22,7 +22,7 @@ export default async function ProjectPage({
   const { id } = await params;
   const taskParam = (await searchParams).task;
   const initialDetailTaskId = typeof taskParam === "string" ? taskParam : undefined;
-  const access = await requireProjectAccess(user.id, id);
+  const access = await requireProjectAccess(user, id);
   if (!access) notFound();
   const project = access.project;
 

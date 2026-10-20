@@ -29,7 +29,7 @@ export default async function UpcomingPage() {
         .from(tasks)
         .where(
           and(
-            inArray(tasks.projectId, await accessibleProjectIds(user.id)),
+            inArray(tasks.projectId, await accessibleProjectIds(user)),
             eq(tasks.isCompleted, false),
             isNull(tasks.deletedAt),
             gte(tasks.dueDate, today),

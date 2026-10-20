@@ -9,6 +9,7 @@ import { apiTokens, users } from "@/lib/db/schema";
 export type AuthenticatedActor = {
   id: string;
   tokenId: string | null;
+  projectIds: string[] | null;
   scopes: string[];
   authType: "session" | "token";
 };
@@ -26,7 +27,7 @@ export async function requireSessionUser() {
     .where(eq(users.id, session.user.id))
     .limit(1);
 
-  return user ?? null;
+  return user ? { id: user.id, projectIds: null } : null;
 }
 
 export async function requireApiActor(
@@ -37,6 +38,7 @@ export async function requireApiActor(
     return {
       id: sessionUser.id,
       tokenId: null,
+      projectIds: null,
       scopes: ["*"],
       authType: "session",
     };
@@ -53,6 +55,7 @@ export async function requireApiActor(
       id: users.id,
       tokenId: apiTokens.id,
       scopes: apiTokens.scopes,
+      projectIds: apiTokens.projectIds,
       expiresAt: apiTokens.expiresAt,
       revokedAt: apiTokens.revokedAt,
     })
@@ -82,6 +85,7 @@ export async function requireApiActor(
   return {
     id: result.id,
     tokenId: result.tokenId,
+    projectIds: result.projectIds ?? null,
     scopes: result.scopes,
     authType: "token",
   };
@@ -89,5 +93,5 @@ export async function requireApiActor(
 
 export async function requireUser(requiredScope = "legacy:full") {
   const actor = await requireApiActor(requiredScope);
-  return actor ? { id: actor.id } : null;
+  return actor ? { id: actor.id, projectIds: actor.projectIds } : null;
 }

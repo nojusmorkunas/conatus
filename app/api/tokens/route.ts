@@ -1,31 +1,31 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 
-import {
-  agentDefaultScopes,
-  agentTokenScopes,
-  generateAgentToken,
-} from "@/lib/auth/api-token";
+import { unreachableProjectIds } from "@/app/api/tokens/project-access";
 import { invalid, unauthorized } from "@/lib/api/responses";
+import { generateAgentToken } from "@/lib/auth/api-token";
 import { requireSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { apiTokens } from "@/lib/db/schema";
+import { agentDefaultScopes, agentTokenScopes } from "@/lib/token-access";
 import { apiTokenCreateSchema } from "@/lib/validation";
+
+export const tokenSelect = {
+  id: apiTokens.id,
+  name: apiTokens.name,
+  prefix: apiTokens.prefix,
+  scopes: apiTokens.scopes,
+  projectIds: apiTokens.projectIds,
+  expiresAt: apiTokens.expiresAt,
+  createdAt: apiTokens.createdAt,
+  lastUsedAt: apiTokens.lastUsedAt,
+};
 
 export async function GET() {
   const user = await requireSessionUser();
   if (!user) return unauthorized();
 
   const tokens = await db
-    .select({
-      id: apiTokens.id,
-      name: apiTokens.name,
-      prefix: apiTokens.prefix,
-      scopes: apiTokens.scopes,
-      expiresAt: apiTokens.expiresAt,
-      revokedAt: apiTokens.revokedAt,
-      createdAt: apiTokens.createdAt,
-      lastUsedAt: apiTokens.lastUsedAt,
-    })
+    .select(tokenSelect)
     .from(apiTokens)
     .where(and(eq(apiTokens.userId, user.id), isNull(apiTokens.revokedAt)))
     .orderBy(desc(apiTokens.createdAt));
@@ -42,20 +42,17 @@ export async function POST(request: Request) {
     return invalid(parsed.error);
   }
 
-  const generated = generateAgentToken();
-  const requestedScopes = parsed.data.scopes ?? [...agentDefaultScopes];
-  if (
-    requestedScopes.some(
-      (scope) => !agentTokenScopes.includes(scope as (typeof agentTokenScopes)[number]),
-    )
-  ) {
-    return Response.json({ error: "Unknown API token scope" }, { status: 400 });
+  const projectIds = parsed.data.projectIds ? [...new Set(parsed.data.projectIds)] : null;
+  if (projectIds && (await unreachableProjectIds(user.id, projectIds)).length) {
+    return Response.json({ error: "One of the selected projects doesn't exist or isn't shared with you" }, { status: 400 });
   }
-  const expiresInDays =
-    parsed.data.expiresInDays === undefined ? 90 : parsed.data.expiresInDays;
-  const expiresAt = expiresInDays
-    ? new Date(Date.now() + expiresInDays * 86_400_000)
-    : null;
+
+  const generated = generateAgentToken();
+  const requestedScopes = parsed.data.scopes ?? agentDefaultScopes;
+  const scopes = agentTokenScopes.filter((scope) => requestedScopes.includes(scope));
+  const expiresAt = parsed.data.expiresAt === undefined
+    ? new Date(Date.now() + 90 * 86_400_000)
+    : parsed.data.expiresAt === null ? null : new Date(parsed.data.expiresAt);
   const [token] = await db
     .insert(apiTokens)
     .values({
@@ -63,16 +60,11 @@ export async function POST(request: Request) {
       name: parsed.data.name,
       tokenHash: generated.hash,
       prefix: generated.prefix,
-      scopes: requestedScopes,
+      scopes,
+      projectIds,
       expiresAt,
     })
-    .returning({
-      id: apiTokens.id,
-      name: apiTokens.name,
-      prefix: apiTokens.prefix,
-      scopes: apiTokens.scopes,
-      expiresAt: apiTokens.expiresAt,
-    });
+    .returning(tokenSelect);
 
   return Response.json({ ...token, token: generated.raw }, { status: 201 });
 }

@@ -24,7 +24,7 @@ export async function GET() {
       .from(users)
       .where(eq(users.id, actor.id))
       .limit(1),
-    accessibleProjects(actor.id),
+    accessibleProjects(actor),
   ]);
   if (!user) return unauthorized();
 

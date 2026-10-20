@@ -20,7 +20,7 @@ export default async function ReportingPage() {
     .from(users)
     .where(eq(users.id, user.id));
   const today = todayInTimezone(settings.timezone);
-  const projectIds = await accessibleProjectIds(user.id);
+  const projectIds = await accessibleProjectIds(user);
   const [completed, events] = await Promise.all([
     db
       .select({

@@ -21,7 +21,7 @@ export async function GET(
   if (!user) return unauthorized();
 
   const { id } = await params;
-  const access = await requireProjectAccess(user.id, id);
+  const access = await requireProjectAccess(user, id);
   if (!access) return notFound();
 
   const [projectSections, activeTasks] = await Promise.all([

@@ -38,7 +38,7 @@ export async function PATCH(
   if (!user) return unauthorized();
 
   const { id } = await params;
-  const task = await requireTaskAccess(user.id, id);
+  const task = await requireTaskAccess(user, id);
   if (!task) return notFound();
 
   const parsed = taskUpdateSchema.safeParse(await request.json());
@@ -282,7 +282,7 @@ export async function PATCH(
   }
 
   if (projectId && projectId !== task.projectId) {
-    if (!(await requireProjectAccess(user.id, projectId))) return notFound();
+    if (!(await requireProjectAccess(user, projectId))) return notFound();
   }
 
   const projectChanged = targetProjectId !== task.projectId;
@@ -356,7 +356,7 @@ export async function DELETE(
   if (!user) return unauthorized();
 
   const { id } = await params;
-  const task = await requireTaskAccess(user.id, id);
+  const task = await requireTaskAccess(user, id);
   if (!task) return notFound();
 
   const [project] = await db

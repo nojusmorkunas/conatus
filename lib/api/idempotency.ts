@@ -10,7 +10,7 @@ const RETENTION_MS = 24 * 60 * 60 * 1000;
 
 export async function withIdempotency(
   request: Request,
-  options: { userId: string; operation: string },
+  options: { userId: string; tokenId: string | null; operation: string },
   handler: () => Promise<Response>,
 ) {
   const key = request.headers.get("idempotency-key");
@@ -22,6 +22,8 @@ export async function withIdempotency(
     );
   }
 
+  // Keys are per client so a token never replays another client's response.
+  const operation = `${options.operation}:${options.tokenId ?? "session"}`;
   const requestHash = createHash("sha256")
     .update(await request.clone().text())
     .digest("hex");
@@ -32,7 +34,7 @@ export async function withIdempotency(
     .where(
       and(
         eq(idempotencyKeys.userId, options.userId),
-        eq(idempotencyKeys.operation, options.operation),
+        eq(idempotencyKeys.operation, operation),
         eq(idempotencyKeys.key, key),
         lt(idempotencyKeys.expiresAt, new Date()),
       ),
@@ -42,7 +44,7 @@ export async function withIdempotency(
     .insert(idempotencyKeys)
     .values({
       userId: options.userId,
-      operation: options.operation,
+      operation,
       key,
       requestHash,
       expiresAt,
@@ -57,7 +59,7 @@ export async function withIdempotency(
       .where(
         and(
           eq(idempotencyKeys.userId, options.userId),
-          eq(idempotencyKeys.operation, options.operation),
+          eq(idempotencyKeys.operation, operation),
           eq(idempotencyKeys.key, key),
         ),
       )

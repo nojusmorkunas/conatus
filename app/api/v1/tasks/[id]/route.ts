@@ -22,7 +22,7 @@ export async function GET(
   const actor = await requireApiActor("tasks:read");
   if (!actor) return unauthorized();
   const { id } = await params;
-  const task = await requireTaskAccess(actor.id, id);
+  const task = await requireTaskAccess(actor, id);
   if (!task) return notFound();
 
   const [withTaskLabels] = hasScope(actor.scopes, "labels:read")
