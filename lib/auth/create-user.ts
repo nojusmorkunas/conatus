@@ -7,6 +7,7 @@ export type CreateUserInput = {
   username: string;
   email?: string | null;
   passwordHash: string | null;
+  oidcIdentity?: string | null;
   timezone?: string;
   emailVerified?: Date | null;
   instanceRole?: "admin" | "member";
@@ -20,6 +21,7 @@ export async function createUserWithInboxUsing(
     username,
     email = null,
     passwordHash,
+    oidcIdentity = null,
     timezone = "UTC",
     emailVerified = null,
     instanceRole = "member",
@@ -27,7 +29,7 @@ export async function createUserWithInboxUsing(
 ) {
   const [user] = await client
     .insert(users)
-    .values({ username, email, passwordHash, timezone, emailVerified, instanceRole })
+    .values({ username, email, passwordHash, oidcIdentity, timezone, emailVerified, instanceRole })
     .returning({ id: users.id, username: users.username, instanceRole: users.instanceRole });
 
   await client.insert(projects).values({

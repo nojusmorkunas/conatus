@@ -79,7 +79,9 @@ export async function getRegistrationState(
 }
 
 export async function enrollUser(
-  input: CreateUserInput & { inviteToken?: string },
+  // skipInvite: single sign-on, where the identity provider decides who may
+  // sign up. The first account still becomes the administrator.
+  input: CreateUserInput & { inviteToken?: string; skipInvite?: boolean },
 ) {
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(${REGISTRATION_LOCK_ID})`);
@@ -91,7 +93,7 @@ export async function enrollUser(
     const isBootstrap = !existingUser;
     let inviteId: string | null = null;
 
-    if (!isBootstrap && !isOpenRegistrationEnabled()) {
+    if (!isBootstrap && !input.skipInvite && !isOpenRegistrationEnabled()) {
       if (!input.inviteToken) {
         throw new RegistrationEnrollmentError("invite_required");
       }
