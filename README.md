@@ -1,8 +1,6 @@
 <h1 align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./public/conatus-logo-dark.svg">
-    <img src="./public/conatus-logo.svg" alt="Conatus" width="320">
-  </picture>
+  <img src="./public/conatus-logo.svg#gh-light-mode-only" alt="Conatus" width="320">
+  <img src="./public/conatus-logo-dark.svg#gh-dark-mode-only" alt="Conatus" width="320">
 </h1>
 
 <p align="center"><em>Every goal starts with a next step.</em></p>
@@ -23,10 +21,7 @@
 Conatus is a self-hosted task manager inspired by Todoist. It runs on your own server with Docker Compose, with tasks in PostgreSQL and files in S3 storage you control. AI agents can read, create, reschedule and complete your tasks through the [MCP server](https://github.com/nojusmorkunas/conatus-mcp), and your own scripts can use the REST API and webhooks. Conatus is free and open source under the AGPL.
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: light)" srcset="./docs/screenshots/today-light.png">
-    <img src="./docs/screenshots/today.png" alt="The Conatus Today view with overdue and scheduled tasks, priorities, durations and labels, next to the project sidebar" width="100%">
-  </picture>
+  <img src="./docs/screenshots/today.png" alt="The Conatus Today view with overdue and scheduled tasks, priorities, durations and labels, next to the project sidebar" width="100%">
 </p>
 
 - Projects with sections, sub-tasks, labels, four priorities and saved filters
@@ -39,10 +34,7 @@ Conatus is a self-hosted task manager inspired by Todoist. It runs on your own s
 - Daily database backups from the first boot
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: light)" srcset="./docs/screenshots/task-light.png">
-    <img src="./docs/screenshots/task.png" alt="A Conatus task with sub-tasks, a comment, a file attachment, deadline, duration, priority and labels" width="720">
-  </picture>
+  <img src="./docs/screenshots/task.png" alt="A Conatus task with sub-tasks, a comment, a file attachment, deadline, duration, priority and labels" width="720">
 </p>
 
 ## Deploy
@@ -127,9 +119,5 @@ AGPL-3.0-or-later. See [`LICENSE`](./LICENSE).
 ## Star history
 
 <a href="https://www.star-history.com/?repos=nojusmorkunas%2Fconatus&type=date&releases=&legend=bottom-right">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=nojusmorkunas/conatus&type=date&theme=dark&legend=bottom-right" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=nojusmorkunas/conatus&type=date&legend=bottom-right" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=nojusmorkunas/conatus&type=date&legend=bottom-right" />
- </picture>
+ <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=nojusmorkunas/conatus&type=date&theme=dark&legend=bottom-right" />
 </a>
