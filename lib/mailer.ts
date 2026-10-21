@@ -1,8 +1,8 @@
-import nodemailer from "nodemailer";
+import nodemailer, { type Transporter } from "nodemailer";
 
 // Reuse across dev HMR reloads, same reasoning as lib/db/index.ts.
 const globalForMailer = globalThis as unknown as {
-  transporter?: nodemailer.Transporter;
+  transporter?: Transporter;
 };
 
 export function isEmailConfigured() {
