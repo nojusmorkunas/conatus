@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { jsonInit } from "@/lib/api-client";
+import { api, ApiError, jsonInit } from "@/lib/api-client";
 
 export function AccountSettings({
   username,
@@ -14,6 +15,10 @@ export function AccountSettings({
   username: string;
   hasPassword: boolean;
 }) {
+  const router = useRouter();
+  const [newUsername, setNewUsername] = useState(username);
+  const [usernamePending, setUsernamePending] = useState(false);
+  const [usernameMessage, setUsernameMessage] = useState<string | null>(null);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -23,6 +28,22 @@ export function AccountSettings({
   const [confirmationUsername, setConfirmationUsername] = useState("");
   const [deletePending, setDeletePending] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  async function changeUsername(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setUsernameMessage(null);
+    setUsernamePending(true);
+    try {
+      const result = await api.patch<{ username: string }>("/api/account", { username: newUsername });
+      setNewUsername(result.username);
+      setUsernameMessage("Username updated.");
+      router.refresh();
+    } catch (error) {
+      setUsernameMessage(error instanceof ApiError ? error.message : "Could not update username.");
+    } finally {
+      setUsernamePending(false);
+    }
+  }
 
   async function changePassword(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -87,10 +108,32 @@ export function AccountSettings({
     >
       <h2 id="account-heading" className="scroll-mt-6 text-lg font-semibold">Account</h2>
 
-      <div className="space-y-2">
-        <label htmlFor="account-username" className="text-sm font-medium">Username</label>
-        <Input id="account-username" type="text" value={username} readOnly />
-      </div>
+      <form onSubmit={changeUsername} className="space-y-3">
+        <div className="space-y-2">
+          <label htmlFor="account-username" className="text-sm font-medium">Username</label>
+          <Input
+            id="account-username"
+            type="text"
+            autoComplete="username"
+            required
+            minLength={3}
+            maxLength={32}
+            value={newUsername}
+            onChange={(event) => setNewUsername(event.target.value)}
+          />
+        </div>
+        <div className="flex items-center gap-3">
+          <Button
+            type="submit"
+            disabled={usernamePending || newUsername.trim().toLowerCase() === username}
+          >
+            {usernamePending ? "Saving…" : "Change username"}
+          </Button>
+          {usernameMessage && (
+            <p role="status" className="text-sm text-muted-foreground">{usernameMessage}</p>
+          )}
+        </div>
+      </form>
 
       <form onSubmit={changePassword} className="space-y-3">
         <h3 className="text-sm font-medium">
