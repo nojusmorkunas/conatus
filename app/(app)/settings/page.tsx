@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { and, desc, eq, gt, isNull, ne } from "drizzle-orm";
 
+import { oidcProviderName } from "@/lib/auth/oidc";
 import { requireSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { accessibleProjects } from "@/lib/db/access";
@@ -9,12 +10,19 @@ import type { SettingsInput } from "@/lib/validation";
 import type { TokenProject } from "@/components/api-tokens/api-tokens";
 import { AccountSettings } from "@/components/account/account-settings";
 import { RegistrationInvites } from "@/components/admin/registration-invites";
+import { SsoButton } from "@/components/auth/sso-button";
 import { SettingsForm } from "./settings-form";
 import { MobilePageHeader } from "@/components/projects/mobile-sidebar-trigger";
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sso?: string }>;
+}) {
   const sessionUser = await requireSessionUser();
   if (!sessionUser) redirect("/login");
+  const ssoName = oidcProviderName();
+  const { sso } = await searchParams;
 
   const [user] = await db
     .select({
@@ -28,6 +36,7 @@ export default async function SettingsPage() {
       icalToken: users.icalToken,
       username: users.username,
       passwordHash: users.passwordHash,
+      oidcIdentity: users.oidcIdentity,
       instanceRole: users.instanceRole,
     })
     .from(users)
@@ -123,6 +132,7 @@ export default async function SettingsPage() {
           <div className="flex w-max gap-1 lg:w-auto lg:flex-col">
             {[
               ["account", "Account"],
+              ...(ssoName ? [["sso", "Single sign-on"]] : []),
               ...(user.instanceRole === "admin" ? [["registration", "Registration"]] : []),
               ["preferences", "Preferences"],
               ["appearance", "Appearance"],
@@ -147,6 +157,32 @@ export default async function SettingsPage() {
             username={user.username}
             hasPassword={user.passwordHash !== null}
           />
+          {ssoName && (
+            <section
+              id="sso"
+              aria-labelledby="sso-heading"
+              className="scroll-mt-6 space-y-3 rounded-md border p-5"
+            >
+              <h2 id="sso-heading" className="text-lg font-semibold">Single sign-on</h2>
+              {user.oidcIdentity ? (
+                <p className="text-sm text-muted-foreground">
+                  This account is connected to {ssoName}.
+                </p>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Connect your {ssoName} account to sign in with it.
+                  </p>
+                  <SsoButton link>Connect {ssoName}</SsoButton>
+                </>
+              )}
+              {sso === "conflict" && (
+                <p role="alert" className="text-sm text-destructive">
+                  That {ssoName} account is already connected to another user.
+                </p>
+              )}
+            </section>
+          )}
           {user.instanceRole === "admin" && (
             <RegistrationInvites
               initialInvitations={signupInvitations.map((invite) => ({

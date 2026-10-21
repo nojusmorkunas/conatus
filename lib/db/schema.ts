@@ -23,6 +23,8 @@ export const users = pgTable(
     name: text("name"),
     image: text("image"),
     passwordHash: text("password_hash"),
+    // "<issuer> <sub>" of the linked OpenID Connect identity; see lib/auth/oidc.
+    oidcIdentity: text("oidc_identity").unique(),
     emailVerified: timestamp("email_verified"),
     // Instance administration is intentionally separate from project roles.
     // The first account is promoted to admin during server bootstrap.

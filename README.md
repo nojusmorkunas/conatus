@@ -83,6 +83,8 @@ CONATUS_ADMIN_PASSWORD=replace-with-a-long-random-password
 
 If you use a domain or reverse proxy, also set `AUTH_URL` and `PUBLIC_BASE_URL` to the external HTTPS address. The [reverse proxy guide](https://useconatus.com/getting-started/reverse-proxy/) has Caddy and nginx configs.
 
+To sign in through Keycloak, Authentik or another OpenID Connect provider, set the `AUTH_OIDC_*` values described in [`.env.example`](./.env.example).
+
 ### 3. Start Conatus
 
 ```bash

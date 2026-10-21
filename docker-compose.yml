@@ -102,6 +102,10 @@ services:
       AUTH_URL: ${AUTH_URL:-}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
       REGISTRATION_MODE: ${REGISTRATION_MODE:-invite-only}
+      AUTH_OIDC_ISSUER: ${AUTH_OIDC_ISSUER:-}
+      AUTH_OIDC_ID: ${AUTH_OIDC_ID:-}
+      AUTH_OIDC_SECRET: ${AUTH_OIDC_SECRET:-}
+      AUTH_OIDC_NAME: ${AUTH_OIDC_NAME:-}
       # Local development only: disables rate limiting and opens registration.
       CONATUS_DEV_MODE: ${CONATUS_DEV_MODE:-0}
       # The bundled Silo unless .env points at an external S3 server.

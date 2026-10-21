@@ -9,6 +9,7 @@ import Link from "next/link";
 import type { z } from "zod";
 
 import { credentialsSchema } from "@/lib/validation";
+import { SsoButton } from "@/components/auth/sso-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -22,11 +23,17 @@ type LoginInput = z.infer<typeof credentialsSchema>;
 
 export function LoginForm({
   bootstrapAvailable = false,
+  ssoName = null,
+  ssoFailed = false,
 }: {
   bootstrapAvailable?: boolean;
+  ssoName?: string | null;
+  ssoFailed?: boolean;
 }) {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    ssoFailed ? "Single sign-on failed. Try again or ask the server administrator." : null,
+  );
   const {
     register,
     handleSubmit,
@@ -78,6 +85,7 @@ export function LoginForm({
         <Button type="submit" disabled={isSubmitting}>
           Log in
         </Button>
+        {ssoName && <SsoButton>Continue with {ssoName}</SsoButton>}
         {bootstrapAvailable ? (
           <p className="text-sm text-muted-foreground">
             New server?{" "}
