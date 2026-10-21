@@ -64,7 +64,7 @@ test("edits and revokes a token from settings", async ({ page, request }) => {
   await editor.getByRole("button", { name: "Save changes", exact: true }).click();
   const item = section.getByRole("listitem").filter({ has: page.getByRole("button", { name: "Edit Editable", exact: true }) });
   await expect(item.getByText("All projects", { exact: true })).toBeVisible();
-  await expect(item.getByText("Never", { exact: true })).toBeVisible();
+  await expect(item.locator("dt:text-is('Expires') + dd")).toHaveText("Never");
   await expect(item.getByText("Labels: read, write, delete", { exact: true })).toBeVisible();
   const labelResponse = await request.post("/api/v1/labels", { headers, data: { name: "Agent label" } });
   expect(labelResponse.status()).toBe(201);
