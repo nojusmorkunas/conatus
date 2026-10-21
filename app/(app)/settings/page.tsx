@@ -1,11 +1,12 @@
 import { redirect } from "next/navigation";
-import { and, desc, eq, gt, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, ne } from "drizzle-orm";
 
 import { requireSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { accessibleProjects } from "@/lib/db/access";
-import { apiTokens, registrationInvites, users, webhooks } from "@/lib/db/schema";
+import { apiTokens, projectCollaborators, projects, registrationInvites, users, webhooks } from "@/lib/db/schema";
 import type { SettingsInput } from "@/lib/validation";
+import type { TokenProject } from "@/components/api-tokens/api-tokens";
 import { AccountSettings } from "@/components/account/account-settings";
 import { RegistrationInvites } from "@/components/admin/registration-invites";
 import { SettingsForm } from "./settings-form";
@@ -34,12 +35,42 @@ export default async function SettingsPage() {
 
   const userProjects = await accessibleProjects(sessionUser);
 
+  const [ownProjects, sharedProjects] = await Promise.all([
+    db.select().from(projects)
+      .where(eq(projects.userId, sessionUser.id))
+      .orderBy(projects.order),
+    db.select({ project: projects }).from(projectCollaborators)
+      .innerJoin(projects, eq(projects.id, projectCollaborators.projectId))
+      .where(and(
+        eq(projectCollaborators.userId, sessionUser.id),
+        ne(projects.userId, sessionUser.id),
+        isNull(projects.deletedAt),
+      ))
+      .orderBy(projects.order),
+  ]);
+  const toTokenProject = (project: typeof projects.$inferSelect, shared: boolean): TokenProject => ({
+    id: project.id,
+    name: project.isInbox && !shared ? "Inbox" : project.name,
+    color: project.color,
+    parentId: project.parentId,
+    isInbox: project.isInbox,
+    isArchived: project.isArchived,
+    inTrash: project.deletedAt !== null,
+    shared,
+  });
+  const tokenProjects: TokenProject[] = [
+    ...ownProjects.filter((project) => project.isInbox).map((project) => toTokenProject(project, false)),
+    ...ownProjects.filter((project) => !project.isInbox).map((project) => toTokenProject(project, false)),
+    ...sharedProjects.map(({ project }) => toTokenProject(project, true)),
+  ];
+
   const tokens = await db
     .select({
       id: apiTokens.id,
       name: apiTokens.name,
       prefix: apiTokens.prefix,
       scopes: apiTokens.scopes,
+      projectIds: apiTokens.projectIds,
       expiresAt: apiTokens.expiresAt,
       createdAt: apiTokens.createdAt,
       lastUsedAt: apiTokens.lastUsedAt,
@@ -140,6 +171,7 @@ export default async function SettingsPage() {
               id: project.id,
               name: project.isInbox && !project.shared ? "Inbox" : project.name,
             }))}
+            tokenProjects={tokenProjects}
             icalToken={user.icalToken}
             initialApiTokens={tokens.map((token) => ({
               ...token,

@@ -275,15 +275,17 @@ export function ProjectRow({
   );
 }
 
-type ProjectTreeNode = {
-  project: Project;
-  children: ProjectTreeNode[];
+type TreeProject = { id: string; parentId: string | null; shared?: boolean };
+
+type ProjectTreeNode<T extends TreeProject = Project> = {
+  project: T;
+  children: ProjectTreeNode<T>[];
 };
 
-export function buildProjectTree(projects: Project[]) {
+export function buildProjectTree<T extends TreeProject = Project>(projects: T[]) {
   const visibleIds = new Set(projects.map((project) => project.id));
-  const children = new Map<string, Project[]>();
-  const roots: Project[] = [];
+  const children = new Map<string, T[]>();
+  const roots: T[] = [];
 
   for (const project of projects) {
     if (project.shared || !project.parentId || !visibleIds.has(project.parentId)) {
@@ -296,7 +298,7 @@ export function buildProjectTree(projects: Project[]) {
   }
 
   const rendered = new Set<string>();
-  function makeNode(project: Project, ancestors = new Set<string>()): ProjectTreeNode {
+  function makeNode(project: T, ancestors = new Set<string>()): ProjectTreeNode<T> {
     rendered.add(project.id);
     const path = new Set(ancestors).add(project.id);
     return {

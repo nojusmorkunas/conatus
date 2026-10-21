@@ -18,6 +18,7 @@ import { api, jsonInit } from "@/lib/api-client";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { ApiTokens, type ApiToken, type TokenProject } from "@/components/api-tokens/api-tokens";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { CompletionSoundToggle } from "@/components/completion-sound-toggle";
 import { toastError } from "@/components/ui/toast";
@@ -36,16 +37,6 @@ const weekStartOptions = [
   { value: 0, label: "Sunday" },
 ];
 
-type ApiToken = {
-  id: string;
-  name: string;
-  prefix: string;
-  scopes: string[];
-  expiresAt: string | null;
-  createdAt: string;
-  lastUsedAt: string | null;
-};
-
 type Webhook = {
   id: string;
   url: string;
@@ -54,21 +45,19 @@ type Webhook = {
   createdAt: string;
 };
 
-function formatTokenDate(value: string) {
-  return new Date(value).toISOString().slice(0, 10);
-}
-
 export function SettingsForm({
   defaults,
   projects,
   icalToken,
   initialApiTokens,
+  tokenProjects,
   initialWebhooks,
 }: {
   defaults: SettingsInput;
   projects: { id: string; name: string }[];
   icalToken: string | null;
   initialApiTokens: ApiToken[];
+  tokenProjects: TokenProject[];
   initialWebhooks: Webhook[];
 }) {
   const router = useRouter();
@@ -77,14 +66,6 @@ export function SettingsForm({
   const [importResult, setImportResult] = useState<string | null>(null);
   const [token, setToken] = useState(icalToken);
   const [copied, setCopied] = useState(false);
-  const [apiTokens, setApiTokens] = useState(initialApiTokens);
-  const [apiTokenName, setApiTokenName] = useState("");
-  const [createdApiToken, setCreatedApiToken] = useState<{
-    id: string;
-    raw: string;
-  } | null>(null);
-  const [apiTokenCopied, setApiTokenCopied] = useState(false);
-  const [creatingApiToken, setCreatingApiToken] = useState(false);
   const [webhooks, setWebhooks] = useState(initialWebhooks);
   const [webhookUrl, setWebhookUrl] = useState("");
   const [createdWebhook, setCreatedWebhook] = useState<{
@@ -178,42 +159,6 @@ export function SettingsForm({
     setCopied(true);
   };
 
-  const refreshApiTokens = async () => {
-    const res = await fetch("/api/tokens");
-    if (res.ok) setApiTokens(await res.json());
-  };
-
-  const onCreateApiToken = async () => {
-    if (!apiTokenName.trim()) return;
-
-    setCreatingApiToken(true);
-    const res = await fetch("/api/tokens", jsonInit("POST", { name: apiTokenName }));
-    if (res.ok) {
-      const result = await res.json();
-      setCreatedApiToken({ id: result.id, raw: result.token });
-      setApiTokenCopied(false);
-      setApiTokenName("");
-      await refreshApiTokens();
-    }
-    setCreatingApiToken(false);
-  };
-
-  const onCopyApiToken = async () => {
-    if (!createdApiToken) return;
-    await navigator.clipboard.writeText(createdApiToken.raw);
-    setApiTokenCopied(true);
-  };
-
-  const onRevokeApiToken = async (id: string, name: string) => {
-    if (!confirm(`Revoke API token “${name}”?`)) return;
-
-    const res = await fetch(`/api/tokens/${id}`, { method: "DELETE" });
-    if (!res.ok) return;
-
-    setApiTokens((current) => current.filter((item) => item.id !== id));
-    if (createdApiToken?.id === id) setCreatedApiToken(null);
-  };
-
   const onCreateWebhook = async () => {
     if (!webhookUrl.trim()) return;
 
@@ -257,7 +202,8 @@ export function SettingsForm({
   };
 
   return (
-    <form onSubmit={onSubmit} className="space-y-8">
+    <div className="space-y-8">
+      <form onSubmit={onSubmit}>
       <section id="preferences" aria-labelledby="preferences-heading" className="scroll-mt-6 rounded-md border p-5">
         <h2 id="preferences-heading" className="mb-4 scroll-mt-6 text-lg font-semibold">Preferences</h2>
         <FieldGroup>
@@ -444,6 +390,8 @@ export function SettingsForm({
         </FieldGroup>
       </section>
 
+      </form>
+
       <section id="appearance" aria-labelledby="appearance-heading" className="scroll-mt-6 rounded-md border p-5">
         <h2 id="appearance-heading" className="mb-4 scroll-mt-6 text-lg font-semibold">Appearance</h2>
         <FieldGroup>
@@ -487,93 +435,12 @@ export function SettingsForm({
         </Field>
       </section>
 
-      <section id="api-tokens" aria-labelledby="api-tokens-heading" className="scroll-mt-6 rounded-md border p-5">
-        <h2 id="api-tokens-heading" className="mb-4 scroll-mt-6 text-lg font-semibold">API tokens</h2>
-        <p className="mb-4 text-sm text-muted-foreground">
-          Agent tokens use least-privilege scopes, expire after 90 days by default,
-          and work with the v1 API and installable MCP server.
-        </p>
-        <Field>
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Input
-                value={apiTokenName}
-                maxLength={80}
-                placeholder="Token name"
-                onChange={(event) => setApiTokenName(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key !== "Enter") return;
-                  event.preventDefault();
-                  void onCreateApiToken();
-                }}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                disabled={creatingApiToken || !apiTokenName.trim()}
-                onClick={onCreateApiToken}
-              >
-                {creatingApiToken ? "Creating…" : "Create"}
-              </Button>
-            </div>
-
-            {createdApiToken && (
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <Input
-                    readOnly
-                    value={createdApiToken.raw}
-                    className="font-mono text-xs"
-                  />
-                  <Button type="button" variant="outline" onClick={onCopyApiToken}>
-                    {apiTokenCopied ? "Copied" : "Copy"}
-                  </Button>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Save this token now. You won&apos;t see it again.
-                </p>
-              </div>
-            )}
-
-            {apiTokens.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No API tokens.</p>
-            ) : (
-              <div className="space-y-2">
-                {apiTokens.map((apiToken) => (
-                  <div
-                    key={apiToken.id}
-                    className="flex items-center justify-between gap-3 rounded-md border p-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{apiToken.name}</p>
-                      <p className="font-mono text-xs text-muted-foreground">
-                        {apiToken.prefix}…
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Created {formatTokenDate(apiToken.createdAt)} · Last used{" "}
-                        {apiToken.lastUsedAt
-                          ? formatTokenDate(apiToken.lastUsedAt)
-                          : "never"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {apiToken.scopes.length} scoped permissions · Expires{" "}
-                        {apiToken.expiresAt ? formatTokenDate(apiToken.expiresAt) : "never"}
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => onRevokeApiToken(apiToken.id, apiToken.name)}
-                    >
-                      Revoke
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </Field>
-      </section>
+      <ApiTokens
+        initialTokens={initialApiTokens}
+        projects={tokenProjects}
+        timezone={defaults.timezone}
+        dateFormat={defaults.dateFormat}
+      />
 
       <section id="webhooks" aria-labelledby="webhooks-heading" className="scroll-mt-6 rounded-md border p-5">
         <h2 id="webhooks-heading" className="mb-4 scroll-mt-6 text-lg font-semibold">Webhooks</h2>
@@ -697,6 +564,6 @@ export function SettingsForm({
           )}
         </Field>
       </section>
-    </form>
+    </div>
   );
 }
