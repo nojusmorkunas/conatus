@@ -1,11 +1,38 @@
-import { and, count, eq, sql } from "drizzle-orm";
+import { and, count, eq, ne, sql } from "drizzle-orm";
 
-import { unauthorized } from "@/lib/api/responses";
+import { invalid, unauthorized } from "@/lib/api/responses";
 import { normalizeUsername, REGISTRATION_LOCK_ID } from "@/lib/auth/registration";
 import { requireSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
-import { accountDeleteSchema } from "@/lib/validation";
+import { accountDeleteSchema, registerSchema } from "@/lib/validation";
+
+export async function PATCH(request: Request) {
+  const sessionUser = await requireSessionUser();
+  if (!sessionUser) return unauthorized();
+
+  const parsed = registerSchema
+    .pick({ username: true })
+    .safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return invalid(parsed.error);
+
+  const { username } = parsed.data;
+  const [taken] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.username, username), ne(users.id, sessionUser.id)))
+    .limit(1);
+  if (taken) {
+    return Response.json({ error: "That username is already taken." }, { status: 409 });
+  }
+
+  await db
+    .update(users)
+    .set({ username, updatedAt: new Date() })
+    .where(eq(users.id, sessionUser.id));
+
+  return Response.json({ ok: true, username });
+}
 
 export async function DELETE(request: Request) {
   const sessionUser = await requireSessionUser();
