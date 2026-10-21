@@ -160,8 +160,10 @@ export function ApiTokens({ initialTokens, projects, timezone, dateFormat }: {
                         <dd className={expired ? "text-destructive" : days !== null && days <= 7 ? "text-amber-700 dark:text-amber-300" : undefined}>
                           {token.expiresAt === null ? "Never" : expired ? `Expired on ${displayDate(token.expiresAt)}` : `${displayDate(token.expiresAt)} (${days === 0 ? "today" : `in ${days} ${days === 1 ? "day" : "days"}`})`}
                         </dd>
-                        <dt className="text-muted-foreground">Activity</dt>
-                        <dd>Created {displayDate(token.createdAt)} · {token.lastUsedAt ? `Last used ${displayDate(token.lastUsedAt)}` : "Never used"}</dd>
+                        <dt className="text-muted-foreground">Created</dt>
+                        <dd>{displayDate(token.createdAt)}</dd>
+                        <dt className="text-muted-foreground">Last used</dt>
+                        <dd>{token.lastUsedAt ? displayDate(token.lastUsedAt) : "Never"}</dd>
                       </dl>
                     </>
                   )}
