@@ -1,9 +1,9 @@
-import { and, eq, isNull, lte } from "drizzle-orm";
+import { and, eq, inArray, isNull, lte } from "drizzle-orm";
 
 import { invalid, notFound, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { requireTaskAccess } from "@/lib/db/access";
+import { allowedProjectIds, requireTaskAccess } from "@/lib/db/access";
 import { reminders, tasks } from "@/lib/db/schema";
 import { reminderCreateSchema } from "@/lib/validation";
 
@@ -16,6 +16,7 @@ export async function GET(request: Request) {
   const due = url.searchParams.get("due");
 
   if (due) {
+    const allowed = await allowedProjectIds(user);
     const dueReminders = await db
       .select({
         id: reminders.id,
@@ -32,6 +33,7 @@ export async function GET(request: Request) {
           lte(reminders.remindAt, new Date()),
           isNull(reminders.seenAt),
           isNull(tasks.deletedAt),
+          allowed === null ? undefined : inArray(tasks.projectId, [...allowed]),
         ),
       )
       .orderBy(reminders.remindAt);
@@ -43,7 +45,7 @@ export async function GET(request: Request) {
     return Response.json({ error: "taskId is required" }, { status: 400 });
   }
 
-  if (!(await requireTaskAccess(user.id, taskId))) return notFound();
+  if (!(await requireTaskAccess(user, taskId))) return notFound();
 
   // Reminders are personal: members never see each other's.
   const taskReminders = await db
@@ -66,7 +68,7 @@ export async function POST(request: Request) {
 
   const { taskId, remindAt } = parsed.data;
 
-  if (!(await requireTaskAccess(user.id, taskId))) return notFound();
+  if (!(await requireTaskAccess(user, taskId))) return notFound();
 
   const [reminder] = await db
     .insert(reminders)

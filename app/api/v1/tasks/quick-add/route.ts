@@ -19,7 +19,7 @@ export async function POST(request: Request) {
 
   return withIdempotency(
     request,
-    { userId: actor.id, operation: "tasks.quick-add" },
+    { userId: actor.id, tokenId: actor.tokenId, operation: "tasks.quick-add" },
     async () => {
       const body = await request.clone().json().catch(() => null);
       if (!body || typeof body.text !== "string" || !body.text.trim()) {
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
           .from(users)
           .where(eq(users.id, actor.id))
           .limit(1),
-        accessibleProjects(actor.id),
+        accessibleProjects(actor),
         db.select().from(labels).where(eq(labels.userId, actor.id)),
       ]);
       const parsed = parseQuickAdd(body.text, {
@@ -55,7 +55,9 @@ export async function POST(request: Request) {
           {
             error: parsed.projectName
               ? `Project “${parsed.projectName}” was not found`
-              : "Inbox was not found",
+              : actor.projectIds !== null
+                ? "This token can't add tasks to Inbox. Add a #project to the text."
+                : "Inbox was not found",
           },
           { status: 400 },
         );

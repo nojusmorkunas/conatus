@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     return Response.json({ error: "Invalid parentId" }, { status: 400 });
   }
 
-  if (!(await requireProjectAccess(user.id, projectId))) return notFound();
+  if (!(await requireProjectAccess(user, projectId))) return notFound();
 
   if (!parsedParentId) {
     return Response.json(await loadProjectTasks(projectId, user.id));
@@ -77,7 +77,7 @@ export async function POST(request: Request) {
     durationMinutes,
   } = parsed.data;
 
-  const access = await requireProjectAccess(user.id, projectId);
+  const access = await requireProjectAccess(user, projectId);
   if (!access) return notFound();
   const project = access.project;
 

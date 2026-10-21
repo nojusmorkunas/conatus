@@ -58,7 +58,7 @@ export async function GET(request: Request) {
   // syncing client has to be able to ask for them.
   const includeDeleted = url.searchParams.get("includeDeleted") === "true";
 
-  const accessibleIds = await accessibleProjectIds(actor.id);
+  const accessibleIds = await accessibleProjectIds(actor);
   if (!accessibleIds.length) {
     return Response.json({ items: [], nextCursor: null, serverTime });
   }
@@ -141,7 +141,7 @@ export async function POST(request: Request) {
   if (!actor) return unauthorized();
   return withIdempotency(
     request,
-    { userId: actor.id, operation: "tasks.create" },
+    { userId: actor.id, tokenId: actor.tokenId, operation: "tasks.create" },
     () => createTask(request),
   );
 }

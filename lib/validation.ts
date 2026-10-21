@@ -5,6 +5,7 @@ import { parseRecurrence } from "./recurrence";
 import { parseFilter } from "./filter";
 import { activityGraphSources } from "./activity-sources";
 import { startPageViewValues } from "./start-page";
+import { agentTokenScopes } from "./token-access";
 
 export const dateFormats = [
   "yyyy-MM-dd",
@@ -109,11 +110,28 @@ export const settingsSchema = z.object({
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type SettingsInput = z.infer<typeof settingsSchema>;
 
+const tokenScopesSchema = z.array(z.enum(agentTokenScopes)).min(1, "Pick at least one permission").max(agentTokenScopes.length);
+const tokenProjectIdsSchema = z.array(z.uuid()).min(1, "Pick at least one project").max(500).nullable();
+const tokenExpiresAtSchema = z.iso.datetime({ offset: true }).nullable().refine(
+  (value) => value === null || Date.parse(value) > Date.now(),
+  "The expiry date has to be in the future",
+);
+
 export const apiTokenCreateSchema = z.object({
   name: z.string().trim().min(1).max(80),
-  scopes: z.array(z.string().min(1).max(80)).max(32).optional(),
-  expiresInDays: z.number().int().min(1).max(365).nullable().optional(),
+  scopes: tokenScopesSchema.optional(),
+  projectIds: tokenProjectIdsSchema.optional(),
+  expiresAt: tokenExpiresAtSchema.optional(),
 });
+
+export const apiTokenUpdateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80).optional(),
+    scopes: tokenScopesSchema.optional(),
+    projectIds: tokenProjectIdsSchema.optional(),
+    expiresAt: tokenExpiresAtSchema.optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, "No changes given");
 
 const webhookUrlSchema = z.url().refine((value) => {
   const url = new URL(value);

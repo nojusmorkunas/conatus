@@ -16,7 +16,7 @@ export async function GET(
   if (!user) return unauthorized();
 
   const { id } = await params;
-  if (!(await requireProjectAccess(user.id, id))) return notFound();
+  if (!(await requireProjectAccess(user, id))) return notFound();
 
   const searchParams = new URL(request.url).searchParams;
   const sectionIdValue = searchParams.get("sectionId");

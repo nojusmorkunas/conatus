@@ -2,14 +2,28 @@ import { and, eq, isNull } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { projectCollaborators, projects, tasks } from "@/lib/db/schema";
+import { coveredProjectIds } from "@/lib/token-access";
+
+export type ProjectActor = { id: string; projectIds: string[] | null };
+
+// null when the actor may reach every project it is a member of.
+export async function allowedProjectIds(actor: ProjectActor): Promise<Set<string> | null> {
+  if (actor.projectIds === null) return null;
+  const own = await db
+    .select({ id: projects.id, parentId: projects.parentId })
+    .from(projects)
+    .where(eq(projects.userId, actor.id));
+  return coveredProjectIds(actor.projectIds, own);
+}
 
 export type Role = "owner" | "editor";
 
 // The single authorization chokepoint for project-scoped data: a project is
 // accessible iff you own it or hold a collaborator row. Everything task- or
-// section-shaped resolves through its project.
+// section-shaped resolves through its project. The chokepoint also applies
+// a token's project limit.
 export async function requireProjectAccess(
-  userId: string,
+  actor: ProjectActor,
   projectId: string,
 ): Promise<{ role: Role; project: typeof projects.$inferSelect } | null> {
   const [row] = await db
@@ -19,21 +33,24 @@ export async function requireProjectAccess(
       projectCollaborators,
       and(
         eq(projectCollaborators.projectId, projects.id),
-        eq(projectCollaborators.userId, userId),
+        eq(projectCollaborators.userId, actor.id),
       ),
     )
     .where(and(eq(projects.id, projectId), isNull(projects.deletedAt)));
   if (!row) return null;
-  if (row.project.userId === userId) return { role: "owner", project: row.project };
+  if (row.project.userId !== actor.id && !row.collaboratorId) return null;
+  const allowed = await allowedProjectIds(actor);
+  if (allowed && !allowed.has(projectId)) return null;
+  if (row.project.userId === actor.id) return { role: "owner", project: row.project };
   return row.collaboratorId ? { role: "editor", project: row.project } : null;
 }
 
 export async function isProjectMember(userId: string, projectId: string) {
-  return Boolean(await requireProjectAccess(userId, projectId));
+  return Boolean(await requireProjectAccess({ id: userId, projectIds: null }, projectId));
 }
 
 // Task access is via the task's project; tasks.userId is only the creator.
-export async function requireTaskAccess(userId: string, taskId: string) {
+export async function requireTaskAccess(actor: ProjectActor, taskId: string) {
   const [row] = await db
     .select({ task: tasks, ownerId: projects.userId, collaboratorId: projectCollaborators.userId })
     .from(tasks)
@@ -42,11 +59,13 @@ export async function requireTaskAccess(userId: string, taskId: string) {
       projectCollaborators,
       and(
         eq(projectCollaborators.projectId, projects.id),
-        eq(projectCollaborators.userId, userId),
+        eq(projectCollaborators.userId, actor.id),
       ),
     )
     .where(and(eq(tasks.id, taskId), isNull(tasks.deletedAt), isNull(projects.deletedAt)));
-  if (!row || (row.ownerId !== userId && !row.collaboratorId)) return null;
+  if (!row || (row.ownerId !== actor.id && !row.collaboratorId)) return null;
+  const allowed = await allowedProjectIds(actor);
+  if (allowed && !allowed.has(row.task.projectId)) return null;
   return row.task;
 }
 
@@ -59,22 +78,24 @@ export async function requireTaskAccess(userId: string, taskId: string) {
 // would keep the project and its tasks cached after losing access. Absence
 // from the full list is the only signal that catches it.
 export async function accessibleProjects(
-  userId: string,
+  actor: ProjectActor,
 ): Promise<(typeof projects.$inferSelect & { shared?: boolean })[]> {
   const own = await db
     .select()
     .from(projects)
-    .where(and(eq(projects.userId, userId), eq(projects.isArchived, false), isNull(projects.deletedAt)))
+    .where(and(eq(projects.userId, actor.id), eq(projects.isArchived, false), isNull(projects.deletedAt)))
     .orderBy(projects.order);
   const shared = await db
     .select({ project: projects })
     .from(projectCollaborators)
     .innerJoin(projects, eq(projects.id, projectCollaborators.projectId))
-    .where(and(eq(projectCollaborators.userId, userId), eq(projects.isArchived, false), isNull(projects.deletedAt)))
+    .where(and(eq(projectCollaborators.userId, actor.id), eq(projects.isArchived, false), isNull(projects.deletedAt)))
     .orderBy(projects.order);
-  return [...own, ...shared.map((row) => ({ ...row.project, shared: true }))];
+  const reachable = [...own, ...shared.map((row) => ({ ...row.project, shared: true }))];
+  const allowed = await allowedProjectIds(actor);
+  return allowed ? reachable.filter((project) => allowed.has(project.id)) : reachable;
 }
 
-export async function accessibleProjectIds(userId: string) {
-  return (await accessibleProjects(userId)).map((project) => project.id);
+export async function accessibleProjectIds(actor: ProjectActor) {
+  return (await accessibleProjects(actor)).map((project) => project.id);
 }

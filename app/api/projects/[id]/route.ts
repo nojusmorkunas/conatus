@@ -18,7 +18,7 @@ export async function GET(
   if (!user) return unauthorized();
 
   const { id } = await params;
-  const access = await requireProjectAccess(user.id, id);
+  const access = await requireProjectAccess(user, id);
   if (!access) return notFound();
   const project = access.project;
 
@@ -39,7 +39,7 @@ export async function PATCH(
   if (!user) return unauthorized();
 
   const { id } = await params;
-  const access = await requireProjectAccess(user.id, id);
+  const access = await requireProjectAccess(user, id);
   if (!access) return notFound();
   if (access.role !== "owner") {
     return Response.json(
@@ -58,6 +58,15 @@ export async function PATCH(
   const parsed = projectUpdateSchema.safeParse(body);
   if (!parsed.success) {
     return invalid(parsed.error);
+  }
+
+  if (
+    user.projectIds !== null &&
+    parsed.data.parentId !== undefined &&
+    parsed.data.parentId !== project.parentId &&
+    (parsed.data.parentId === null || !(await requireProjectAccess(user, parsed.data.parentId)))
+  ) {
+    return Response.json({ error: "This token can only move projects inside the projects it can access" }, { status: 403 });
   }
 
   if (project.isInbox && parsed.data.name && parsed.data.name !== project.name) {
@@ -160,7 +169,7 @@ export async function DELETE(
   if (!user) return unauthorized();
 
   const { id } = await params;
-  const access = await requireProjectAccess(user.id, id);
+  const access = await requireProjectAccess(user, id);
   if (!access) return notFound();
   if (access.role !== "owner") {
     return Response.json(

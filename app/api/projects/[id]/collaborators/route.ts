@@ -23,7 +23,7 @@ export async function GET(
   if (!user) return unauthorized();
 
   const { id } = await params;
-  const access = await requireProjectAccess(user.id, id);
+  const access = await requireProjectAccess(user, id);
   if (!access) return notFound();
   if (access.role !== "owner") {
     return Response.json(
@@ -55,7 +55,7 @@ export async function POST(
   if (!user) return unauthorized();
 
   const { id } = await params;
-  const access = await requireProjectAccess(user.id, id);
+  const access = await requireProjectAccess(user, id);
   if (!access) return notFound();
   if (access.role !== "owner") {
     return Response.json(
@@ -113,7 +113,7 @@ export async function DELETE(
   if (!user) return unauthorized();
 
   const { id } = await params;
-  const access = await requireProjectAccess(user.id, id);
+  const access = await requireProjectAccess(user, id);
   if (!access) return notFound();
 
   const parsed = removeSchema.safeParse(await request.json());

@@ -1,0 +1,77 @@
+import { expect, test } from "@playwright/test";
+
+import { registerAndLogin } from "./helpers";
+
+test("creates a limited token from settings and the API honours it", async ({ page, request }) => {
+  await registerAndLogin(page, `e2e-${Date.now()}-token-create`);
+  const workResponse = await page.request.post("/api/projects", { data: { name: "Work" } });
+  expect(workResponse.status()).toBe(201);
+  const work = await workResponse.json();
+  const clientsResponse = await page.request.post("/api/projects", { data: { name: "Clients", parentId: work.id } });
+  expect(clientsResponse.status()).toBe(201);
+  const clients = await clientsResponse.json();
+  expect((await page.request.post("/api/projects", { data: { name: "Home" } })).status()).toBe(201);
+
+  await page.goto("/settings");
+  const section = page.locator("#api-tokens");
+  await section.getByRole("button", { name: "New token", exact: true }).click();
+  const editor = section.locator("form");
+  await editor.getByLabel("Name", { exact: true }).fill("Agent");
+  await editor.getByLabel("Expiration", { exact: true }).click();
+  await page.getByRole("option", { name: "7 days", exact: true }).click();
+  await expect(editor.getByText("Expires on", { exact: false })).toBeVisible();
+  await editor.getByRole("button", { name: "Read only", exact: true }).click();
+  await editor.getByRole("group", { name: "Tasks", exact: true }).getByRole("checkbox", { name: "Write", exact: true }).check();
+  await expect(editor.getByText("Custom", { exact: true })).toBeVisible();
+  await expect(editor.getByRole("group", { name: "Permission presets" }).locator('button[aria-pressed="true"]')).toHaveCount(0);
+  await editor.getByRole("radio", { name: "Only selected projects", exact: true }).check();
+  await editor.getByRole("checkbox", { name: "Work", exact: true }).check();
+  await expect(editor.getByRole("checkbox", { name: "Clients", exact: true })).toBeChecked();
+  await expect(editor.getByRole("checkbox", { name: "Clients", exact: true })).toBeDisabled();
+  await expect(editor.getByText("Included with Work", { exact: true })).toBeVisible();
+  await editor.getByRole("button", { name: "Create token", exact: true }).click();
+  await expect(section.getByText("Token created", { exact: true })).toBeVisible();
+  const token = await section.getByRole("textbox", { name: "New token value" }).inputValue();
+  expect(token).toBeTruthy();
+  const headers = { Authorization: `Bearer ${token}` };
+  const projectsResponse = await request.get("/api/v1/projects", { headers });
+  expect(projectsResponse.status()).toBe(200);
+  expect((await projectsResponse.json()).map((project: { id: string }) => project.id).sort()).toEqual([work.id, clients.id].sort());
+  expect((await request.post("/api/v1/tasks", { headers, data: { projectId: work.id, content: "Work task" } })).status()).toBe(201);
+  expect((await request.post("/api/v1/projects", { headers, data: { name: "x", parentId: work.id } })).status()).toBe(401);
+  await section.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(section.getByRole("textbox", { name: "New token value" })).toHaveCount(0);
+  const item = section.getByRole("listitem").filter({ has: page.getByRole("button", { name: "Edit Agent", exact: true }) });
+  await expect(item.getByText("Agent", { exact: true })).toBeVisible();
+  await expect(item.getByText("Tasks: read, write", { exact: true })).toBeVisible();
+  await expect(item.getByText("Only Work", { exact: true })).toBeVisible();
+});
+
+test("edits and revokes a token from settings", async ({ page, request }) => {
+  await registerAndLogin(page, `e2e-${Date.now()}-token-edit`);
+  const tokenResponse = await page.request.post("/api/tokens", { data: { name: "Editable", scopes: ["tasks:read"] } });
+  expect(tokenResponse.status()).toBe(201);
+  const { token } = await tokenResponse.json();
+  const headers = { Authorization: `Bearer ${token}` };
+  await page.goto("/settings");
+  const section = page.locator("#api-tokens");
+  await section.getByRole("button", { name: "Edit Editable", exact: true }).click();
+  const editor = section.locator("form");
+  await editor.getByRole("button", { name: "Full access", exact: true }).click();
+  await editor.getByRole("radio", { name: "All projects", exact: true }).check();
+  await editor.getByLabel("Expiration", { exact: true }).click();
+  await page.getByRole("option", { name: "No expiration", exact: true }).click();
+  await editor.getByRole("button", { name: "Save changes", exact: true }).click();
+  const item = section.getByRole("listitem").filter({ has: page.getByRole("button", { name: "Edit Editable", exact: true }) });
+  await expect(item.getByText("All projects", { exact: true })).toBeVisible();
+  await expect(item.locator("dt:text-is('Expires') + dd")).toHaveText("Never");
+  await expect(item.getByText("Labels: read, write, delete", { exact: true })).toBeVisible();
+  const labelResponse = await request.post("/api/v1/labels", { headers, data: { name: "Agent label" } });
+  expect(labelResponse.status()).toBe(201);
+  const label = await labelResponse.json();
+  expect((await request.delete(`/api/v1/labels/${label.id}`, { headers })).status()).toBe(200);
+  page.once("dialog", (dialog) => dialog.accept());
+  await section.getByRole("button", { name: "Revoke Editable", exact: true }).click();
+  await expect(item).toHaveCount(0);
+  expect((await request.get("/api/v1/tasks", { headers })).status()).toBe(401);
+});

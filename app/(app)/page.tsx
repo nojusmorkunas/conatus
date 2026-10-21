@@ -27,7 +27,7 @@ export default async function Home() {
   const view = startPageViews.find((candidate) => candidate.value === account.startPage);
   if (view?.href) redirect(view.href);
 
-  const projects = await accessibleProjects(user.id);
+  const projects = await accessibleProjects(user);
   redirect(
     startPageHref(account.startPage, {
       inboxProjectId: projects.find((project) => project.isInbox && !project.shared)?.id ?? null,

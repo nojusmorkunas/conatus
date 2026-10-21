@@ -32,7 +32,7 @@ export default async function CalendarPage({
     .from(tasks)
     .where(
       and(
-        inArray(tasks.projectId, await accessibleProjectIds(user.id)),
+        inArray(tasks.projectId, await accessibleProjectIds(user)),
         eq(tasks.isCompleted, false),
         isNull(tasks.deletedAt),
         or(

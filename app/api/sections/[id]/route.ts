@@ -4,16 +4,16 @@ import { generateKeyBetween } from "fractional-indexing";
 import { invalid, notFound, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { requireProjectAccess } from "@/lib/db/access";
+import { type ProjectActor, requireProjectAccess } from "@/lib/db/access";
 import { sections, taskLabels, tasks } from "@/lib/db/schema";
 import { sectionUpdateSchema } from "@/lib/validation";
 
-async function accessibleSection(userId: string, sectionId: string) {
+async function accessibleSection(user: ProjectActor, sectionId: string) {
   const [section] = await db
     .select()
     .from(sections)
     .where(eq(sections.id, sectionId));
-  if (!section || !(await requireProjectAccess(userId, section.projectId))) {
+  if (!section || !(await requireProjectAccess(user, section.projectId))) {
     return undefined;
   }
   return section;
@@ -27,7 +27,7 @@ export async function PATCH(
   if (!user) return unauthorized();
 
   const { id } = await params;
-  const section = await accessibleSection(user.id, id);
+  const section = await accessibleSection(user, id);
   if (!section) return notFound();
 
   const parsed = sectionUpdateSchema.safeParse(await request.json());
@@ -37,7 +37,7 @@ export async function PATCH(
 
   if ("projectId" in parsed.data) {
     const targetProjectId = parsed.data.projectId;
-    if (!(await requireProjectAccess(user.id, targetProjectId))) return notFound();
+    if (!(await requireProjectAccess(user, targetProjectId))) return notFound();
     const targetSections = await db.select().from(sections)
       .where(eq(sections.projectId, targetProjectId)).orderBy(sections.order);
     const order = generateKeyBetween(targetSections.at(-1)?.order ?? null, null);
@@ -177,11 +177,11 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const user = await requireUser("projects:write");
+  const user = await requireUser("projects:delete");
   if (!user) return unauthorized();
 
   const { id } = await params;
-  const section = await accessibleSection(user.id, id);
+  const section = await accessibleSection(user, id);
   if (!section) return notFound();
 
   await db.delete(sections).where(eq(sections.id, id));

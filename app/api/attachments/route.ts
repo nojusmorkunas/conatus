@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     return Response.json({ error: "taskId is required" }, { status: 400 });
   }
 
-  if (!(await requireTaskAccess(user.id, taskId))) return notFound();
+  if (!(await requireTaskAccess(user, taskId))) return notFound();
 
   const taskAttachments = await db
     .select()
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "File exceeds 10MB limit" }, { status: 413 });
   }
 
-  if (!(await requireTaskAccess(user.id, taskId))) return notFound();
+  if (!(await requireTaskAccess(user, taskId))) return notFound();
 
   const [attachment] = await db
     .insert(attachments)

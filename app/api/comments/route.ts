@@ -20,8 +20,8 @@ export async function GET(request: Request) {
   }
 
   const scope = taskId
-    ? await requireTaskAccess(user.id, taskId)
-    : await requireProjectAccess(user.id, projectId!);
+    ? await requireTaskAccess(user, taskId)
+    : await requireProjectAccess(user, projectId!);
   if (!scope) return notFound();
 
   const scopeComments = await db
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
   const { taskId, projectId, content } = parsed.data;
 
   if (taskId) {
-    const task = await requireTaskAccess(user.id, taskId);
+    const task = await requireTaskAccess(user, taskId);
     if (!task) return notFound();
 
     const [comment] = await db
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     return Response.json(comment, { status: 201 });
   }
 
-  const access = await requireProjectAccess(user.id, projectId!);
+  const access = await requireProjectAccess(user, projectId!);
   if (!access) return notFound();
 
   const [comment] = await db
