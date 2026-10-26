@@ -1,6 +1,7 @@
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 
 import { db } from "@/lib/db";
+import { accessibleProjectIds } from "@/lib/db/access";
 import { tasks, users } from "@/lib/db/schema";
 import { buildCalendar } from "@/lib/ical";
 
@@ -28,7 +29,13 @@ export async function GET(
     })
     .from(tasks)
     .where(
-      and(eq(tasks.userId, user.id), eq(tasks.isCompleted, false), isNull(tasks.deletedAt), isNotNull(tasks.dueDate)),
+      and(
+        // Same scope as Upcoming: tasks.userId is only the creator.
+        inArray(tasks.projectId, await accessibleProjectIds({ id: user.id, projectIds: null })),
+        eq(tasks.isCompleted, false),
+        isNull(tasks.deletedAt),
+        isNotNull(tasks.dueDate),
+      ),
     )
     .limit(500);
 
