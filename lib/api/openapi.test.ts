@@ -40,6 +40,9 @@ describe("v1 OpenAPI contract", () => {
     expect(Object.keys(contract.paths)).toEqual(expect.arrayContaining([
       "/auth/device-token", "/context", "/projects", "/projects/{id}", "/tasks", "/tasks/{id}",
       "/tasks/quick-add", "/sections", "/sections/{id}", "/labels", "/labels/{id}",
+      "/filters", "/filters/{id}", "/attachments", "/attachments/{id}",
+      "/projects/{id}/collaborators", "/projects/{id}/completed-tasks",
+      "/trash/tasks/{id}/restore", "/trash/projects/{id}/restore", "/settings",
       "/comments", "/comments/{id}", "/reminders", "/reminders/{id}",
     ]));
 

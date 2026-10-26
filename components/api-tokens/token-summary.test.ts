@@ -18,7 +18,7 @@ const projects: TokenProject[] = ["Work", "Clients", "Home", "Garden", "Old"].ma
 test("default permissions are grouped in catalog order", () => {
   expect(permissionSummary(agentDefaultScopes)).toEqual({
     legacy: false,
-    chips: ["Tasks: read, write", "Projects and sections: read, write", "Labels: read, write", "Comments: read, write", "Reminders: read, write"],
+    chips: ["Tasks: read, write", "Projects and sections: read, write, share", "Labels: read, write", "Saved filters: read, write", "Comments: read, write", "Reminders: read, write", "Settings: write"],
   });
 });
 

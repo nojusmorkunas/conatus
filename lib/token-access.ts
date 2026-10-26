@@ -5,15 +5,20 @@ export const agentTokenScopes = [
   "projects:read",
   "projects:write",
   "projects:delete",
+  "projects:share",
   "labels:read",
   "labels:write",
   "labels:delete",
+  "filters:read",
+  "filters:write",
+  "filters:delete",
   "comments:read",
   "comments:write",
   "comments:delete",
   "reminders:read",
   "reminders:write",
   "reminders:delete",
+  "settings:write",
 ] as const;
 
 export type AgentTokenScope = (typeof agentTokenScopes)[number];
@@ -26,17 +31,18 @@ export const tokenPermissionGroups = [
   {
     label: "Tasks",
     permissions: [
-      { scope: "tasks:read", label: "Read", description: "See and search tasks, including completed ones and ones in Trash. Also reads your name, username, time zone and Inbox, which the MCP server relies on." },
-      { scope: "tasks:write", label: "Write", description: "Add, edit, complete, reopen, reorder and move tasks, set their labels and restore them from Trash." },
-      { scope: "tasks:delete", label: "Delete", description: "Move tasks to Trash, together with their subtasks." },
+      { scope: "tasks:read", label: "Read", description: "See and search tasks, including completed ones and ones in Trash, and download their attachments. Also reads your name, username, time zone and Inbox, which the MCP server relies on." },
+      { scope: "tasks:write", label: "Write", description: "Add, edit, complete, reopen, reorder and move tasks, set their labels, attach files and restore them from Trash." },
+      { scope: "tasks:delete", label: "Delete", description: "Move tasks to Trash, together with their subtasks, and delete attachments permanently." },
     ],
   },
   {
     label: "Projects and sections",
     permissions: [
-      { scope: "projects:read", label: "Read", description: "See projects and their sections." },
+      { scope: "projects:read", label: "Read", description: "See projects, their sections and who they're shared with." },
       { scope: "projects:write", label: "Write", description: "Create, rename, archive, reorder and move projects and sections, and restore projects from Trash. Moving or duplicating a section moves or copies its tasks too." },
       { scope: "projects:delete", label: "Delete", description: "Move projects to Trash, together with their sub-projects, and delete sections. Deleting a section also deletes its tasks permanently." },
+      { scope: "projects:share", label: "Share", description: "Invite people to projects you own, remove them and leave projects shared with you." },
     ],
   },
   {
@@ -45,6 +51,14 @@ export const tokenPermissionGroups = [
       { scope: "labels:read", label: "Read", description: "See your labels." },
       { scope: "labels:write", label: "Write", description: "Create, rename, recolor and favorite labels." },
       { scope: "labels:delete", label: "Delete", description: "Delete labels, which removes them from every task." },
+    ],
+  },
+  {
+    label: "Saved filters",
+    permissions: [
+      { scope: "filters:read", label: "Read", description: "See your saved filters." },
+      { scope: "filters:write", label: "Write", description: "Create, rename and change saved filters." },
+      { scope: "filters:delete", label: "Delete", description: "Delete saved filters." },
     ],
   },
   {
@@ -61,6 +75,12 @@ export const tokenPermissionGroups = [
       { scope: "reminders:read", label: "Read", description: "See your reminders." },
       { scope: "reminders:write", label: "Write", description: "Add reminders and mark them as seen. Quick add needs this when the text asks for a reminder." },
       { scope: "reminders:delete", label: "Delete", description: "Delete reminders permanently." },
+    ],
+  },
+  {
+    label: "Settings",
+    permissions: [
+      { scope: "settings:write", label: "Write", description: "Change your name, time zone, date format, first day of the week, daily goal and start page." },
     ],
   },
 ] as const satisfies readonly {

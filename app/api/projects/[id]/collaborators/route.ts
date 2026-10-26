@@ -19,19 +19,12 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const user = await requireUser();
+  const user = await requireUser("projects:read");
   if (!user) return unauthorized();
 
   const { id } = await params;
   const access = await requireProjectAccess(user, id);
   if (!access) return notFound();
-  if (access.role !== "owner") {
-    return Response.json(
-      { error: "Only the project owner can manage collaborators" },
-      { status: 403 },
-    );
-  }
-
   const collaborators = await db
     .select({
       userId: projectCollaborators.userId,
@@ -44,14 +37,19 @@ export async function GET(
     .where(eq(projectCollaborators.projectId, id))
     .orderBy(projectCollaborators.createdAt);
 
-  return Response.json({ collaborators });
+  const [owner] = await db
+    .select({ userId: users.id, username: users.username })
+    .from(users)
+    .where(eq(users.id, access.project.userId));
+
+  return Response.json({ owner, collaborators });
 }
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const user = await requireUser();
+  const user = await requireUser("projects:share");
   if (!user) return unauthorized();
 
   const { id } = await params;
@@ -109,7 +107,7 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const user = await requireUser();
+  const user = await requireUser("projects:share");
   if (!user) return unauthorized();
 
   const { id } = await params;

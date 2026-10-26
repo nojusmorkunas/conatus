@@ -10,7 +10,7 @@ import { BUCKET, ensureBucket, s3 } from "@/lib/storage";
 const MAX_SIZE = 10 * 1024 * 1024;
 
 export async function GET(request: Request) {
-  const user = await requireUser();
+  const user = await requireUser("tasks:read");
   if (!user) return unauthorized();
 
   const taskId = new URL(request.url).searchParams.get("taskId");
@@ -30,7 +30,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const user = await requireUser();
+  const user = await requireUser("tasks:write");
   if (!user) return unauthorized();
 
   const form = await request.formData();

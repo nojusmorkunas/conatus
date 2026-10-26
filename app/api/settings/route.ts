@@ -7,7 +7,7 @@ import { users } from "@/lib/db/schema";
 import { settingsSchema } from "@/lib/validation";
 
 export async function PATCH(request: Request) {
-  const user = await requireUser();
+  const user = await requireUser("settings:write");
   if (!user) return unauthorized();
 
   const parsed = settingsSchema.safeParse(await request.json());
