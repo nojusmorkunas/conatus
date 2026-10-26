@@ -21,6 +21,9 @@ jobs:
   publish:
     name: Publish ${{ matrix.name }}
     runs-on: ubuntu-latest
+    # A normal release takes about 15 minutes. The arm64 half runs under QEMU
+    # and has hung before, which otherwise only fails at the 6-hour default.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
