@@ -10,7 +10,9 @@ export async function PATCH(request: Request) {
   const user = await requireUser("settings:write");
   if (!user) return unauthorized();
 
-  const parsed = settingsSchema.safeParse(await request.json());
+  // Partial so API clients can change one setting without first reading the
+  // ones they never see, like the daily goal.
+  const parsed = settingsSchema.partial().safeParse(await request.json());
   if (!parsed.success) {
     return invalid(parsed.error);
   }
