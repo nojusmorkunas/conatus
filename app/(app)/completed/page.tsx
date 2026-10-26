@@ -1,4 +1,5 @@
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -19,6 +20,7 @@ export default async function CompletedPage() {
     .from(users)
     .where(eq(users.id, user.id));
   const today = todayInTimezone(settings.timezone);
+  const parent = alias(tasks, "parent");
 
   const completed = await db
     .select({
@@ -29,12 +31,14 @@ export default async function CompletedPage() {
       projectName: projects.name,
     })
     .from(tasks)
+    .leftJoin(parent, eq(parent.id, tasks.parentId))
     .innerJoin(projects, eq(projects.id, tasks.projectId))
     .where(
       and(
         inArray(tasks.projectId, await accessibleProjectIds(user)),
         eq(tasks.isCompleted, true),
         isNull(tasks.deletedAt),
+        or(isNull(parent.id), eq(parent.isCompleted, false)),
       ),
     )
     .orderBy(desc(tasks.completedAt))

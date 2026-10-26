@@ -47,6 +47,19 @@ export async function PATCH(
   }
 
   if ("completed" in parsed.data) {
+    const projectTasks = await db
+      .select({
+        id: tasks.id,
+        parentId: tasks.parentId,
+        sectionId: tasks.sectionId,
+        order: tasks.order,
+        isCompleted: tasks.isCompleted,
+        completedAt: tasks.completedAt,
+      })
+      .from(tasks)
+      .where(eq(tasks.projectId, task.projectId));
+    const descendantIds = [...subtreeIds(projectTasks, id)].filter((taskId) => taskId !== id);
+
     // Completing a recurring task advances it to the next occurrence
     // instead of archiving it.
     if (parsed.data.completed && task.recurrence && task.dueDate) {
@@ -62,15 +75,35 @@ export async function PATCH(
         task.recurrenceEndDate,
       );
       const recurrenceFinished = nextDueDate === null;
-      const [updated] = await db
-        .update(tasks)
-        .set(
-          recurrenceFinished
-            ? { isCompleted: true, completedAt: new Date(), updatedAt: new Date() }
-            : { dueDate: nextDueDate, updatedAt: new Date() },
-        )
-        .where(eq(tasks.id, id))
-        .returning();
+      const completedAt = new Date();
+      const [updated] = await db.transaction(async (tx) => {
+        const updated = await tx
+          .update(tasks)
+          .set(
+            recurrenceFinished
+              ? { isCompleted: true, completedAt, updatedAt: new Date() }
+              : { dueDate: nextDueDate, updatedAt: new Date() },
+          )
+          .where(eq(tasks.id, id))
+          .returning();
+        if (descendantIds.length) {
+          await tx
+            .update(tasks)
+            .set({
+              isCompleted: recurrenceFinished,
+              completedAt: recurrenceFinished ? completedAt : null,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                inArray(tasks.id, descendantIds),
+                eq(tasks.isCompleted, !recurrenceFinished),
+                isNull(tasks.deletedAt),
+              ),
+            );
+        }
+        return updated;
+      });
 
       const [project] = await db
         .select({ name: projects.name })
@@ -88,15 +121,48 @@ export async function PATCH(
       return Response.json(updated);
     }
 
-    const [updated] = await db
-      .update(tasks)
-      .set({
-        isCompleted: parsed.data.completed,
-        completedAt: parsed.data.completed ? new Date() : null,
-        updatedAt: new Date(),
-      })
-      .where(eq(tasks.id, id))
-      .returning();
+    const completed = parsed.data.completed;
+    const completedAt = completed ? new Date() : null;
+    const [updated] = await db.transaction(async (tx) => {
+      const updated = await tx
+        .update(tasks)
+        .set({ isCompleted: completed, completedAt, updatedAt: new Date() })
+        .where(eq(tasks.id, id))
+        .returning();
+      if (descendantIds.length && (completed || task.completedAt)) {
+        await tx
+          .update(tasks)
+          .set({ isCompleted: completed, completedAt, updatedAt: new Date() })
+          .where(
+            and(
+              inArray(tasks.id, descendantIds),
+              eq(tasks.isCompleted, !completed),
+              completed ? undefined : eq(tasks.completedAt, task.completedAt!),
+              isNull(tasks.deletedAt),
+            ),
+          );
+      }
+      if (!completed) {
+        const byId = new Map(projectTasks.map((row) => [row.id, row]));
+        const ancestorIds: string[] = [];
+        const seen = new Set([id]);
+        let parentId = task.parentId;
+        while (parentId && !seen.has(parentId)) {
+          seen.add(parentId);
+          const parent = byId.get(parentId);
+          if (!parent) break;
+          if (parent.isCompleted) ancestorIds.push(parent.id);
+          parentId = parent.parentId;
+        }
+        if (ancestorIds.length) {
+          await tx
+            .update(tasks)
+            .set({ isCompleted: false, completedAt: null, updatedAt: new Date() })
+            .where(and(inArray(tasks.id, ancestorIds), isNull(tasks.deletedAt)));
+        }
+      }
+      return updated;
+    });
 
     const [project] = await db
       .select({ name: projects.name })
@@ -288,7 +354,9 @@ export async function PATCH(
   const projectChanged = targetProjectId !== task.projectId;
   const targetAssigneeId =
     rest.assigneeId === undefined ? task.assigneeId : rest.assigneeId;
-  if (targetAssigneeId && !(await isProjectMember(targetAssigneeId, targetProjectId))) {
+  const targetAssigneeIsMember =
+    !targetAssigneeId || await isProjectMember(targetAssigneeId, targetProjectId);
+  if (!targetAssigneeIsMember) {
     if (projectChanged && rest.assigneeId === undefined) {
       // Like sections, assignments that do not belong to the target project
       // are silently dropped when a task moves between projects.
@@ -311,10 +379,44 @@ export async function PATCH(
 
   // A project move drops sections from the old project; an explicit
   // sectionId still gets validated against the target project above.
+  // Resending the current projectId is not a move.
   const targetSectionId =
-    sectionId !== undefined ? sectionId : projectId ? null : task.sectionId;
+    sectionId !== undefined ? sectionId : projectChanged ? null : task.sectionId;
 
   const movingLists = projectChanged || targetSectionId !== task.sectionId;
+  // A subtask moved to another project or section on its own becomes a
+  // top-level task there; its own subtasks come along below.
+  const parentId = task.parentId && movingLists ? null : task.parentId;
+
+  const projectTasks = movingLists
+    ? await db
+        .select({
+          id: tasks.id,
+          parentId: tasks.parentId,
+          sectionId: tasks.sectionId,
+          order: tasks.order,
+          assigneeId: tasks.assigneeId,
+        })
+        .from(tasks)
+        .where(eq(tasks.projectId, task.projectId))
+    : [];
+  const descendantIds = movingLists
+    ? [...subtreeIds(projectTasks, id)].filter((taskId) => taskId !== id)
+    : [];
+  const invalidAssigneeIds: string[] = [];
+  if (projectChanged) {
+    const descendants = new Set(descendantIds);
+    const assigneeIds = new Set(projectTasks
+      .filter((row) => descendants.has(row.id))
+      .map((row) => row.assigneeId)
+      .filter((assigneeId) => assigneeId !== null));
+    for (const assigneeId of assigneeIds) {
+      const isMember = assigneeId === targetAssigneeId
+        ? targetAssigneeIsMember
+        : await isProjectMember(assigneeId, targetProjectId);
+      if (!isMember) invalidAssigneeIds.push(assigneeId);
+    }
+  }
 
   let order = task.order;
   if (movingLists) {
@@ -323,7 +425,7 @@ export async function PATCH(
       .from(tasks)
       .where(
         siblingScope({
-          parentId: task.parentId,
+          parentId,
           projectId: targetProjectId,
           sectionId: targetSectionId,
         }),
@@ -333,17 +435,33 @@ export async function PATCH(
     order = generateKeyBetween(last?.order ?? null, null);
   }
 
-  const [updated] = await db
-    .update(tasks)
-    .set({
-      ...rest,
-      projectId: targetProjectId,
-      sectionId: targetSectionId,
-      order,
-      updatedAt: new Date(),
-    })
-    .where(eq(tasks.id, id))
-    .returning();
+  const [updated] = await db.transaction(async (tx) => {
+    const updated = await tx
+      .update(tasks)
+      .set({
+        ...rest,
+        projectId: targetProjectId,
+        sectionId: targetSectionId,
+        parentId,
+        order,
+        updatedAt: new Date(),
+      })
+      .where(eq(tasks.id, id))
+      .returning();
+    if (descendantIds.length) {
+      await tx
+        .update(tasks)
+        .set({ projectId: targetProjectId, sectionId: targetSectionId, updatedAt: new Date() })
+        .where(inArray(tasks.id, descendantIds));
+      if (invalidAssigneeIds.length) {
+        await tx
+          .update(tasks)
+          .set({ assigneeId: null, updatedAt: new Date() })
+          .where(and(inArray(tasks.id, descendantIds), inArray(tasks.assigneeId, invalidAssigneeIds)));
+      }
+    }
+    return updated;
+  });
 
   return Response.json(updated);
 }
