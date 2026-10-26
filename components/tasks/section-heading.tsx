@@ -175,7 +175,7 @@ export function SectionHeading({
             <DropdownMenuItem
               variant="destructive"
               onClick={() => {
-                if (confirm(`Delete section "${section.name}"? Its tasks will be deleted too.`)) onDelete(section);
+                if (confirm(`Delete section "${section.name}"? Its tasks will move to Trash.`)) onDelete(section);
               }}
             >
               <Trash2 /> Delete

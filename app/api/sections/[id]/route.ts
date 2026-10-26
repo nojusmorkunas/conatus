@@ -184,7 +184,19 @@ export async function DELETE(
   const section = await accessibleSection(user, id);
   if (!section) return notFound();
 
-  await db.delete(sections).where(eq(sections.id, id));
+  // Send the section's tasks to Trash. tasks.section_id cascades, so deleting
+  // the row alone would delete them for good. Clearing sectionId, on tasks
+  // already in Trash too, keeps every one out of the cascade, and a restore
+  // brings it back at the project root. Subtasks share their root's section,
+  // so whole trees go together.
+  await db.transaction(async (tx) => {
+    const deletedAt = new Date();
+    await tx.update(tasks).set({ deletedAt, updatedAt: deletedAt })
+      .where(and(eq(tasks.sectionId, id), isNull(tasks.deletedAt)));
+    await tx.update(tasks).set({ sectionId: null, updatedAt: deletedAt })
+      .where(eq(tasks.sectionId, id));
+    await tx.delete(sections).where(eq(sections.id, id));
+  });
 
   return Response.json({ ok: true });
 }

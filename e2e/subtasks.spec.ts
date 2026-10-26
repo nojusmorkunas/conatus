@@ -12,6 +12,7 @@ type Task = {
   isCompleted: boolean;
   completedAt: string | null;
   dueDate: string | null;
+  order: string;
 };
 
 async function inboxId(page: Page) {
@@ -161,4 +162,31 @@ test("creating a subtask under a completed parent is rejected", async ({ page })
 
   expect(response.status()).toBe(400);
   await expect(response.json()).resolves.toEqual({ error: "Reopen the parent task first" });
+});
+
+test("deleting a section sends its task trees to Trash and restores them at the project root", async ({ page }) => {
+  const projectId = await inboxId(page);
+  const rootTask = await createTask(page, projectId);
+  const sectionResponse = await page.request.post("/api/sections", { data: { projectId, name: "Doomed" } });
+  expect(sectionResponse.status()).toBe(201);
+  const section = await sectionResponse.json() as { id: string };
+  const parent = await createTask(page, projectId, { sectionId: section.id, content: "Section parent" });
+  const child = await createTask(page, projectId, { parentId: parent.id, content: "Section child" });
+  // Both lists start at the first order key, so the restored parent would
+  // share one with the task already at the project root.
+  expect(parent.order).toBe(rootTask.order);
+
+  expect((await page.request.delete(`/api/sections/${section.id}`)).status()).toBe(200);
+  expect((await page.request.get(`/api/v1/tasks/${parent.id}`)).status()).toBe(404);
+  expect((await page.request.get(`/api/v1/tasks/${child.id}`)).status()).toBe(404);
+
+  await page.goto("/trash");
+  await expect(page.getByText("Section parent")).toBeVisible();
+  await expect(page.getByText("Section child")).toHaveCount(0);
+
+  expect((await page.request.post(`/api/trash/tasks/${parent.id}/restore`)).status()).toBe(200);
+  const restored = await readTask(page, parent.id);
+  expect(restored).toMatchObject({ sectionId: null, parentId: null });
+  expect(restored.order > rootTask.order).toBe(true);
+  expect(await readTask(page, child.id)).toMatchObject({ sectionId: null, parentId: parent.id });
 });
