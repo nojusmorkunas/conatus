@@ -97,6 +97,8 @@ export default auth((request) => {
   const { pathname } = request.nextUrl;
   if (publicPages.has(pathname)) return next();
   if (pathname === "/api/v1/openapi.json") return next();
+  // Native clients call this before they have a session or a token.
+  if (pathname === "/api/v1/auth/device-token") return next();
 
   if (pathname.startsWith("/api/")) {
     if (request.headers.get("authorization")?.startsWith("Bearer ")) return next();
