@@ -96,6 +96,19 @@ export const idempotencyKeys = pgTable(
   ],
 );
 
+// One-time PKCE codes for browser sign-in to a native app.
+export const deviceLoginCodes = pgTable("device_login_codes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  codeHash: text("code_hash").notNull().unique(),
+  codeChallenge: text("code_challenge").notNull(),
+  deviceName: text("device_name").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const passwordResetTokens = pgTable("password_reset_tokens", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id")

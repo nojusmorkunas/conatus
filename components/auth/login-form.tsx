@@ -22,10 +22,12 @@ import {
 type LoginInput = z.infer<typeof credentialsSchema>;
 
 export function LoginForm({
+  callbackUrl = "/",
   bootstrapAvailable = false,
   ssoName = null,
   ssoFailed = false,
 }: {
+  callbackUrl?: string;
   bootstrapAvailable?: boolean;
   ssoName?: string | null;
   ssoFailed?: boolean;
@@ -55,7 +57,7 @@ export function LoginForm({
       setError("Invalid username or password.");
       return;
     }
-    router.push("/");
+    router.push(callbackUrl);
     router.refresh();
   });
 
@@ -85,7 +87,7 @@ export function LoginForm({
         <Button type="submit" disabled={isSubmitting}>
           Log in
         </Button>
-        {ssoName && <SsoButton>Continue with {ssoName}</SsoButton>}
+        {ssoName && <SsoButton redirectTo={callbackUrl}>Continue with {ssoName}</SsoButton>}
         {bootstrapAvailable ? (
           <p className="text-sm text-muted-foreground">
             New server?{" "}

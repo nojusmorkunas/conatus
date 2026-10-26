@@ -19,7 +19,21 @@ export async function GET() {
         post: {
           operationId: "createDeviceToken",
           security: [],
-          responses: { "201": { description: "Device token, returned once" }, "401": { description: "Invalid credentials" }, "429": { description: "Too many attempts" } },
+          description: "Exchange credentials or a one-time browser sign-in code for a device token. For browser sign-in (including OpenID Connect), generate a random PKCE code verifier (43–128 characters) and its unpadded base64url SHA-256 challenge, then open /device-login?device=…&challenge=…. After consent, receive com.useconatus.app:/auth?code=… or com.useconatus.app:/auth?error=access_denied, then exchange the code with codeVerifier here. Codes expire after 5 minutes and each exchange attempt consumes the code. Only the credentials path is login rate limited.",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { type: "object", required: ["username", "password", "deviceName"], properties: { username: { type: "string", minLength: 1 }, password: { type: "string", minLength: 1 }, deviceName: { type: "string", minLength: 1, maxLength: 100 } } },
+                    { type: "object", required: ["code", "codeVerifier"], properties: { code: { type: "string", minLength: 1, maxLength: 100 }, codeVerifier: { type: "string", pattern: "^[A-Za-z0-9._~-]{43,128}$" } } },
+                  ],
+                },
+              },
+            },
+          },
+          responses: { "201": { description: "Device token, returned once" }, "400": { description: "Invalid request body" }, "401": { description: "Invalid credentials or invalid or expired code" }, "429": { description: "Too many credential attempts" } },
         },
       },
       "/filters": {
