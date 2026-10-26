@@ -20,6 +20,7 @@ export async function sendDueReminders() {
       dueTime: tasks.dueTime,
       projectName: projects.name,
       userEmail: users.email,
+      emailReminders: users.emailReminders,
     })
     .from(reminders)
     .innerJoin(tasks, eq(reminders.taskId, tasks.id))
@@ -30,6 +31,15 @@ export async function sendDueReminders() {
   for (const reminder of due) {
     if (!reminder.userEmail) continue;
     try {
+      if (!reminder.emailReminders) {
+        // Mark these sent so turning emails back on won't send reminders
+        // that piled up while email reminders were disabled.
+        await db
+          .update(reminders)
+          .set({ sentAt: new Date() })
+          .where(eq(reminders.id, reminder.id));
+        continue;
+      }
       const due = reminder.dueDate
         ? `${reminder.dueDate}${reminder.dueTime ? ` ${reminder.dueTime}` : ""}`
         : "no due date";

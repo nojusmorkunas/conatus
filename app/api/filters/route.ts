@@ -8,7 +8,7 @@ import { filters } from "@/lib/db/schema";
 import { filterCreateSchema } from "@/lib/validation";
 
 export async function GET() {
-  const user = await requireUser();
+  const user = await requireUser("filters:read");
   if (!user) return unauthorized();
 
   const userFilters = await db
@@ -21,7 +21,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const user = await requireUser();
+  const user = await requireUser("filters:write");
   if (!user) return unauthorized();
 
   const parsed = filterCreateSchema.safeParse(await request.json());

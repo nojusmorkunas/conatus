@@ -24,7 +24,7 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const user = await requireUser();
+  const user = await requireUser("tasks:read");
   if (!user) return unauthorized();
 
   const { id } = await params;
@@ -48,7 +48,7 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const user = await requireUser();
+  const user = await requireUser("tasks:delete");
   if (!user) return unauthorized();
 
   const { id } = await params;

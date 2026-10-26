@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 
 import { invalid } from "@/lib/api/responses";
 import { generateAgentToken } from "@/lib/auth/api-token";
+import { redeemDeviceLoginCode } from "@/lib/auth/device-login";
 import { agentTokenScopes } from "@/lib/token-access";
 import {
   LOGIN_RETRY_AFTER_SECONDS,
@@ -11,15 +12,25 @@ import { verifyPassword } from "@/lib/auth/password";
 import { normalizeUsername } from "@/lib/auth/registration";
 import { db } from "@/lib/db";
 import { apiTokens, users } from "@/lib/db/schema";
-import { deviceTokenSchema } from "@/lib/validation";
+import { deviceCodeExchangeSchema, deviceTokenSchema } from "@/lib/validation";
 
 // The one unauthenticated route under /api/v1: native clients cannot hold a
-// browser session, so this trades a password for a token they store instead.
+// browser session, so this trades credentials or a one-time PKCE code for a token.
 // The token is listed and revocable alongside every other token in settings.
 export async function POST(request: Request) {
-  const parsed = deviceTokenSchema.safeParse(
-    await request.json().catch(() => null),
-  );
+  const body = await request.json().catch(() => null);
+  if (body && typeof body === "object" && "code" in body) {
+    const parsed = deviceCodeExchangeSchema.safeParse(body);
+    if (!parsed.success) return invalid(parsed.error);
+
+    const redeemed = await redeemDeviceLoginCode(parsed.data.code, parsed.data.codeVerifier);
+    if (!redeemed) {
+      return Response.json({ error: "Invalid or expired code" }, { status: 401 });
+    }
+    return createDeviceToken(redeemed.userId, redeemed.deviceName);
+  }
+
+  const parsed = deviceTokenSchema.safeParse(body);
   if (!parsed.success) {
     return invalid(parsed.error);
   }
@@ -49,14 +60,18 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid credentials" }, { status: 401 });
   }
 
+  return createDeviceToken(user.id, parsed.data.deviceName);
+}
+
+async function createDeviceToken(userId: string, deviceName: string) {
   const generated = generateAgentToken();
   // No expiry: a phone that silently stops syncing after 90 days reads as data
   // loss. Revocation is the control, not rotation.
   const [token] = await db
     .insert(apiTokens)
     .values({
-      userId: user.id,
-      name: parsed.data.deviceName,
+      userId,
+      name: deviceName,
       tokenHash: generated.hash,
       prefix: generated.prefix,
       scopes: [...agentTokenScopes],

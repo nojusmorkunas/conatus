@@ -8,9 +8,11 @@ import { Button } from "@/components/ui/button";
 // account's timezone, oidc_link links the identity to the signed-in account.
 export function SsoButton({
   link = false,
+  redirectTo = "/",
   children,
 }: {
   link?: boolean;
+  redirectTo?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -21,7 +23,7 @@ export function SsoButton({
         const attributes = "; path=/; max-age=600; samesite=lax";
         document.cookie = `oidc_tz=${Intl.DateTimeFormat().resolvedOptions().timeZone}${attributes}`;
         document.cookie = link ? `oidc_link=1${attributes}` : "oidc_link=; path=/; max-age=0";
-        void signIn("oidc", { redirectTo: link ? "/settings#sso" : "/" });
+        void signIn("oidc", { redirectTo: link ? "/settings#sso" : redirectTo });
       }}
     >
       {children}

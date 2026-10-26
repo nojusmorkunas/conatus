@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { auth } from "@/auth";
+import { nativeAppScheme } from "@/lib/native-app";
 
 const publicPages = new Set([
   "/login",
@@ -47,7 +48,9 @@ function buildCsp(nonce: string) {
     "connect-src 'self'",
     "object-src 'none'",
     "base-uri 'none'",
-    "form-action 'self'",
+    // Chrome applies form-action to the redirect that answers a form POST,
+    // so the device sign-in form's 303 into the app is blocked without it.
+    `form-action 'self' ${nativeAppScheme}:`,
     "frame-ancestors 'none'",
   ].join("; ");
 }
@@ -97,6 +100,8 @@ export default auth((request) => {
   const { pathname } = request.nextUrl;
   if (publicPages.has(pathname)) return next();
   if (pathname === "/api/v1/openapi.json") return next();
+  // Native clients call this before they have a session or a token.
+  if (pathname === "/api/v1/auth/device-token") return next();
 
   if (pathname.startsWith("/api/")) {
     if (request.headers.get("authorization")?.startsWith("Bearer ")) return next();
@@ -107,9 +112,14 @@ export default auth((request) => {
     );
   }
 
+  const loginUrl = new URL("/login", request.nextUrl);
+  if (pathname !== "/") {
+    loginUrl.searchParams.set("callbackUrl", pathname + request.nextUrl.search);
+  }
+
   return withSecurityHeaders(
     request,
-    NextResponse.redirect(new URL("/login", request.nextUrl)),
+    NextResponse.redirect(loginUrl),
     csp,
   );
 });

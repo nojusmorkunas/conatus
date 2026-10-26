@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-// No user row matches, so every attempt lands on the invalid-credentials path.
-// That is the branch worth pinning: it must not leak whether the name exists.
+// No user or code row matches; replies must not leak whether a name exists.
 vi.mock("@/lib/db", () => ({
   db: {
     select: () => ({ from: () => ({ where: () => ({ limit: async () => [] }) }) }),
+    delete: () => ({ where: () => ({ returning: async () => [] }) }),
   },
 }));
 
@@ -56,5 +56,26 @@ describe("POST /api/v1/auth/device-token", () => {
     const blocked = await POST(makeRequest(credentials));
     expect(blocked.status).toBe(429);
     expect(blocked.headers.get("Retry-After")).toBe("300");
+  });
+
+  test("rejects an unknown code with a valid-format verifier", async () => {
+    const response = await POST(makeRequest({ code: "unknown", codeVerifier: "a".repeat(43) }));
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: "Invalid or expired code" });
+  });
+
+  test("rejects a malformed code verifier", async () => {
+    const response = await POST(makeRequest({ code: "unknown", codeVerifier: "short" }));
+    expect(response.status).toBe(400);
+  });
+
+  test("exchanges codes without using the credentials rate limit", async () => {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await POST(makeRequest(credentials));
+    }
+
+    const response = await POST(makeRequest({ code: "unknown", codeVerifier: "a".repeat(43) }));
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: "Invalid or expired code" });
   });
 });

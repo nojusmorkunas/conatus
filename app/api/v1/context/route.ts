@@ -20,6 +20,7 @@ export async function GET() {
         timezone: users.timezone,
         dateFormat: users.dateFormat,
         weekStart: users.weekStart,
+        emailReminders: users.emailReminders,
       })
       .from(users)
       .where(eq(users.id, actor.id))

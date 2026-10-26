@@ -35,6 +35,8 @@ export const users = pgTable(
     dailyGoal: integer("daily_goal").notNull().default(5),
     // Which events the /stats activity graph counts; see lib/activity-sources.
     activityGraphSource: text("activity_graph_source").notNull().default("completed"),
+    // Whether due reminders are delivered by email.
+    emailReminders: boolean("email_reminders").notNull().default(true),
     // Where "/" lands: a view key or a project id; see lib/start-page.
     startPage: text("start_page").notNull().default("today"),
     // Null only for a newly-created account. The onboarding completion route
@@ -93,6 +95,19 @@ export const idempotencyKeys = pgTable(
     ),
   ],
 );
+
+// One-time PKCE codes for browser sign-in to a native app.
+export const deviceLoginCodes = pgTable("device_login_codes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  codeHash: text("code_hash").notNull().unique(),
+  codeChallenge: text("code_challenge").notNull(),
+  deviceName: text("device_name").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
 
 export const passwordResetTokens = pgTable("password_reset_tokens", {
   id: uuid("id").primaryKey().defaultRandom(),
