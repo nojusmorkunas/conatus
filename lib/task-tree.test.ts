@@ -6,6 +6,7 @@ import {
   flattenTaskGroup,
   flattenTaskTree,
   projectTaskDepth,
+  selectionRoots,
   visibleFlatRows,
   wouldCreateTaskCycle,
 } from "./task-tree";
@@ -42,6 +43,27 @@ const multiSectionReorderItems = [
 ];
 
 describe("task tree", () => {
+  test("keeps only the parent when parent and child are selected", () => {
+    expect(selectionRoots(tasks, ["a", "b"])).toEqual(["a"]);
+  });
+
+  test("keeps a child selected on its own", () => {
+    expect(selectionRoots(tasks, ["b"])).toEqual(["b"]);
+  });
+
+  test("excludes a grandchild under a selected grandparent", () => {
+    const tree = [...tasks, { id: "grandchild", parentId: "b" }];
+    expect(selectionRoots(tree, ["grandchild", "a"])).toEqual(["a"]);
+  });
+
+  test("stops the selection ancestor walk at a missing task", () => {
+    const tree = [
+      { id: "parent", parentId: null },
+      { id: "grandchild", parentId: "missing" },
+    ];
+    expect(selectionRoots(tree, ["parent", "grandchild"])).toEqual(["parent", "grandchild"]);
+  });
+
   test("flattens tasks in pre-order with depths", () => {
     expect(flattenTaskTree(tasks).map(({ id, depth }) => [id, depth])).toEqual([
       ["a", 0], ["b", 1], ["c", 0],

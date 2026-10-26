@@ -119,6 +119,26 @@ export function subtreeIds(tasks: TreeTask[], rootId: string) {
   return ids;
 }
 
+export function selectionRoots<T extends Pick<TreeTask, "id" | "parentId">>(
+  tasks: T[],
+  selectedIds: string[],
+): string[] {
+  const byId = new Map(tasks.map((task) => [task.id, task]));
+  const selected = new Set(selectedIds);
+  // ponytail: flat date lists can omit an unselected middle task, so a selected
+  // grandchild may still go out on its own when the ancestor walk stops there.
+  return selectedIds.filter((id) => {
+    const seen = new Set([id]);
+    let parentId = byId.get(id)?.parentId;
+    while (parentId && !seen.has(parentId)) {
+      if (selected.has(parentId)) return false;
+      seen.add(parentId);
+      parentId = byId.get(parentId)?.parentId;
+    }
+    return true;
+  });
+}
+
 export function taskDepth(tasks: TreeTask[], taskId: string) {
   const byId = new Map(tasks.map((task) => [task.id, task]));
   const seen = new Set<string>();

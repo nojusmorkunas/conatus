@@ -38,6 +38,7 @@ import { completeRecurring } from "@/lib/recurring-complete";
 import { compareTasks, type SortBy } from "@/lib/task-sort";
 import {
   flattenTaskGroup,
+  selectionRoots,
   subtreeIds,
   taskDepth,
 } from "@/lib/task-tree";
@@ -343,14 +344,18 @@ export function TaskList({
 
   // Dragging any one of the selected tasks takes the rest with it.
   async function moveSelectedTasks(targetProjectId: string) {
-    const ok = await bulkAction((task) => patchTask(task.id, { projectId: targetProjectId }));
+    const ok = await bulkAction(
+      (task) => patchTask(task.id, { projectId: targetProjectId }),
+      selectionRoots(tasks, selectedTaskIds),
+    );
     router.refresh();
     return ok;
   }
 
   async function dropOnProject(task: TaskWithLabels, targetProjectId: string, projectName: string) {
+    const rootIds = selectionRoots(tasks, selectedTaskIds);
     const moved = actsOnSelection(task)
-      ? tasks.filter((candidate) => selectedTaskIds.includes(candidate.id))
+      ? tasks.filter((candidate) => rootIds.includes(candidate.id))
       : [task];
     // Where each task sat, so undo can put it back in its section rather than
     // only in this project. Its place in the order is not restored: a project
@@ -447,12 +452,13 @@ export function TaskList({
     if (ok) await refresh();
   }
 
-  async function bulkAction(action: (task: TaskWithLabels) => Promise<Response>) {
+  async function bulkAction(action: (task: TaskWithLabels) => Promise<Response>, ids?: string[]) {
     setError(null);
     const byId = new Map(tasks.map((task) => [task.id, task]));
     const ok = await runOnSelection(
       (taskId) => action(byId.get(taskId)!),
       refresh,
+      ids,
     );
     if (!ok) setError("Some updates failed.");
     return ok;
@@ -587,19 +593,9 @@ export function TaskList({
 
   // Only the top of a selected branch moves: its subtasks come along with it,
   // and moving them too would flatten them into the drop target.
-  function selectionRoots() {
-    const selected = new Set(selectedTaskIds);
-    const byId = new Map(tasks.map((task) => [task.id, task]));
+  function orderedSelectionRoots() {
     const rowOrder = new Map(flatTasks.map((task, index) => [task.id, index]));
-    return selectedTaskIds
-      .filter((id) => {
-        let parentId = byId.get(id)?.parentId ?? null;
-        while (parentId) {
-          if (selected.has(parentId)) return false;
-          parentId = byId.get(parentId)?.parentId ?? null;
-        }
-        return true;
-      })
+    return selectionRoots(tasks, selectedTaskIds)
       .sort((a, b) => (rowOrder.get(a) ?? 0) - (rowOrder.get(b) ?? 0));
   }
 
@@ -609,7 +605,7 @@ export function TaskList({
   async function moveSelectionTo(target: TaskDropProjection) {
     setError(null);
     let afterId = target.afterId;
-    for (const id of selectionRoots()) {
+    for (const id of orderedSelectionRoots()) {
       const response = await patchTask(id, {
         sectionId: target.sectionId,
         parentId: target.parentId,

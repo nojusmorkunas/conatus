@@ -11,6 +11,7 @@ import { jsonInit } from "@/lib/api-client";
 import { truncate } from "@/lib/utils";
 import { usePendingAction } from "@/lib/use-pending-action";
 import { useTaskSelection } from "@/lib/use-task-selection";
+import { selectionRoots } from "@/lib/task-tree";
 import { completeRecurring } from "@/lib/recurring-complete";
 import { EmptyState } from "@/components/ui/empty-state";
 
@@ -159,19 +160,20 @@ export function TaskDateList({
 
   const allTasks = groups.flatMap((group) => group.tasks);
 
-  async function bulkAction(action: (task: TaskWithLabels) => Promise<Response>) {
+  async function bulkAction(action: (task: TaskWithLabels) => Promise<Response>, ids?: string[]) {
     setError(null);
     const byId = new Map(allTasks.map((task) => [task.id, task]));
     const ok = await runOnSelection(
       (taskId) => action(byId.get(taskId)!),
       () => router.refresh(),
+      ids,
     );
     if (!ok) setError("Some updates failed.");
     return ok;
   }
 
-  function patchSelected(body: Record<string, unknown>) {
-    void bulkAction((task) => fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", body)));
+  function patchSelected(body: Record<string, unknown>, ids?: string[]) {
+    void bulkAction((task) => fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", body)), ids);
   }
 
   // A row inside the selection speaks for all of it.
@@ -245,7 +247,7 @@ export function TaskDateList({
                 actsOnSelection(target) ? patchSelected({ priority }) : void patch(target.id, { priority })
               }
               onMove={(target, projectId) =>
-                actsOnSelection(target) ? patchSelected({ projectId }) : void patch(target.id, { projectId })
+                actsOnSelection(target) ? patchSelected({ projectId }, selectionRoots(allTasks, selectedIds)) : void patch(target.id, { projectId })
               }
               onDuplicate={duplicateTask}
               onSubtaskAdded={() => router.refresh()}

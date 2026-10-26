@@ -32,12 +32,13 @@ export function useTaskSelection() {
   async function run(
     action: (taskId: string) => Promise<Response>,
     after: () => Promise<unknown> | unknown,
+    ids = selectedIds,
   ) {
-    if (selectedIds.length === 0) return true;
+    if (ids.length === 0) return true;
     let ok = false;
     try {
       // ponytail: per-task fanout, batch endpoint when N gets large.
-      const responses = await Promise.all(selectedIds.map(action));
+      const responses = await Promise.all(ids.map(action));
       ok = responses.every((response) => response.ok);
     } finally {
       await after();

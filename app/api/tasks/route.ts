@@ -100,10 +100,13 @@ export async function POST(request: Request) {
 
   if (parentId) {
     const [parent] = await db
-      .select({ id: tasks.id, sectionId: tasks.sectionId })
+      .select({ id: tasks.id, sectionId: tasks.sectionId, isCompleted: tasks.isCompleted })
       .from(tasks)
       .where(and(eq(tasks.id, parentId), eq(tasks.projectId, projectId), isNull(tasks.deletedAt)));
     if (!parent) return notFound();
+    if (parent.isCompleted) {
+      return Response.json({ error: "Reopen the parent task first" }, { status: 400 });
+    }
     effectiveSectionId = parent.sectionId;
   }
 
