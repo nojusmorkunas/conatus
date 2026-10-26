@@ -80,7 +80,7 @@ export const tokenPermissionGroups = [
   {
     label: "Settings",
     permissions: [
-      { scope: "settings:write", label: "Write", description: "Change your name, time zone, date format, first day of the week, daily goal and start page." },
+      { scope: "settings:write", label: "Write", description: "Change your name, time zone, date format, first day of the week, daily goal, start page and email reminders." },
     ],
   },
 ] as const satisfies readonly {

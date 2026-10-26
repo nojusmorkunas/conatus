@@ -47,6 +47,7 @@ type Webhook = {
 
 export function SettingsForm({
   defaults,
+  emailConfigured,
   projects,
   icalToken,
   initialApiTokens,
@@ -54,6 +55,7 @@ export function SettingsForm({
   initialWebhooks,
 }: {
   defaults: SettingsInput;
+  emailConfigured: boolean;
   projects: { id: string; name: string }[];
   icalToken: string | null;
   initialApiTokens: ApiToken[];
@@ -371,6 +373,28 @@ export function SettingsForm({
             )}
           />
         </Field>
+
+        {emailConfigured && (
+          <Field>
+            <Controller
+              control={control}
+              name="emailReminders"
+              render={({ field }) => (
+                <label className="flex w-fit cursor-pointer items-center gap-2 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    className="size-4 accent-foreground"
+                    aria-describedby="email-reminders-description"
+                    checked={field.value ?? true}
+                    onChange={(event) => field.onChange(event.target.checked)}
+                  />
+                  Email reminders
+                </label>
+              )}
+            />
+            <FieldDescription id="email-reminders-description">Email me when a reminder is due.</FieldDescription>
+          </Field>
+        )}
 
         <div className="flex items-center gap-3">
           <Button type="submit" disabled={formState.isSubmitting}>

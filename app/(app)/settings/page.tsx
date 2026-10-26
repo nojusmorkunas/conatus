@@ -6,6 +6,7 @@ import { requireSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { accessibleProjects } from "@/lib/db/access";
 import { apiTokens, projectCollaborators, projects, registrationInvites, users, webhooks } from "@/lib/db/schema";
+import { isEmailConfigured } from "@/lib/mailer";
 import type { SettingsInput } from "@/lib/validation";
 import type { TokenProject } from "@/components/api-tokens/api-tokens";
 import { AccountSettings } from "@/components/account/account-settings";
@@ -33,6 +34,7 @@ export default async function SettingsPage({
       dailyGoal: users.dailyGoal,
       activityGraphSource: users.activityGraphSource,
       startPage: users.startPage,
+      emailReminders: users.emailReminders,
       icalToken: users.icalToken,
       username: users.username,
       passwordHash: users.passwordHash,
@@ -202,11 +204,13 @@ export default async function SettingsPage({
               activityGraphSource:
                 user.activityGraphSource as SettingsInput["activityGraphSource"],
               startPage: user.startPage,
+              emailReminders: user.emailReminders,
             }}
             projects={userProjects.map((project) => ({
               id: project.id,
               name: project.isInbox && !project.shared ? "Inbox" : project.name,
             }))}
+            emailConfigured={isEmailConfigured()}
             tokenProjects={tokenProjects}
             icalToken={user.icalToken}
             initialApiTokens={tokens.map((token) => ({

@@ -73,7 +73,7 @@ export async function GET() {
         post: { operationId: "restoreProject", parameters: [{ $ref: "#/components/parameters/id" }], responses: { "200": { description: "Restored owned project and descendants" }, "400": { description: "Restore the parent project first" }, "404": { description: "Deleted owned project not found" } } },
       },
       "/settings": {
-        patch: { operationId: "updateSettings", description: "Update name, time zone, date format, first day of the week, daily goal, activity graph source and start page using the settings fields.", responses: { "200": { description: "Settings updated" }, "400": { description: "Invalid settings" } } },
+        patch: { operationId: "updateSettings", description: "Update name, time zone, date format, first day of the week, daily goal, activity graph source, start page and email reminders using the settings fields.", responses: { "200": { description: "Settings updated" }, "400": { description: "Invalid settings" } } },
       },
       "/context": { get: { operationId: "getWorkspaceContext", responses: { "200": { description: "Workspace context" } } } },
       "/projects": {

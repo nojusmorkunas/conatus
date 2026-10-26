@@ -105,6 +105,7 @@ export const settingsSchema = z.object({
   // so older clients — the API, the MCP server — can keep PATCHing settings
   // with the fields they know about.
   startPage: z.union([z.enum(startPageViewValues), z.uuid()]).optional(),
+  emailReminders: z.boolean().optional(),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;
