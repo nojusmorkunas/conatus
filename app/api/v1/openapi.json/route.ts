@@ -35,6 +35,11 @@ export async function GET() {
           },
           responses: { "201": { description: "Device token, returned once" }, "400": { description: "Invalid request body" }, "401": { description: "Invalid credentials or invalid or expired code" }, "429": { description: "Too many credential attempts" } },
         },
+        delete: {
+          operationId: "revokeDeviceToken",
+          description: "Revoke the token that authenticates this request, for signing out of an app. It stops working at once, as if revoked in settings.",
+          responses: { "204": { description: "Token revoked" }, "401": { description: "No valid token" } },
+        },
       },
       "/filters": {
         get: { operationId: "listFilters", responses: { "200": { description: "Saved filters" } } },
@@ -92,7 +97,7 @@ export async function GET() {
       "/context": { get: { operationId: "getWorkspaceContext", responses: { "200": { description: "Workspace context" } } } },
       "/projects": {
         get: { operationId: "listProjects", responses: { "200": { description: "Projects" } } },
-        post: { operationId: "createProject", responses: { "201": { description: "Created project" } } },
+        post: { operationId: "createProject", parameters: [{ name: "Idempotency-Key", in: "header", schema: { type: "string", maxLength: 200 } }], responses: { "201": { description: "Created project" } } },
       },
       "/projects/{id}": {
         get: { operationId: "getProject", parameters: [{ $ref: "#/components/parameters/id" }], responses: { "200": { description: "Project" } } },
@@ -117,14 +122,14 @@ export async function GET() {
         patch: { operationId: "updateTask", parameters: [{ $ref: "#/components/parameters/id" }], responses: { "200": { description: "Updated task" } } },
         delete: { operationId: "deleteTask", parameters: [{ $ref: "#/components/parameters/id" }], responses: { "200": { description: "Deleted task" } } },
       },
-      "/labels": { get: { operationId: "listLabels", responses: { "200": { description: "Labels" } } }, post: { operationId: "createLabel", responses: { "201": { description: "Created label" } } } },
+      "/labels": { get: { operationId: "listLabels", responses: { "200": { description: "Labels" } } }, post: { operationId: "createLabel", parameters: [{ name: "Idempotency-Key", in: "header", schema: { type: "string", maxLength: 200 } }], responses: { "201": { description: "Created label" } } } },
       "/labels/{id}": {
         patch: { operationId: "updateLabel", parameters: [{ $ref: "#/components/parameters/id" }], responses: { "200": { description: "Updated label" } } },
         delete: { operationId: "deleteLabel", parameters: [{ $ref: "#/components/parameters/id" }], responses: { "200": { description: "Deleted label" } } },
       },
       "/sections": {
         get: { operationId: "listSections", parameters: [{ name: "projectId", in: "query", schema: { type: "string", format: "uuid" } }], responses: { "200": { description: "Sections" } } },
-        post: { operationId: "createSection", responses: { "201": { description: "Created section" } } },
+        post: { operationId: "createSection", parameters: [{ name: "Idempotency-Key", in: "header", schema: { type: "string", maxLength: 200 } }], responses: { "201": { description: "Created section" } } },
       },
       "/sections/{id}": {
         patch: { operationId: "updateSection", parameters: [{ $ref: "#/components/parameters/id" }], responses: { "200": { description: "Updated section" } } },
