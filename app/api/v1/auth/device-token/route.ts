@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 
-import { invalid } from "@/lib/api/responses";
+import { invalid, unauthorized } from "@/lib/api/responses";
 import { generateAgentToken } from "@/lib/auth/api-token";
 import { redeemDeviceLoginCode } from "@/lib/auth/device-login";
 import { agentTokenScopes } from "@/lib/token-access";
@@ -10,12 +10,13 @@ import {
 } from "@/lib/auth/login-rate-limit";
 import { verifyPassword } from "@/lib/auth/password";
 import { normalizeUsername } from "@/lib/auth/registration";
+import { requireApiActor } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { apiTokens, users } from "@/lib/db/schema";
 import { deviceCodeExchangeSchema, deviceTokenSchema } from "@/lib/validation";
 
-// The one unauthenticated route under /api/v1: native clients cannot hold a
-// browser session, so this trades credentials or a one-time PKCE code for a token.
+// POST is the one unauthenticated route under /api/v1: native clients cannot hold
+// a browser session, so this trades credentials or a one-time PKCE code for a token.
 // The token is listed and revocable alongside every other token in settings.
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -85,4 +86,17 @@ async function createDeviceToken(userId: string, deviceName: string) {
     });
 
   return Response.json({ ...token, token: generated.raw }, { status: 201 });
+}
+
+// Signing out of an app: the token revokes itself, as revoking it in settings would.
+export async function DELETE() {
+  const actor = await requireApiActor();
+  if (!actor?.tokenId) return unauthorized();
+
+  await db
+    .update(apiTokens)
+    .set({ revokedAt: new Date() })
+    .where(eq(apiTokens.id, actor.tokenId));
+
+  return new Response(null, { status: 204 });
 }

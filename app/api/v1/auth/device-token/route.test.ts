@@ -1,16 +1,24 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
+const { requireApiActor, revoked } = vi.hoisted(() => ({
+  requireApiActor: vi.fn(),
+  revoked: [] as unknown[],
+}));
+
 // No user or code row matches; replies must not leak whether a name exists.
 vi.mock("@/lib/db", () => ({
   db: {
     select: () => ({ from: () => ({ where: () => ({ limit: async () => [] }) }) }),
     delete: () => ({ where: () => ({ returning: async () => [] }) }),
+    update: () => ({ set: (values: unknown) => ({ where: async () => { revoked.push(values); } }) }),
   },
 }));
 
+vi.mock("@/lib/auth/session", () => ({ requireApiActor }));
+
 import { clearRateLimits } from "@/lib/rate-limit";
 
-import { POST } from "./route";
+import { DELETE, POST } from "./route";
 
 function makeRequest(body: unknown) {
   return new Request("https://example.test/api/v1/auth/device-token", {
@@ -77,5 +85,25 @@ describe("POST /api/v1/auth/device-token", () => {
     const response = await POST(makeRequest({ code: "unknown", codeVerifier: "a".repeat(43) }));
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({ error: "Invalid or expired code" });
+  });
+});
+
+describe("DELETE /api/v1/auth/device-token", () => {
+  beforeEach(() => {
+    revoked.length = 0;
+  });
+
+  test("needs a token, not a browser session", async () => {
+    requireApiActor.mockResolvedValueOnce({ id: "user", tokenId: null });
+    expect((await DELETE()).status).toBe(401);
+    requireApiActor.mockResolvedValueOnce(null);
+    expect((await DELETE()).status).toBe(401);
+    expect(revoked).toHaveLength(0);
+  });
+
+  test("revokes the token that sent it", async () => {
+    requireApiActor.mockResolvedValueOnce({ id: "user", tokenId: "token" });
+    expect((await DELETE()).status).toBe(204);
+    expect(revoked).toEqual([{ revokedAt: expect.any(Date) }]);
   });
 });
