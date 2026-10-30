@@ -5,6 +5,7 @@ import { normalizeUsername, REGISTRATION_LOCK_ID } from "@/lib/auth/registration
 import { requireSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
+import { notifyDevices } from "@/lib/push";
 import { accountDeleteSchema, registerSchema } from "@/lib/validation";
 
 export async function PATCH(request: Request) {
@@ -30,6 +31,8 @@ export async function PATCH(request: Request) {
     .update(users)
     .set({ username, updatedAt: new Date() })
     .where(eq(users.id, sessionUser.id));
+
+  notifyDevices(sessionUser);
 
   return Response.json({ ok: true, username });
 }

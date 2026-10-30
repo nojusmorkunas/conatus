@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { allowedProjectIds, requireTaskAccess } from "@/lib/db/access";
 import { reminders, tasks } from "@/lib/db/schema";
+import { notifyDevices } from "@/lib/push";
 import { reminderCreateSchema } from "@/lib/validation";
 
 export async function GET(request: Request) {
@@ -74,6 +75,8 @@ export async function POST(request: Request) {
     .insert(reminders)
     .values({ taskId, userId: user.id, remindAt: new Date(remindAt) })
     .returning();
+
+  notifyDevices(user);
 
   return Response.json(reminder, { status: 201 });
 }

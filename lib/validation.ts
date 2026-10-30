@@ -23,6 +23,10 @@ export const deviceTokenSchema = credentialsSchema.extend({
   deviceName: z.string().trim().min(1).max(100),
 });
 
+export const pushSubscriptionSchema = z.object({
+  url: z.url().max(2048),
+});
+
 export const deviceLoginRequestSchema = z.object({
   device: z.string().trim().min(1).max(100),
   challenge: z.string().regex(/^[A-Za-z0-9_-]{43}$/),

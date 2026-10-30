@@ -11,6 +11,7 @@ import {
   tasks,
   users,
 } from "@/lib/db/schema";
+import { notifyDevices } from "@/lib/push";
 
 const addSchema = z.object({ username: z.string().trim().min(1) });
 const removeSchema = z.object({ userId: z.string().uuid() });
@@ -100,6 +101,8 @@ export async function POST(
     );
   }
 
+  notifyDevices(user, { projects: [id] });
+
   return Response.json(inserted[0], { status: 201 });
 }
 
@@ -149,6 +152,8 @@ export async function DELETE(
     .where(
       and(eq(tasks.projectId, id), eq(tasks.assigneeId, parsed.data.userId)),
     );
+  // The person removed is no longer a member but still has the project cached.
+  notifyDevices(user, { projects: [id], users: [parsed.data.userId] });
 
   return Response.json({ ok: true });
 }

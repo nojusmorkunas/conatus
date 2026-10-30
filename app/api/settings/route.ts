@@ -4,6 +4,7 @@ import { invalid, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
+import { notifyDevices } from "@/lib/push";
 import { settingsSchema } from "@/lib/validation";
 
 export async function PATCH(request: Request) {
@@ -21,6 +22,8 @@ export async function PATCH(request: Request) {
     .update(users)
     .set({ ...parsed.data, updatedAt: new Date() })
     .where(eq(users.id, user.id));
+
+  notifyDevices(user);
 
   return Response.json({ ok: true });
 }

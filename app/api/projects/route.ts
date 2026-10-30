@@ -8,6 +8,7 @@ import { accessibleProjects, requireProjectAccess } from "@/lib/db/access";
 import { logActivity } from "@/lib/db/activity";
 import { validateProjectParent } from "@/lib/db/project-parent";
 import { projects } from "@/lib/db/schema";
+import { notifyDevices } from "@/lib/push";
 import { projectCreateSchema } from "@/lib/validation";
 
 // Deliberately has no updatedSince or includeDeleted, unlike /api/v1/tasks:
@@ -67,6 +68,8 @@ export async function POST(request: Request) {
     projectId: project.id,
     projectName: project.name,
   });
+
+  notifyDevices(user);
 
   return Response.json(project, { status: 201 });
 }

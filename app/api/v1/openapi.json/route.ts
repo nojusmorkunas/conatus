@@ -41,6 +41,19 @@ export async function GET() {
           responses: { "204": { description: "Token revoked" }, "401": { description: "No valid token" } },
         },
       },
+      "/push/subscription": {
+        put: {
+          operationId: "setPushSubscription",
+          description: "Register the push address for the device token that authenticates this request, replacing any earlier one. When something this user can see changes elsewhere, the server POSTs {\"t\":\"sync\"} to the address, at most once every few seconds, and the device syncs. It skips the device that made the change, and forgets the address when it answers 404 or 410 or when the token is revoked. Addresses must use HTTPS and must not point to loopback, private or link-local networks unless the server allows them.",
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["url"], properties: { url: { type: "string", format: "uri", maxLength: 2048 } } } } } },
+          responses: { "204": { description: "Push address saved" }, "400": { description: "Invalid or refused address" }, "401": { description: "No valid device token" } },
+        },
+        delete: {
+          operationId: "deletePushSubscription",
+          description: "Stop push for the device token that authenticates this request.",
+          responses: { "204": { description: "Push address removed" }, "401": { description: "No valid device token" } },
+        },
+      },
       "/filters": {
         get: { operationId: "listFilters", responses: { "200": { description: "Saved filters" } } },
         post: { operationId: "createFilter", responses: { "201": { description: "Created saved filter" } } },

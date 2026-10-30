@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { type ProjectActor, requireTaskAccess, requireProjectAccess } from "@/lib/db/access";
 import { comments } from "@/lib/db/schema";
+import { notifyDevices } from "@/lib/push";
 import { commentUpdateSchema } from "@/lib/validation";
 
 async function ownedComment(user: ProjectActor, commentId: string) {
@@ -42,6 +43,7 @@ export async function PATCH(
     .set({ content: parsed.data.content, updatedAt: new Date() })
     .where(eq(comments.id, id))
     .returning();
+  notifyDevices(user, comment.taskId ? { tasks: [comment.taskId] } : { projects: [comment.projectId!] });
 
   return Response.json(updated);
 }
@@ -58,6 +60,7 @@ export async function DELETE(
   if (!comment) return notFound();
 
   await db.delete(comments).where(eq(comments.id, id));
+  notifyDevices(user, comment.taskId ? { tasks: [comment.taskId] } : { projects: [comment.projectId!] });
 
   return Response.json({ ok: true });
 }

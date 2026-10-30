@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { accessibleProjectIds, requireProjectAccess } from "@/lib/db/access";
 import { sections } from "@/lib/db/schema";
+import { notifyDevices } from "@/lib/push";
 import { sectionCreateSchema } from "@/lib/validation";
 
 export async function GET(request: Request) {
@@ -73,6 +74,8 @@ export async function POST(request: Request) {
       order: generateKeyBetween(before, after),
     })
     .returning();
+
+  notifyDevices(user, { projects: [projectId] });
 
   return Response.json(section, { status: 201 });
 }
