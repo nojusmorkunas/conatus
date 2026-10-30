@@ -153,9 +153,27 @@ export async function GET() {
         patch: { operationId: "updateComment", parameters: [{ $ref: "#/components/parameters/id" }], responses: { "200": { description: "Updated comment" } } },
         delete: { operationId: "deleteComment", parameters: [{ $ref: "#/components/parameters/id" }], responses: { "200": { description: "Deleted comment" } } },
       },
-      "/reminders": { get: { operationId: "listReminders", responses: { "200": { description: "Reminders" } } }, post: { operationId: "createReminder", responses: { "201": { description: "Created reminder" } } } },
+      "/reminders": {
+        get: {
+          operationId: "listReminders",
+          description: "The caller's reminders for one task, or across tasks: with due=1 the unseen ones whose time has come, with pending=1 every unseen one, including those still to come.",
+          parameters: [
+            { name: "taskId", in: "query", schema: { type: "string", format: "uuid" } },
+            { name: "due", in: "query", schema: { type: "string", enum: ["1"] } },
+            { name: "pending", in: "query", schema: { type: "string", enum: ["1"] } },
+          ],
+          responses: { "200": { description: "Reminders" }, "400": { description: "taskId, due or pending is required" } },
+        },
+        post: { operationId: "createReminder", responses: { "201": { description: "Created reminder" } } },
+      },
       "/reminders/{id}": {
-        patch: { operationId: "updateReminder", parameters: [{ $ref: "#/components/parameters/id" }], responses: { "200": { description: "Updated reminder" } } },
+        patch: {
+          operationId: "updateReminder",
+          description: "Send {\"seen\":true} to mark a reminder seen, or {\"remindAt\":\"<ISO time>\"} to move it, for example to snooze it. A moved reminder is unseen again and its email goes out at the new time.",
+          parameters: [{ $ref: "#/components/parameters/id" }],
+          requestBody: { required: true, content: { "application/json": { schema: { oneOf: [{ type: "object", required: ["seen"], properties: { seen: { const: true } } }, { type: "object", required: ["remindAt"], properties: { remindAt: { type: "string", format: "date-time" } } }] } } } },
+          responses: { "200": { description: "Updated reminder" }, "400": { description: "Invalid body" }, "404": { description: "Reminder not found" } },
+        },
         delete: { operationId: "deleteReminder", parameters: [{ $ref: "#/components/parameters/id" }], responses: { "200": { description: "Deleted reminder" } } },
       },
     },

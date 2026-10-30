@@ -6,6 +6,7 @@ import {
   projectCreateSchema,
   projectUpdateSchema,
   commentCreateSchema,
+  reminderUpdateSchema,
   requestPasswordResetSchema,
   resendVerificationSchema,
   resetPasswordSchema,
@@ -190,4 +191,12 @@ test("token expiry accepts ISO dates with Z or a numeric offset", () => {
 
 test("token updates reject empty changes", () => {
   expect(apiTokenUpdateSchema.safeParse({}).success).toBe(false);
+});
+
+test("reminder updates mark one seen or move it", () => {
+  expect(reminderUpdateSchema.safeParse({ seen: true }).success).toBe(true);
+  expect(reminderUpdateSchema.safeParse({ remindAt: "2026-11-02T09:15:00.000Z" }).success).toBe(true);
+  expect(reminderUpdateSchema.safeParse({ seen: false }).success).toBe(false);
+  expect(reminderUpdateSchema.safeParse({ remindAt: "tomorrow" }).success).toBe(false);
+  expect(reminderUpdateSchema.safeParse({}).success).toBe(false);
 });

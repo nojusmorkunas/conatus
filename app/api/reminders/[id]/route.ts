@@ -37,7 +37,11 @@ export async function PATCH(
 
   const [updated] = await db
     .update(reminders)
-    .set({ seenAt: new Date() })
+    .set(
+      "remindAt" in parsed.data
+        ? { remindAt: new Date(parsed.data.remindAt), seenAt: null, sentAt: null }
+        : { seenAt: new Date() },
+    )
     .where(eq(reminders.id, id))
     .returning();
 

@@ -362,9 +362,11 @@ export const reminderCreateSchema = z.object({
   remindAt: z.iso.datetime(),
 });
 
-export const reminderUpdateSchema = z.object({
-  seen: z.literal(true),
-});
+// Either marks a reminder seen, or moves it (a snooze), which makes it due again.
+export const reminderUpdateSchema = z.union([
+  z.object({ seen: z.literal(true) }),
+  z.object({ remindAt: z.iso.datetime() }),
+]);
 
 export type ReminderCreateInput = z.infer<typeof reminderCreateSchema>;
 export type ReminderUpdateInput = z.infer<typeof reminderUpdateSchema>;
