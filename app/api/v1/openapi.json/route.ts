@@ -107,7 +107,7 @@ export async function GET() {
       "/settings": {
         patch: { operationId: "updateSettings", description: "Update name, time zone, date format, first day of the week, daily goal, activity graph source, start page and email reminders. Send only the fields to change.", responses: { "200": { description: "Settings updated" }, "400": { description: "Invalid settings" } } },
       },
-      "/context": { get: { operationId: "getWorkspaceContext", responses: { "200": { description: "Workspace context" } } } },
+      "/context": { get: { operationId: "getWorkspaceContext", description: "The signed-in user, today in their time zone, the Inbox and the token's scopes. user.emailRemindersAvailable is false when the server can't email reminders, because SMTP isn't set up or the user has no email address.", responses: { "200": { description: "Workspace context" } } } },
       "/projects": {
         get: { operationId: "listProjects", responses: { "200": { description: "Projects" } } },
         post: { operationId: "createProject", parameters: [{ name: "Idempotency-Key", in: "header", schema: { type: "string", maxLength: 200 } }], responses: { "201": { description: "Created project" } } },
