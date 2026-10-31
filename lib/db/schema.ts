@@ -160,6 +160,15 @@ export const webhooks = pgTable("webhooks", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// One wake-up address per signed-in device, so it goes when the token does.
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  tokenId: uuid("token_id")
+    .primaryKey()
+    .references(() => apiTokens.id, { onDelete: "cascade" }),
+  url: text("url").notNull(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const projects = pgTable("projects", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id")

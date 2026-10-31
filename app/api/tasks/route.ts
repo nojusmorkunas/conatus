@@ -10,6 +10,7 @@ import { logActivity } from "@/lib/db/activity";
 import { loadProjectTasks } from "@/lib/db/project-tasks";
 import { sections, tasks } from "@/lib/db/schema";
 import { withCommentCounts, withLabels } from "@/lib/db/task-labels";
+import { notifyDevices } from "@/lib/push";
 import { taskCreateSchema } from "@/lib/validation";
 
 export async function GET(request: Request) {
@@ -176,6 +177,7 @@ export async function POST(request: Request) {
     projectId: project.id,
     projectName: project.name,
   });
+  notifyDevices(user, { projects: [project.id] });
 
   return Response.json(task, { status: 201 });
 }

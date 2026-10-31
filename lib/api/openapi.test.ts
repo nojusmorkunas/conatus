@@ -38,7 +38,7 @@ describe("v1 OpenAPI contract", () => {
     expect(contract.openapi).toBe("3.1.0");
     expect(contract.security).toEqual([{ bearerAuth: [] }]);
     expect(Object.keys(contract.paths)).toEqual(expect.arrayContaining([
-      "/auth/device-token", "/context", "/projects", "/projects/{id}", "/tasks", "/tasks/{id}",
+      "/auth/device-token", "/push/subscription", "/context", "/projects", "/projects/{id}", "/tasks", "/tasks/{id}",
       "/tasks/quick-add", "/sections", "/sections/{id}", "/labels", "/labels/{id}",
       "/filters", "/filters/{id}", "/attachments", "/attachments/{id}",
       "/projects/{id}/collaborators", "/projects/{id}/completed-tasks",

@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { type ProjectActor, requireTaskAccess } from "@/lib/db/access";
 import { reminders } from "@/lib/db/schema";
+import { notifyDevices } from "@/lib/push";
 import { reminderUpdateSchema } from "@/lib/validation";
 
 async function ownedReminder(user: ProjectActor, reminderId: string) {
@@ -36,9 +37,15 @@ export async function PATCH(
 
   const [updated] = await db
     .update(reminders)
-    .set({ seenAt: new Date() })
+    .set(
+      "remindAt" in parsed.data
+        ? { remindAt: new Date(parsed.data.remindAt), seenAt: null, sentAt: null }
+        : { seenAt: new Date() },
+    )
     .where(eq(reminders.id, id))
     .returning();
+
+  notifyDevices(user);
 
   return Response.json(updated);
 }
@@ -55,6 +62,8 @@ export async function DELETE(
   if (!reminder) return notFound();
 
   await db.delete(reminders).where(eq(reminders.id, id));
+
+  notifyDevices(user);
 
   return Response.json({ ok: true });
 }

@@ -5,6 +5,7 @@ import { invalid, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { labels } from "@/lib/db/schema";
+import { notifyDevices } from "@/lib/push";
 import { labelCreateSchema } from "@/lib/validation";
 
 export async function GET() {
@@ -45,6 +46,8 @@ export async function POST(request: Request) {
       order: generateKeyBetween(last?.order ?? null, null),
     })
     .returning();
+
+  notifyDevices(user);
 
   return Response.json(label, { status: 201 });
 }

@@ -4,6 +4,7 @@ import { invalid, notFound, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { labels } from "@/lib/db/schema";
+import { notifyDevices } from "@/lib/push";
 import { labelUpdateSchema } from "@/lib/validation";
 
 async function ownedLabel(userId: string, labelId: string) {
@@ -36,6 +37,8 @@ export async function PATCH(
     .where(eq(labels.id, id))
     .returning();
 
+  notifyDevices(user);
+
   return Response.json(updated);
 }
 
@@ -51,6 +54,8 @@ export async function DELETE(
   if (!label) return notFound();
 
   await db.delete(labels).where(eq(labels.id, id));
+
+  notifyDevices(user);
 
   return Response.json({ ok: true });
 }

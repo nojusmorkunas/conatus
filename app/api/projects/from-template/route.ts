@@ -5,6 +5,7 @@ import { invalid, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { projects, sections, tasks } from "@/lib/db/schema";
+import { notifyDevices } from "@/lib/push";
 import { templateSchema } from "@/lib/validation";
 
 export async function POST(request: Request) {
@@ -95,6 +96,8 @@ export async function POST(request: Request) {
 
     return { projectId: project.id, sections: data.sections.length, tasks: data.tasks.length };
   });
+
+  notifyDevices(user);
 
   return Response.json(result, { status: 201 });
 }

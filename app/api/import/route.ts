@@ -5,6 +5,7 @@ import { invalid, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { labels, projects, sections, taskLabels, tasks } from "@/lib/db/schema";
+import { notifyDevices } from "@/lib/push";
 import { importSchema } from "@/lib/validation";
 
 export async function POST(request: Request) {
@@ -177,6 +178,8 @@ export async function POST(request: Request) {
       labels: labelsToCreate.length,
     };
   });
+
+  notifyDevices(user);
 
   return Response.json(counts, { status: 201 });
 }

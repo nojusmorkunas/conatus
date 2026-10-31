@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { allowedProjectIds } from "@/lib/db/access";
 import { projectCollaborators, projects, tasks } from "@/lib/db/schema";
+import { notifyDevices } from "@/lib/push";
 import { subtreeIds } from "@/lib/task-tree";
 
 export async function POST(
@@ -76,6 +77,7 @@ export async function POST(
       await tx.update(tasks).set({ order }).where(eq(tasks.id, id));
     }
   });
+  notifyDevices(user, { projects: [row.task.projectId] });
 
   return Response.json({ ok: true });
 }

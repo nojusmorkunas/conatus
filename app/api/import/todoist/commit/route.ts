@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth/session";
 import { todayInTimezone } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { comments, labels, projects, sections, taskLabels, tasks, users } from "@/lib/db/schema";
+import { notifyDevices } from "@/lib/push";
 import { parseTodoistImportSource } from "@/lib/todoist-upload";
 
 export const runtime = "nodejs";
@@ -287,6 +288,7 @@ export async function POST(request: Request) {
       return counts;
     });
 
+    notifyDevices(user);
     return Response.json(result, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "The import failed.";

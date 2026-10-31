@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { allowedProjectIds, requireTaskAccess } from "@/lib/db/access";
 import { reminders, tasks } from "@/lib/db/schema";
+import { notifyDevices } from "@/lib/push";
 import { reminderCreateSchema } from "@/lib/validation";
 
 export async function GET(request: Request) {
@@ -14,8 +15,11 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const taskId = url.searchParams.get("taskId");
   const due = url.searchParams.get("due");
+  // pending also lists the ones still to come, so a device can set its own
+  // alarms for reminders made elsewhere.
+  const pending = url.searchParams.get("pending");
 
-  if (due) {
+  if (due || pending) {
     const allowed = await allowedProjectIds(user);
     const dueReminders = await db
       .select({
@@ -30,7 +34,7 @@ export async function GET(request: Request) {
       .where(
         and(
           eq(reminders.userId, user.id),
-          lte(reminders.remindAt, new Date()),
+          pending ? undefined : lte(reminders.remindAt, new Date()),
           isNull(reminders.seenAt),
           isNull(tasks.deletedAt),
           allowed === null ? undefined : inArray(tasks.projectId, [...allowed]),
@@ -74,6 +78,8 @@ export async function POST(request: Request) {
     .insert(reminders)
     .values({ taskId, userId: user.id, remindAt: new Date(remindAt) })
     .returning();
+
+  notifyDevices(user);
 
   return Response.json(reminder, { status: 201 });
 }

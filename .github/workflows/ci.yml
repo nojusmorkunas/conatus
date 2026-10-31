@@ -113,6 +113,7 @@ jobs:
       - name: Run end-to-end tests
         env:
           REGISTRATION_MODE: open
+          PUSH_ALLOW_PRIVATE_NETWORKS: "1"
           PLAYWRIGHT_SKIP_WEBSERVER: "1"
         run: |
           npm start &

@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { type ProjectActor, requireProjectAccess } from "@/lib/db/access";
 import { sections, taskLabels, tasks } from "@/lib/db/schema";
+import { notifyDevices } from "@/lib/push";
 import { sectionUpdateSchema } from "@/lib/validation";
 
 async function accessibleSection(user: ProjectActor, sectionId: string) {
@@ -49,6 +50,7 @@ export async function PATCH(
         .where(eq(tasks.sectionId, id));
       return moved;
     });
+    notifyDevices(user, { projects: [section.projectId, targetProjectId] });
     return Response.json(updated);
   }
 
@@ -56,6 +58,7 @@ export async function PATCH(
     const [updated] = await db.update(sections)
       .set({ isArchived: parsed.data.isArchived, updatedAt: new Date() })
       .where(eq(sections.id, id)).returning();
+    notifyDevices(user, { projects: [section.projectId] });
     return Response.json(updated);
   }
 
@@ -119,6 +122,7 @@ export async function PATCH(
       .set({ name: parsed.data.name, updatedAt: new Date() })
       .where(eq(sections.id, id))
       .returning();
+    notifyDevices(user, { projects: [section.projectId] });
     return Response.json(updated);
   }
 
@@ -148,6 +152,7 @@ export async function PATCH(
       })
       .where(eq(sections.id, id))
       .returning();
+    notifyDevices(user, { projects: [section.projectId] });
     return Response.json(updated);
   }
 
@@ -170,6 +175,7 @@ export async function PATCH(
     .where(eq(sections.id, id))
     .returning();
 
+  notifyDevices(user, { projects: [section.projectId] });
   return Response.json(updated);
 }
 
@@ -197,6 +203,7 @@ export async function DELETE(
       .where(eq(tasks.sectionId, id));
     await tx.delete(sections).where(eq(sections.id, id));
   });
+  notifyDevices(user, { projects: [section.projectId] });
 
   return Response.json({ ok: true });
 }

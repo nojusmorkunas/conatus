@@ -8,6 +8,7 @@ import { requireProjectAccess } from "@/lib/db/access";
 import { logActivity } from "@/lib/db/activity";
 import { validateProjectParent } from "@/lib/db/project-parent";
 import { projects, sections } from "@/lib/db/schema";
+import { notifyDevices } from "@/lib/push";
 import { projectUpdateSchema } from "@/lib/validation";
 
 export async function GET(
@@ -158,6 +159,8 @@ export async function PATCH(
     });
   }
 
+  notifyDevices(user, { projects: [id] });
+
   return Response.json(updated);
 }
 
@@ -215,6 +218,8 @@ export async function DELETE(
     projectId: null,
     projectName: project.name,
   });
+
+  notifyDevices(user, { projects: [...deletedIds] });
 
   return Response.json({ ok: true });
 }

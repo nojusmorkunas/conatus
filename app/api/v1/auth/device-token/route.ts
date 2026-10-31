@@ -12,7 +12,7 @@ import { verifyPassword } from "@/lib/auth/password";
 import { normalizeUsername } from "@/lib/auth/registration";
 import { requireApiActor } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { apiTokens, users } from "@/lib/db/schema";
+import { apiTokens, pushSubscriptions, users } from "@/lib/db/schema";
 import { deviceCodeExchangeSchema, deviceTokenSchema } from "@/lib/validation";
 
 // POST is the one unauthenticated route under /api/v1: native clients cannot hold
@@ -97,6 +97,7 @@ export async function DELETE() {
     .update(apiTokens)
     .set({ revokedAt: new Date() })
     .where(eq(apiTokens.id, actor.tokenId));
+  await db.delete(pushSubscriptions).where(eq(pushSubscriptions.tokenId, actor.tokenId));
 
   return new Response(null, { status: 204 });
 }

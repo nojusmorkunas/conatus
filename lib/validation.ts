@@ -23,6 +23,10 @@ export const deviceTokenSchema = credentialsSchema.extend({
   deviceName: z.string().trim().min(1).max(100),
 });
 
+export const pushSubscriptionSchema = z.object({
+  url: z.url().max(2048),
+});
+
 export const deviceLoginRequestSchema = z.object({
   device: z.string().trim().min(1).max(100),
   challenge: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
@@ -358,9 +362,11 @@ export const reminderCreateSchema = z.object({
   remindAt: z.iso.datetime(),
 });
 
-export const reminderUpdateSchema = z.object({
-  seen: z.literal(true),
-});
+// Either marks a reminder seen, or moves it (a snooze), which makes it due again.
+export const reminderUpdateSchema = z.union([
+  z.object({ seen: z.literal(true) }),
+  z.object({ remindAt: z.iso.datetime() }),
+]);
 
 export type ReminderCreateInput = z.infer<typeof reminderCreateSchema>;
 export type ReminderUpdateInput = z.infer<typeof reminderUpdateSchema>;

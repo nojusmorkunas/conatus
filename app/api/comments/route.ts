@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { requireProjectAccess, requireTaskAccess } from "@/lib/db/access";
 import { logActivity } from "@/lib/db/activity";
 import { comments, projects } from "@/lib/db/schema";
+import { notifyDevices } from "@/lib/push";
 import { commentCreateSchema } from "@/lib/validation";
 
 export async function GET(request: Request) {
@@ -64,6 +65,7 @@ export async function POST(request: Request) {
       projectId: task.projectId,
       projectName: project?.name ?? "",
     });
+    notifyDevices(user, { projects: [task.projectId] });
     return Response.json(comment, { status: 201 });
   }
 
@@ -82,6 +84,7 @@ export async function POST(request: Request) {
     projectId: projectId!,
     projectName: access.project.name,
   });
+  notifyDevices(user, { projects: [projectId!] });
 
   return Response.json(comment, { status: 201 });
 }

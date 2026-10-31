@@ -5,7 +5,7 @@ import { tokenSelect } from "@/app/api/tokens/route";
 import { invalid, notFound, unauthorized } from "@/lib/api/responses";
 import { requireSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { apiTokens } from "@/lib/db/schema";
+import { apiTokens, pushSubscriptions } from "@/lib/db/schema";
 import { agentTokenScopes } from "@/lib/token-access";
 import { apiTokenUpdateSchema } from "@/lib/validation";
 
@@ -24,6 +24,7 @@ export async function DELETE(
     .returning({ id: apiTokens.id });
 
   if (!deleted) return notFound();
+  await db.delete(pushSubscriptions).where(eq(pushSubscriptions.tokenId, deleted.id));
 
   return Response.json({ ok: true });
 }

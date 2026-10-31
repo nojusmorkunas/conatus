@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { allowedProjectIds } from "@/lib/db/access";
 import { projects } from "@/lib/db/schema";
+import { notifyDevices } from "@/lib/push";
 
 export async function POST(
   _request: Request,
@@ -51,6 +52,8 @@ export async function POST(
     .update(projects)
     .set({ deletedAt: null, updatedAt: new Date() })
     .where(inArray(projects.id, [...restoredIds]));
+
+  notifyDevices(user, { projects: [...restoredIds] });
 
   return Response.json({ ok: true });
 }

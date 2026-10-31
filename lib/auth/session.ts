@@ -93,5 +93,5 @@ export async function requireApiActor(
 
 export async function requireUser(requiredScope = "legacy:full") {
   const actor = await requireApiActor(requiredScope);
-  return actor ? { id: actor.id, projectIds: actor.projectIds } : null;
+  return actor ? { id: actor.id, projectIds: actor.projectIds, tokenId: actor.tokenId } : null;
 }

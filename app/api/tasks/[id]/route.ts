@@ -12,6 +12,7 @@ import {
 } from "@/lib/db/access";
 import { logActivity } from "@/lib/db/activity";
 import { labels, projects, sections, taskLabels, tasks, users } from "@/lib/db/schema";
+import { notifyDevices } from "@/lib/push";
 import { nextOccurrenceWithinEnd } from "@/lib/recurrence";
 import { withLabels } from "@/lib/db/task-labels";
 import { taskUpdateSchema } from "@/lib/validation";
@@ -118,6 +119,7 @@ export async function PATCH(
         projectName: project?.name ?? "",
       });
 
+      notifyDevices(user, { projects: [task.projectId] });
       return Response.json(updated);
     }
 
@@ -177,6 +179,7 @@ export async function PATCH(
       projectName: project?.name ?? "",
     });
 
+    notifyDevices(user, { projects: [task.projectId] });
     return Response.json(updated);
   }
 
@@ -203,6 +206,8 @@ export async function PATCH(
       .where(eq(tasks.id, id))
       .returning();
     const [withTaskLabels] = await withLabels([updated], user.id);
+    // Labels are personal, so only the actor's devices care.
+    notifyDevices(user);
     return Response.json(withTaskLabels);
   }
 
@@ -291,6 +296,7 @@ export async function PATCH(
       }
       return moved;
     });
+    notifyDevices(user, { projects: [task.projectId] });
     return Response.json(updated);
   }
 
@@ -317,6 +323,7 @@ export async function PATCH(
       .set({ order: generateKeyBetween(before, after), updatedAt: new Date() })
       .where(eq(tasks.id, id))
       .returning();
+    notifyDevices(user, { projects: [task.projectId] });
     return Response.json(updated);
   }
 
@@ -462,6 +469,7 @@ export async function PATCH(
     }
     return updated;
   });
+  notifyDevices(user, { projects: [task.projectId, targetProjectId] });
 
   return Response.json(updated);
 }
@@ -502,6 +510,7 @@ export async function DELETE(
     projectId: task.projectId,
     projectName: project?.name ?? "",
   });
+  notifyDevices(user, { projects: [task.projectId] });
 
   return Response.json({ ok: true });
 }

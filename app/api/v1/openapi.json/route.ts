@@ -41,6 +41,19 @@ export async function GET() {
           responses: { "204": { description: "Token revoked" }, "401": { description: "No valid token" } },
         },
       },
+      "/push/subscription": {
+        put: {
+          operationId: "setPushSubscription",
+          description: "Register the push address for the device token that authenticates this request, replacing any earlier one. When something this user can see changes elsewhere, the server POSTs {\"t\":\"sync\"} to the address, at most once every few seconds, and the device syncs. It skips the device that made the change, and forgets the address when it answers 404 or 410 or when the token is revoked. Addresses must use HTTPS and must not point to loopback, private or link-local networks unless the server allows them.",
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["url"], properties: { url: { type: "string", format: "uri", maxLength: 2048 } } } } } },
+          responses: { "204": { description: "Push address saved" }, "400": { description: "Invalid or refused address" }, "401": { description: "No valid device token" } },
+        },
+        delete: {
+          operationId: "deletePushSubscription",
+          description: "Stop push for the device token that authenticates this request.",
+          responses: { "204": { description: "Push address removed" }, "401": { description: "No valid device token" } },
+        },
+      },
       "/filters": {
         get: { operationId: "listFilters", responses: { "200": { description: "Saved filters" } } },
         post: { operationId: "createFilter", responses: { "201": { description: "Created saved filter" } } },
@@ -140,9 +153,27 @@ export async function GET() {
         patch: { operationId: "updateComment", parameters: [{ $ref: "#/components/parameters/id" }], responses: { "200": { description: "Updated comment" } } },
         delete: { operationId: "deleteComment", parameters: [{ $ref: "#/components/parameters/id" }], responses: { "200": { description: "Deleted comment" } } },
       },
-      "/reminders": { get: { operationId: "listReminders", responses: { "200": { description: "Reminders" } } }, post: { operationId: "createReminder", responses: { "201": { description: "Created reminder" } } } },
+      "/reminders": {
+        get: {
+          operationId: "listReminders",
+          description: "The caller's reminders for one task, or across tasks: with due=1 the unseen ones whose time has come, with pending=1 every unseen one, including those still to come.",
+          parameters: [
+            { name: "taskId", in: "query", schema: { type: "string", format: "uuid" } },
+            { name: "due", in: "query", schema: { type: "string", enum: ["1"] } },
+            { name: "pending", in: "query", schema: { type: "string", enum: ["1"] } },
+          ],
+          responses: { "200": { description: "Reminders" }, "400": { description: "taskId, due or pending is required" } },
+        },
+        post: { operationId: "createReminder", responses: { "201": { description: "Created reminder" } } },
+      },
       "/reminders/{id}": {
-        patch: { operationId: "updateReminder", parameters: [{ $ref: "#/components/parameters/id" }], responses: { "200": { description: "Updated reminder" } } },
+        patch: {
+          operationId: "updateReminder",
+          description: "Send {\"seen\":true} to mark a reminder seen, or {\"remindAt\":\"<ISO time>\"} to move it, for example to snooze it. A moved reminder is unseen again and its email goes out at the new time.",
+          parameters: [{ $ref: "#/components/parameters/id" }],
+          requestBody: { required: true, content: { "application/json": { schema: { oneOf: [{ type: "object", required: ["seen"], properties: { seen: { const: true } } }, { type: "object", required: ["remindAt"], properties: { remindAt: { type: "string", format: "date-time" } } }] } } } },
+          responses: { "200": { description: "Updated reminder" }, "400": { description: "Invalid body" }, "404": { description: "Reminder not found" } },
+        },
         delete: { operationId: "deleteReminder", parameters: [{ $ref: "#/components/parameters/id" }], responses: { "200": { description: "Deleted reminder" } } },
       },
     },

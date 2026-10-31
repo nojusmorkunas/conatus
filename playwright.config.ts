@@ -25,8 +25,9 @@ export default defineConfig({
     : {
         command: "npm run dev",
         // Browser feature tests create isolated disposable users. Production
-        // and normal development default to invite-only registration.
-        env: { REGISTRATION_MODE: "open" },
+        // and normal development default to invite-only registration. The
+        // push test listens for wake-ups on loopback.
+        env: { REGISTRATION_MODE: "open", PUSH_ALLOW_PRIVATE_NETWORKS: "1" },
         url: baseURL,
         reuseExistingServer: true,
         timeout: 120_000,
