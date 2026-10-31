@@ -19,7 +19,8 @@ test("scoped v1 API supports context, idempotent creation, listing and scope den
 
   const context = await request.get("/api/v1/context", { headers });
   expect(context.status()).toBe(200);
-  await expect(context.json()).resolves.toMatchObject({ apiVersion: "v1", user: { username } });
+  // Registered without an email address, so the server can't email reminders.
+  await expect(context.json()).resolves.toMatchObject({ apiVersion: "v1", user: { username, emailRemindersAvailable: false } });
 
   const createHeaders = { ...headers, "Idempotency-Key": "same-request" };
   const first = await request.post("/api/v1/tasks", {
