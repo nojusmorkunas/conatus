@@ -65,6 +65,11 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ matrix.image }}
+          # The raw tag below sets latest and latest-ops. Left on auto, the
+          # semver tags add a bare latest to the ops image too, so the ops
+          # image holds latest until the application job overwrites it.
+          flavor: |
+            latest=false
           tags: |
             type=semver,pattern={{version}},value=${{ github.event.release.tag_name }},suffix=${{ matrix.tag_suffix }}
             type=semver,pattern={{major}}.{{minor}},value=${{ github.event.release.tag_name }},suffix=${{ matrix.tag_suffix }}
