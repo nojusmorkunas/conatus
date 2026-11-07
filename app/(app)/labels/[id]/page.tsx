@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { labels, projects, tasks, users } from "@/lib/db/schema";
 import { todayInTimezone } from "@/lib/dates";
 import { withCommentCounts, withLabels } from "@/lib/db/task-labels";
+import { dueOrder } from "@/lib/db/task-order";
 import { ProjectColorDot } from "@/components/projects/project-color-dot";
 import { MobilePageHeader } from "@/components/projects/mobile-sidebar-trigger";
 import { TaskDateList } from "@/components/tasks/task-date-list";
@@ -61,7 +62,7 @@ export default async function LabelPage({
           .from(tasks)
           .innerJoin(projects, eq(projects.id, tasks.projectId))
           .where(and(eq(tasks.userId, user.id), eq(tasks.isCompleted, false), isNull(tasks.deletedAt), isNull(projects.deletedAt)))
-          .orderBy(tasks.dueDate, tasks.order),
+          .orderBy(...dueOrder),
         user.id,
       ),
     ),

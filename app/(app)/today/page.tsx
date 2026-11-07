@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { accessibleProjectIds } from "@/lib/db/access";
 import { labels, tasks, users } from "@/lib/db/schema";
 import { withCommentCounts, withLabels } from "@/lib/db/task-labels";
+import { dueOrder } from "@/lib/db/task-order";
 import { todayInTimezone } from "@/lib/dates";
 import { TaskDateList } from "@/components/tasks/task-date-list";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -34,7 +35,7 @@ export default async function TodayPage() {
             lte(tasks.dueDate, today),
           ),
         )
-        .orderBy(tasks.dueDate, tasks.order),
+        .orderBy(...dueOrder),
       user.id,
     ),
   );
