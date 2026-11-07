@@ -109,10 +109,12 @@ async function seed(tx: Tx) {
       instanceRole: "admin",
     });
     // A seeded workspace is already set up, so skip the first-run wizard that
-    // would otherwise intercept every route until it is completed.
+    // would otherwise intercept every route until it is completed. The seeded
+    // admin also skips beta invites, which would otherwise show up in the
+    // marketing screenshots.
     [owner] = await tx
       .update(users)
-      .set({ onboardingCompletedAt: new Date() })
+      .set({ onboardingCompletedAt: new Date(), betaInvitesOptOut: true })
       .where(eq(users.id, created.id))
       .returning();
   }

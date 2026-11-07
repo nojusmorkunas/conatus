@@ -42,6 +42,14 @@ export const users = pgTable(
     // Null only for a newly-created account. The onboarding completion route
     // records the first-run choice so the flow is never shown on every visit.
     onboardingCompletedAt: timestamp("onboarding_completed_at"),
+    // Ids of the beta invites this account has already been shown; each one
+    // shows once. See lib/beta-invites.
+    seenBetaInvites: jsonb("seen_beta_invites")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    // "Don't ask me about this or future betas": no invite is shown again.
+    betaInvitesOptOut: boolean("beta_invites_opt_out").notNull().default(false),
     // Bearer credential for the iCal feed URL; null means the feed is disabled.
     icalToken: text("ical_token").unique(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
