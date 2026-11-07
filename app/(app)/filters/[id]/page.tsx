@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { filters, labels, projects, tasks, users } from "@/lib/db/schema";
 import { withCommentCounts, withLabels } from "@/lib/db/task-labels";
+import { dueOrder } from "@/lib/db/task-order";
 import { todayInTimezone } from "@/lib/dates";
 import { parseFilter, evaluateFilter, type FilterableTask } from "@/lib/filter";
 import { TaskDateList } from "@/components/tasks/task-date-list";
@@ -80,7 +81,7 @@ export default async function FilterPage({
         .from(tasks)
         .innerJoin(projects, eq(projects.id, tasks.projectId))
         .where(and(eq(tasks.userId, user.id), eq(tasks.isCompleted, false), isNull(tasks.deletedAt), isNull(projects.deletedAt)))
-        .orderBy(tasks.dueDate, tasks.order),
+        .orderBy(...dueOrder),
       user.id,
     ),
   );
