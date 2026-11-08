@@ -37,10 +37,10 @@ afterEach(() => {
 });
 
 describe("POST /api/beta-invite", () => {
-  test("records the invite as seen", async () => {
+  test("records the answer", async () => {
     expect((await post({ inviteId: "android-test" })).status).toBe(204);
     expect(updates).toHaveLength(1);
-    expect(Object.keys(updates[0])).toEqual(["seenBetaInvites"]);
+    expect(Object.keys(updates[0])).toEqual(["dismissedBetaInvites"]);
   });
 
   test("opts out of every beta invite", async () => {

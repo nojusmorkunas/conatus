@@ -1,60 +1,74 @@
 import { describe, expect, test } from "vitest";
 
-import { betaInviteFor, currentBetaInvite, type BetaInvite } from "./beta-invites";
+import { activeBetaInvite, betaInviteFor, currentBetaInvite, type BetaInvite } from "./beta-invites";
 
 const invite: BetaInvite = {
   id: "android-test",
+  name: "Android beta",
   title: "Help test",
   body: "Body",
   joinUrl: "https://example.test/beta",
+  alternative: null,
   endsOn: "2027-02-28",
 };
 
 const admin = {
   instanceRole: "admin",
   onboardingCompletedAt: new Date("2026-01-01T00:00:00Z"),
-  seenBetaInvites: [] as string[],
+  dismissedBetaInvites: [] as string[],
   betaInvitesOptOut: false,
 };
 
 const now = new Date("2026-11-07T12:00:00Z");
 
-describe("betaInviteFor", () => {
-  test("shows an admin an invite they have not seen", () => {
-    expect(betaInviteFor(admin, now, invite)).toBe(invite);
+describe("activeBetaInvite", () => {
+  test("runs until its last day, even on an old release", () => {
+    expect(activeBetaInvite(now, invite, {})).toBe(invite);
+    expect(activeBetaInvite(new Date("2027-02-28T23:59:59Z"), invite, {})).toBe(invite);
+    expect(activeBetaInvite(new Date("2027-03-01T00:00:00Z"), invite, {})).toBeNull();
   });
 
-  test("never shows members", () => {
-    expect(betaInviteFor({ ...admin, instanceRole: "member" }, now, invite)).toBeNull();
+  test("CONATUS_BETA_INVITES=0 turns it off for the server", () => {
+    expect(activeBetaInvite(now, invite, { CONATUS_BETA_INVITES: "0" })).toBeNull();
+    expect(activeBetaInvite(now, invite, { CONATUS_BETA_INVITES: "1" })).toBe(invite);
+  });
+
+  test("is null when there is no invite", () => {
+    expect(activeBetaInvite(now, null, {})).toBeNull();
+  });
+
+  test("the current invite is well formed", () => {
+    if (!currentBetaInvite) return;
+    expect(currentBetaInvite.endsOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(new URL(currentBetaInvite.joinUrl).protocol).toBe("https:");
+  });
+});
+
+describe("betaInviteFor", () => {
+  test("pops up for an admin who has not answered it", () => {
+    expect(betaInviteFor(admin, invite)).toBe(invite);
+  });
+
+  test("never pops up for members", () => {
+    expect(betaInviteFor({ ...admin, instanceRole: "member" }, invite)).toBeNull();
   });
 
   test("waits until onboarding is done", () => {
-    expect(betaInviteFor({ ...admin, onboardingCompletedAt: null }, now, invite)).toBeNull();
+    expect(betaInviteFor({ ...admin, onboardingCompletedAt: null }, invite)).toBeNull();
   });
 
-  test("shows each invite once", () => {
-    expect(betaInviteFor({ ...admin, seenBetaInvites: ["android-test"] }, now, invite)).toBeNull();
-    expect(betaInviteFor({ ...admin, seenBetaInvites: ["older-invite"] }, now, invite)).toBe(invite);
+  test("pops up once per invite", () => {
+    expect(betaInviteFor({ ...admin, dismissedBetaInvites: ["android-test"] }, invite)).toBeNull();
+    expect(betaInviteFor({ ...admin, dismissedBetaInvites: ["older-invite"] }, invite)).toBe(invite);
   });
 
   test("respects the opt-out for this and every later invite", () => {
     const optedOut = { ...admin, betaInvitesOptOut: true };
-    expect(betaInviteFor(optedOut, now, invite)).toBeNull();
-    expect(betaInviteFor(optedOut, now, { ...invite, id: "ios-test" })).toBeNull();
+    expect(betaInviteFor(optedOut, invite)).toBeNull();
+    expect(betaInviteFor(optedOut, { ...invite, id: "ios-test" })).toBeNull();
   });
 
-  test("stops after the last day, even on an old release", () => {
-    expect(betaInviteFor(admin, new Date("2027-02-28T23:59:59Z"), invite)).toBe(invite);
-    expect(betaInviteFor(admin, new Date("2027-03-01T00:00:00Z"), invite)).toBeNull();
-  });
-
-  test("shows nothing when there is no current invite", () => {
-    expect(betaInviteFor(admin, now, null)).toBeNull();
-  });
-
-  test("the current invite has a valid end date", () => {
-    if (!currentBetaInvite) return;
-    expect(currentBetaInvite.endsOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(new URL(currentBetaInvite.joinUrl).protocol).toBe("https:");
+  test("pops up nothing when no invite is running", () => {
+    expect(betaInviteFor(admin, null)).toBeNull();
   });
 });

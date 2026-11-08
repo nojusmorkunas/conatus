@@ -2,6 +2,9 @@ import { redirect } from "next/navigation";
 import { and, desc, eq, gt, isNull, ne } from "drizzle-orm";
 
 import { oidcProviderName } from "@/lib/auth/oidc";
+import { activeBetaInvite } from "@/lib/beta-invites";
+import { buttonVariants } from "@/components/ui/button";
+import { BetaInviteAlternative } from "@/components/beta-invite-dialog";
 import { requireSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { accessibleProjects } from "@/lib/db/access";
@@ -23,6 +26,7 @@ export default async function SettingsPage({
   const sessionUser = await requireSessionUser();
   if (!sessionUser) redirect("/login");
   const ssoName = oidcProviderName();
+  const betaInvite = activeBetaInvite();
   const { sso } = await searchParams;
 
   const [user] = await db
@@ -142,6 +146,7 @@ export default async function SettingsPage({
               ["api-tokens", "API tokens"],
               ["webhooks", "Webhooks"],
               ["data", "Data"],
+              ...(betaInvite ? [["beta", betaInvite.name]] : []),
             ].map(([id, label]) => (
               <a
                 key={id}
@@ -224,6 +229,28 @@ export default async function SettingsPage({
               createdAt: webhook.createdAt.toISOString(),
             }))}
           />
+          {/* Open to everyone, including anyone who dismissed the pop-up. */}
+          {betaInvite && (
+            <section
+              id="beta"
+              aria-labelledby="beta-heading"
+              className="scroll-mt-6 space-y-3 rounded-md border p-5"
+            >
+              <h2 id="beta-heading" className="text-lg font-semibold">{betaInvite.name}</h2>
+              <p className="text-sm text-muted-foreground">{betaInvite.body}</p>
+              {betaInvite.alternative && (
+                <BetaInviteAlternative {...betaInvite.alternative} className="text-sm" />
+              )}
+              <a
+                href={betaInvite.joinUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={buttonVariants()}
+              >
+                Join the beta
+              </a>
+            </section>
+          )}
         </div>
       </div>
     </div>

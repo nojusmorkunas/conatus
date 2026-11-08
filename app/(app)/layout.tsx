@@ -7,7 +7,7 @@ import { accessibleProjects } from "@/lib/db/access";
 import { filters, labels, tasks, users } from "@/lib/db/schema";
 import { ProjectSidebar } from "@/components/projects/project-sidebar";
 import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
-import { BetaInviteBanner } from "@/components/beta-invite-banner";
+import { BetaInviteDialog } from "@/components/beta-invite-dialog";
 import { betaInviteFor } from "@/lib/beta-invites";
 import { Toaster } from "@/components/ui/toast";
 import { todayInTimezone } from "@/lib/dates";
@@ -43,7 +43,7 @@ export default async function AppLayout({
         updatedAt: users.updatedAt,
         instanceRole: users.instanceRole,
         onboardingCompletedAt: users.onboardingCompletedAt,
-        seenBetaInvites: users.seenBetaInvites,
+        dismissedBetaInvites: users.dismissedBetaInvites,
         betaInvitesOptOut: users.betaInvitesOptOut,
       })
       .from(users)
@@ -90,18 +90,17 @@ export default async function AppLayout({
         counts={counts}
         todayCount={todayCount}
       />
-      <main className="flex-1 min-w-0 overflow-y-auto pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0">
-        <BetaInviteBanner
-          invite={betaInvite && {
-            id: betaInvite.id,
-            title: betaInvite.title,
-            body: betaInvite.body,
-            joinUrl: betaInvite.joinUrl,
-          }}
-        />
-        {children}
-      </main>
+      <main className="flex-1 min-w-0 overflow-y-auto pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0">{children}</main>
       <Toaster />
+      <BetaInviteDialog
+        invite={betaInvite && {
+          id: betaInvite.id,
+          title: betaInvite.title,
+          body: betaInvite.body,
+          joinUrl: betaInvite.joinUrl,
+          alternative: betaInvite.alternative,
+        }}
+      />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 {
-  "id": "5d4f932a-684a-4ee9-b380-f8c51e770985",
+  "id": "a9058fed-4e50-4f0f-af02-5b08a22fc4da",
   "prevId": "996002ce-2ace-4095-a6cf-8872dde42e6e",
   "version": "7",
   "dialect": "postgresql",
@@ -1919,8 +1919,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "seen_beta_invites": {
-          "name": "seen_beta_invites",
+        "dismissed_beta_invites": {
+          "name": "dismissed_beta_invites",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true,

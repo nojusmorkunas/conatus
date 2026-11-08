@@ -110,6 +110,8 @@ services:
       CONATUS_DEV_MODE: ${CONATUS_DEV_MODE:-0}
       # Lets phones register push addresses on private networks.
       PUSH_ALLOW_PRIVATE_NETWORKS: ${PUSH_ALLOW_PRIVATE_NETWORKS:-0}
+      # 0 hides invites to test new Conatus apps, in the pop-up and in Settings.
+      CONATUS_BETA_INVITES: ${CONATUS_BETA_INVITES:-1}
       # The bundled Silo unless .env points at an external S3 server.
       S3_ENDPOINT: ${CONATUS_S3_ENDPOINT:-minio}
       S3_PORT: ${CONATUS_S3_PORT:-9000}

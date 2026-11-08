@@ -42,9 +42,9 @@ export const users = pgTable(
     // Null only for a newly-created account. The onboarding completion route
     // records the first-run choice so the flow is never shown on every visit.
     onboardingCompletedAt: timestamp("onboarding_completed_at"),
-    // Ids of the beta invites this account has already been shown; each one
-    // shows once. See lib/beta-invites.
-    seenBetaInvites: jsonb("seen_beta_invites")
+    // Ids of the beta invites this account has answered; an answered invite
+    // never shows again. See lib/beta-invites.
+    dismissedBetaInvites: jsonb("dismissed_beta_invites")
       .$type<string[]>()
       .notNull()
       .default(sql`'[]'::jsonb`),

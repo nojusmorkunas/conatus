@@ -27,7 +27,7 @@ export const pushSubscriptionSchema = z.object({
   url: z.url().max(2048),
 });
 
-export const betaInviteSeenSchema = z.object({
+export const betaInviteAnswerSchema = z.object({
   inviteId: z.string().min(1).max(100),
   optOut: z.boolean().default(false),
 });
