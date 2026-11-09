@@ -26,8 +26,9 @@ export default defineConfig({
         command: "npm run dev",
         // Browser feature tests create isolated disposable users. Production
         // and normal development default to invite-only registration. The
-        // push test listens for wake-ups on loopback.
-        env: { REGISTRATION_MODE: "open", PUSH_ALLOW_PRIVATE_NETWORKS: "1" },
+        // push test listens for wake-ups on loopback. Whichever test registers
+        // first becomes the admin, and the beta invite would cover its page.
+        env: { REGISTRATION_MODE: "open", PUSH_ALLOW_PRIVATE_NETWORKS: "1", CONATUS_BETA_INVITES: "0" },
         url: baseURL,
         reuseExistingServer: true,
         timeout: 120_000,

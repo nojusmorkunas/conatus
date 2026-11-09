@@ -1,0 +1,2 @@
+ALTER TABLE "users" ADD COLUMN "dismissed_beta_invites" jsonb DEFAULT '[]'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "users" ADD COLUMN "beta_invites_opt_out" boolean DEFAULT false NOT NULL;

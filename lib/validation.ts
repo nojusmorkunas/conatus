@@ -27,6 +27,11 @@ export const pushSubscriptionSchema = z.object({
   url: z.url().max(2048),
 });
 
+export const betaInviteAnswerSchema = z.object({
+  inviteId: z.string().min(1).max(100),
+  optOut: z.boolean().default(false),
+});
+
 export const deviceLoginRequestSchema = z.object({
   device: z.string().trim().min(1).max(100),
   challenge: z.string().regex(/^[A-Za-z0-9_-]{43}$/),

@@ -7,6 +7,8 @@ import { accessibleProjects } from "@/lib/db/access";
 import { filters, labels, tasks, users } from "@/lib/db/schema";
 import { ProjectSidebar } from "@/components/projects/project-sidebar";
 import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
+import { BetaInviteDialog } from "@/components/beta-invite-dialog";
+import { betaInviteFor } from "@/lib/beta-invites";
 import { Toaster } from "@/components/ui/toast";
 import { todayInTimezone } from "@/lib/dates";
 // Read on the server so the client bundle carries the version string, not the whole package.json.
@@ -39,6 +41,10 @@ export default async function AppLayout({
         image: users.image,
         timezone: users.timezone,
         updatedAt: users.updatedAt,
+        instanceRole: users.instanceRole,
+        onboardingCompletedAt: users.onboardingCompletedAt,
+        dismissedBetaInvites: users.dismissedBetaInvites,
+        betaInvitesOptOut: users.betaInvitesOptOut,
       })
       .from(users)
       .where(eq(users.id, user.id))
@@ -64,6 +70,7 @@ export default async function AppLayout({
     : [];
   const counts = Object.fromEntries(taskCounts.map(({ projectId, count }) => [projectId, count]));
   const todayCount = taskCounts.reduce((total, row) => total + Number(row.todayCount), 0);
+  const betaInvite = betaInviteFor(account);
 
   return (
     <div className="flex h-dvh flex-col md:flex-row">
@@ -85,6 +92,15 @@ export default async function AppLayout({
       />
       <main className="flex-1 min-w-0 overflow-y-auto pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0">{children}</main>
       <Toaster />
+      <BetaInviteDialog
+        invite={betaInvite && {
+          id: betaInvite.id,
+          title: betaInvite.title,
+          body: betaInvite.body,
+          joinUrl: betaInvite.joinUrl,
+          alternative: betaInvite.alternative,
+        }}
+      />
     </div>
   );
 }

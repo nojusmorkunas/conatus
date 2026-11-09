@@ -114,6 +114,9 @@ jobs:
         env:
           REGISTRATION_MODE: open
           PUSH_ALLOW_PRIVATE_NETWORKS: "1"
+          # The first test to register becomes the admin; keep the beta invite
+          # pop-up from covering its page.
+          CONATUS_BETA_INVITES: "0"
           PLAYWRIGHT_SKIP_WEBSERVER: "1"
         run: |
           npm start &
