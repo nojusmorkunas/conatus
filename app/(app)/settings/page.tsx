@@ -239,7 +239,7 @@ export default async function SettingsPage({
               <h2 id="beta-heading" className="text-lg font-semibold">{betaInvite.name}</h2>
               <p className="text-sm text-muted-foreground">{betaInvite.body}</p>
               {betaInvite.alternative && (
-                <BetaInviteAlternative {...betaInvite.alternative} className="text-sm" />
+                <BetaInviteAlternative parts={betaInvite.alternative} className="text-sm" />
               )}
               <a
                 href={betaInvite.joinUrl}
