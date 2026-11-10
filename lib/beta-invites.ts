@@ -16,7 +16,7 @@ export type BetaInvite = {
   body: string;
   joinUrl: string;
   // Another way in for anyone who would rather not join the test itself.
-  alternative: { text: string; linkLabel: string; url: string } | null;
+  alternative: (string | { label: string; url: string })[] | null;
   // The last day the invite can show, as YYYY-MM-DD in UTC.
   endsOn: string;
 };
@@ -30,11 +30,14 @@ export const currentBetaInvite: BetaInvite | null = {
     "If you have an Android phone, joining takes a Google account and 14 days in the test. " +
     "The test app signs in to this server and works with your real tasks, so expect the odd bug.",
   joinUrl: "https://useconatus.com/android-beta/",
-  alternative: {
-    text: "Rather not use Google Play? The app is also on GitHub, and feedback is welcome either way.",
-    linkLabel: "Get it from GitHub",
-    url: "https://github.com/nojusmorkunas/conatus-android/releases/latest",
-  },
+  alternative: [
+    "The app is also on GitHub! You can download it from ",
+    { label: "here", url: "https://github.com/nojusmorkunas/conatus-android/releases/latest" },
+    " or manage the installs using something like ",
+    { label: "Obtainium", url: "https://obtainium.imranr.dev/" },
+    ". The Google Play version will be released later. " +
+      "F-Droid only accepts apps that are at least 3 months old, so it will be added to the official repo in February.",
+  ],
   endsOn: "2027-02-28",
 };
 

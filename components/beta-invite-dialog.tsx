@@ -37,10 +37,10 @@ export function BetaInviteDialog({ invite }: { invite: Invite | null }) {
         <Dialog.Popup className="fixed top-1/2 left-1/2 z-50 max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border bg-background p-6 text-sm shadow-xl outline-none duration-150 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95">
           <Dialog.Title className="text-lg font-semibold">{invite.title}</Dialog.Title>
           <p className="mt-1 text-xs text-muted-foreground">
-            Sorry to interrupt! This is a one-time note from the Conatus developer, shown only to server admins.
+            Sorry to interrupt! This is a one-time note from the Conatus developer.
           </p>
           <Dialog.Description className="mt-4 text-muted-foreground">{invite.body}</Dialog.Description>
-          {invite.alternative && <BetaInviteAlternative {...invite.alternative} className="mt-3" />}
+          {invite.alternative && <BetaInviteAlternative parts={invite.alternative} className="mt-3" />}
           <div className="mt-5 flex items-start gap-2.5">
             <input
               id={checkboxId}
@@ -76,22 +76,27 @@ export function BetaInviteDialog({ invite }: { invite: Invite | null }) {
 
 // Also used by the Settings section.
 export function BetaInviteAlternative({
-  text,
-  linkLabel,
-  url,
+  parts,
   className,
-}: NonNullable<BetaInvite["alternative"]> & { className?: string }) {
+}: {
+  parts: NonNullable<BetaInvite["alternative"]>;
+  className?: string;
+}) {
   return (
     <p className={cn("text-muted-foreground", className)}>
-      {text}{" "}
-      <a
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="font-medium text-foreground underline underline-offset-4"
-      >
-        {linkLabel}
-      </a>
+      {parts.map((part) =>
+        typeof part === "string" ? part : (
+          <a
+            key={part.url}
+            href={part.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-foreground underline underline-offset-4"
+          >
+            {part.label}
+          </a>
+        ),
+      )}
     </p>
   );
 }
