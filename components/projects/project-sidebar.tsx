@@ -235,7 +235,19 @@ export function ProjectSidebar({
 
   async function refresh() {
     const response = await fetch("/api/projects");
-    if (response.ok) setProjects(await response.json());
+    if (response.ok) {
+      const next: Project[] = await response.json();
+      setProjects(next);
+      // The open project (or a parent of it) just went to Trash, so refreshing
+      // its page would hit notFound(). Archived projects never appear in the list.
+      if (
+        projects.some((project) => project.id === openProjectId) &&
+        !next.some((project) => project.id === openProjectId)
+      ) {
+        router.replace("/today");
+        return;
+      }
+    }
     router.refresh();
   }
 
