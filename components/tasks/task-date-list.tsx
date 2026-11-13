@@ -42,6 +42,7 @@ export function TaskDateList({
     selectedIds,
     start: startSelecting,
     toggle: toggleSelection,
+    range: selectRange,
     run: runOnSelection,
   } = useTaskSelection((ids) => {
     const single = ids.length === 1 ? allTasks.find((task) => task.id === ids[0]) : undefined;
@@ -269,6 +270,7 @@ export function TaskDateList({
               selectionCount={selectedIds.length}
               onSelectionToggle={(target) => toggleSelection([target.id])}
               onSelectionStart={(target) => startSelecting([target.id])}
+              onSelectionRange={(target) => selectRange(target.id, allTasks.map(({ id }) => id))}
               onError={() => setError("That didn't work. Try again.")}
             />
           ))}

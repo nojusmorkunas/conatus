@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
@@ -9,6 +9,7 @@ import {
   ChartNoAxesColumn,
   ChevronDown,
   CircleHelp,
+  Keyboard,
   Inbox,
   LayoutGrid,
   LogOut,
@@ -231,6 +232,27 @@ export function ProjectSidebar({
     }
     window.addEventListener("sidebar:open", openMobileSidebar);
     return () => window.removeEventListener("sidebar:open", openMobileSidebar);
+  }, []);
+
+  // The m and q keys.
+  const toggleSidebar = useEffectEvent(() => {
+    if (window.matchMedia("(min-width: 768px)").matches) setSidebarCollapsed(!collapsed);
+    else setMobileOpen((open) => !open);
+  });
+  useEffect(() => {
+    function onToggle() {
+      toggleSidebar();
+    }
+    function openQuickAdd() {
+      setQuickAddError(false);
+      setQuickAddOpen(true);
+    }
+    window.addEventListener("sidebar:toggle", onToggle);
+    window.addEventListener("quick-add:open", openQuickAdd);
+    return () => {
+      window.removeEventListener("sidebar:toggle", onToggle);
+      window.removeEventListener("quick-add:open", openQuickAdd);
+    };
   }, []);
 
   async function refresh() {
@@ -687,6 +709,9 @@ export function ProjectSidebar({
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => router.push("/settings#help")}>
                 <CircleHelp /> Help
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => window.dispatchEvent(new Event("shortcuts:open"))}>
+                <Keyboard /> Keyboard shortcuts
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => signOut({ callbackUrl: "/login" })}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 
 import type {
   labels as labelsTable,
@@ -9,8 +9,12 @@ import type {
 } from "@/lib/db/schema";
 import { Board } from "@/components/board/board";
 import { TaskList, type TaskWithLabels } from "@/components/tasks/task-list";
+import { keyName, shortcutsBlocked } from "@/lib/keyboard";
 import type { SortBy } from "@/lib/task-sort";
 import { ProjectHeader } from "./project-header";
+
+// Todoist's sort keys. Pressing the current one again goes back to manual order.
+const SORT_KEYS: Record<string, SortBy> = { d: "due", p: "priority", n: "name" };
 
 type Project = typeof projects.$inferSelect;
 type Section = typeof sectionsTable.$inferSelect;
@@ -82,6 +86,24 @@ export function ProjectView({
     setShowCompleted(next);
     localStorage.setItem(`show-completed:${project.id}`, String(next));
   }
+
+  // Shift+V switches layout, as in Todoist.
+  const onProjectKey = useEffectEvent((event: KeyboardEvent) => {
+    if (shortcutsBlocked(event)) return;
+    const key = keyName(event);
+    const sort = SORT_KEYS[key];
+    if (key === "Shift+v") switchView(view === "list" ? "board" : "list");
+    else if (sort) changeSort(sortBy === sort ? "manual" : sort);
+    else return;
+    event.preventDefault();
+  });
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      onProjectKey(event);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   return (
     <div className="mx-auto w-full max-w-4xl px-3 pb-10 sm:px-6 md:px-8 lg:pl-10">

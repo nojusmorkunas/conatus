@@ -130,6 +130,7 @@ export function TaskList({
     selectedIds: selectedTaskIds,
     start: startSelecting,
     toggle: toggleTaskSelection,
+    range: selectTaskRange,
     exit: exitSelection,
     run: runOnSelection,
   } = useTaskSelection((ids) => {
@@ -901,6 +902,7 @@ export function TaskList({
                 onOpenDetail={(task) => setDetailTaskId(task.id)}
                 onSelectionToggle={(task) => toggleTaskSelection(selectionIdsFor(task))}
                 onSelectionStart={(task) => startSelecting(selectionIdsFor(task))}
+                onSelectionRange={(task) => selectTaskRange(task.id, tasks.map(({ id }) => id))}
                 onToggleTaskCollapsed={toggleTaskCollapsed}
                 onRenameSection={(section, name) =>
                   mutateSection(() => fetch(`/api/sections/${section.id}`, jsonInit("PATCH", { name })))

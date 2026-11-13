@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { isTyping } from "@/lib/keyboard";
+
 type PendingAction<T> = {
   label: string;
   execute: () => Promise<unknown> | void;
@@ -68,6 +70,22 @@ export function usePendingAction<T = unknown>() {
   const [controller] = useState(() => new PendingActionController<T>(setPending));
 
   useEffect(() => () => controller.flush(), [controller]);
+
+  // Ctrl/Cmd+Z does what the toast's Undo button does while it shows. Fields
+  // keep their own undo.
+  // ponytail: two lists with a toast each both undo, a page-wide stack if that bites.
+  useEffect(() => {
+    if (!pending) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
+      if (event.key.toLowerCase() !== "z" || isTyping(event.target)) return;
+      if ((event.target as Element).closest?.("[role=dialog]")) return;
+      event.preventDefault();
+      controller.undo();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [pending, controller]);
 
   return {
     pending,
