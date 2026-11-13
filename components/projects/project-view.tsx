@@ -13,7 +13,7 @@ import { keyName, shortcutsBlocked } from "@/lib/keyboard";
 import type { SortBy } from "@/lib/task-sort";
 import { ProjectHeader } from "./project-header";
 
-// Todoist's sort keys. Pressing the current one again goes back to manual order.
+// Sort keys. Pressing the current one again goes back to manual order.
 const SORT_KEYS: Record<string, SortBy> = { d: "due", p: "priority", n: "name" };
 
 // Layout, sort and show-completed are saved per project in localStorage, which
@@ -91,7 +91,7 @@ export function ProjectView({
     storePreference(`show-completed:${project.id}`, String(next));
   }
 
-  // Shift+V switches layout, as in Todoist.
+  // Shift+V switches layout.
   const onProjectKey = useEffectEvent((event: KeyboardEvent) => {
     if (shortcutsBlocked(event)) return;
     const key = keyName(event);

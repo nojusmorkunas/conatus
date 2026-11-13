@@ -40,7 +40,7 @@ async function priority(page: Page, projectId: string, id: string) {
   return tasks.find((task) => task.id === id)?.priority;
 }
 
-test("Todoist's keys move focus and act on the focused task", async ({ page }) => {
+test("keys move focus and act on the focused task", async ({ page }) => {
   const f = await setup(page);
 
   await untilItLands(
