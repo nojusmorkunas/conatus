@@ -3,93 +3,208 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-const HELP_TEXT = [
-  ["/", "Search"],
-  ["q", "Add task"],
-  ["g i", "Go to Inbox"],
-  ["g t", "Go to Today"],
-  ["g u", "Go to Upcoming"],
-  ["Delete", "Move selected tasks to Trash"],
+import { focusTaskRow, keyName, shortcutsBlocked } from "@/lib/keyboard";
+
+// The keys are Todoist's, so people coming from it keep their habits. Two-key
+// sequences start with g (go to) or o (open); g i needs the Inbox's id.
+const SEQUENCES: Record<string, string> = {
+  gh: "/",
+  gt: "/today",
+  gu: "/upcoming",
+  gv: "/filters-labels",
+  gl: "/filters-labels",
+  ga: "/reporting",
+  op: "/stats",
+  os: "/settings",
+};
+
+// "Mod" reads as ⌘ on a Mac and Ctrl elsewhere.
+const HELP: [string, [string, string][]][] = [
+  ["General", [
+    ["q", "Quick Add"],
+    ["a", "Add task to this list"],
+    ["/, f or Mod K", "Search"],
+    ["Mod Z", "Undo"],
+    ["m", "Open or close the sidebar"],
+    ["?", "Keyboard shortcuts"],
+    ["Esc", "Close or cancel"],
+  ]],
+  ["Go to", [
+    ["h", "Home"],
+    ["g i", "Inbox"],
+    ["g t", "Today"],
+    ["g u", "Upcoming"],
+    ["g v", "Filters & Labels"],
+    ["g a", "Reporting"],
+    ["o p", "Stats"],
+    ["o s", "Settings"],
+  ]],
+  ["Tasks", [
+    ["j or ↓", "Next task"],
+    ["k or ↑", "Previous task"],
+    ["Enter", "Open task"],
+    ["e", "Complete"],
+    ["1 to 4", "Set priority"],
+    ["t", "Set date"],
+    ["Shift T", "Remove date"],
+    ["l", "Labels"],
+    ["v", "Move to project"],
+    ["Shift R", "Assign"],
+    ["Shift E", "Show or hide subtasks"],
+    [".", "More actions"],
+  ]],
+  ["Select", [
+    ["x", "Select focused task"],
+    ["Mod click", "Select task"],
+    ["Shift click", "Select a range"],
+    ["Delete", "Move selected to Trash"],
+    ["Esc", "Clear selection"],
+  ]],
+  ["Project", [
+    ["Shift V", "Switch list and board"],
+    ["d", "Sort by date"],
+    ["p", "Sort by priority"],
+    ["n", "Sort by name"],
+  ]],
 ];
 
 export function KeyboardShortcuts({ inboxProjectId }: { inboxProjectId: string | null }) {
   const router = useRouter();
   const [showHelp, setShowHelp] = useState(false);
-  const pendingG = useRef(false);
+  const pending = useRef<string | null>(null);
 
   useEffect(() => {
-    let timeout: ReturnType<typeof setTimeout>;
+    function open() {
+      setShowHelp(true);
+    }
+    window.addEventListener("shortcuts:open", open);
+    return () => window.removeEventListener("shortcuts:open", open);
+  }, []);
+
+  // Capture phase, so the second key of a sequence is spent here before a
+  // focused task row reads it: g t goes to Today instead of setting a date.
+  useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
 
     function onKeyDown(event: KeyboardEvent) {
-      const target = event.target as HTMLElement;
-      if (
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.tagName === "SELECT" ||
-        target.isContentEditable
-      ) {
-        return;
-      }
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
-
-      if (pendingG.current) {
-        pendingG.current = false;
-        clearTimeout(timeout);
-        if (event.key === "i" && inboxProjectId) router.push(`/projects/${inboxProjectId}`);
-        else if (event.key === "t") router.push("/today");
-        else if (event.key === "u") router.push("/upcoming");
+      if (showHelp) {
+        if (event.key === "Escape" || event.key === "?") {
+          event.preventDefault();
+          setShowHelp(false);
+        }
+        event.stopPropagation();
         return;
       }
 
-      if (event.key === "g") {
-        pendingG.current = true;
-        timeout = setTimeout(() => (pendingG.current = false), 1000);
-        return;
-      }
-
-      if (event.key === "q") {
-        window.dispatchEvent(new Event("quick-add:focus"));
-        return;
-      }
-
-      if (event.key === "/") {
+      const mod = event.metaKey || event.ctrlKey;
+      if (mod && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "k" &&
+          !document.querySelector("[aria-modal=true]")) {
         event.preventDefault();
         window.dispatchEvent(new Event("search:focus"));
         return;
       }
 
-      if (event.key === "?") {
-        setShowHelp((value) => !value);
+      if (shortcutsBlocked(event)) return;
+
+      const key = keyName(event);
+      if (pending.current) {
+        const sequence = pending.current + key;
+        pending.current = null;
+        clearTimeout(timeout);
+        event.preventDefault();
+        event.stopPropagation();
+        const href = sequence === "gi"
+          ? inboxProjectId && `/projects/${inboxProjectId}`
+          : SEQUENCES[sequence];
+        if (href) router.push(href);
+        return;
       }
+
+      const target = event.target as Element;
+      switch (key) {
+        case "g":
+        case "o":
+          pending.current = key;
+          timeout = setTimeout(() => (pending.current = null), 1000);
+          return;
+        case "q":
+          window.dispatchEvent(new Event("quick-add:open"));
+          break;
+        case "a":
+          // Pages without a list of their own fall back to Quick Add.
+          window.dispatchEvent(new Event(
+            document.querySelector("[data-quick-add]") ? "quick-add:focus" : "quick-add:open",
+          ));
+          break;
+        case "/":
+        case "f":
+          window.dispatchEvent(new Event("search:focus"));
+          break;
+        case "m":
+          window.dispatchEvent(new Event("sidebar:toggle"));
+          break;
+        case "h":
+          router.push("/");
+          break;
+        case "?":
+          setShowHelp(true);
+          break;
+        case "j":
+        case "k":
+          if (!focusTaskRow(target.closest("[data-task-id]"), key === "j" ? 1 : -1)) return;
+          break;
+        case "ArrowDown":
+        case "ArrowUp":
+          // The arrows keep scrolling the page until a task has focus.
+          if (!target.matches("[data-task-id]")) return;
+          focusTaskRow(target, key === "ArrowDown" ? 1 : -1);
+          break;
+        default:
+          return;
+      }
+      // Keeps the key itself out of whatever just took focus.
+      event.preventDefault();
     }
 
-    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
     return () => {
-      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keydown", onKeyDown, true);
       clearTimeout(timeout);
     };
-  }, [router, inboxProjectId]);
+  }, [router, inboxProjectId, showHelp]);
 
   if (!showHelp) return null;
 
+  const mod = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘" : "Ctrl";
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       onClick={() => setShowHelp(false)}
     >
       <div
-        className="w-64 rounded-lg border border-border bg-background p-4 shadow-lg"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Keyboard shortcuts"
+        className="max-h-[85dvh] w-full max-w-2xl overflow-y-auto rounded-lg border border-border bg-background p-5 shadow-lg"
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 className="mb-2 text-sm font-medium">Keyboard shortcuts</h2>
-        <dl className="flex flex-col gap-1 text-sm">
-          {HELP_TEXT.map(([key, label]) => (
-            <div key={key} className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">{label}</dt>
-              <dd className="font-mono">{key}</dd>
-            </div>
+        <h2 className="mb-4 text-base font-semibold">Keyboard shortcuts</h2>
+        <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
+          {HELP.map(([heading, rows]) => (
+            <section key={heading}>
+              <h3 className="mb-1.5 text-xs font-medium text-muted-foreground">{heading}</h3>
+              <dl className="flex flex-col gap-1 text-sm">
+                {rows.map(([keys, label]) => (
+                  <div key={keys + label} className="flex justify-between gap-4">
+                    <dt>{label}</dt>
+                    <dd className="font-mono text-muted-foreground">{keys.replace("Mod", mod)}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
           ))}
-        </dl>
+        </div>
       </div>
     </div>
   );

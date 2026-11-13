@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useRef, useState, type CSSProperties } from "react";
+import { memo, useEffect, useEffectEvent, useRef, useState, type CSSProperties } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -25,6 +25,7 @@ import {
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 
 import { addDays } from "@/lib/dates";
+import { keyName, taskRows } from "@/lib/keyboard";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { LabelChip } from "@/components/labels/label-chip";
@@ -76,6 +77,7 @@ function TaskRowComponent({
   selected = false,
   onSelectionToggle,
   onSelectionStart,
+  onSelectionRange,
   selectionCount = 1,
   draggable = false,
   draggedDescendant = false,
@@ -113,6 +115,8 @@ function TaskRowComponent({
   onSelectionToggle?: (task: TaskWithLabels) => void;
   /** Ctrl/Cmd-click, or a press and hold on touch, starts selecting here. */
   onSelectionStart?: (task: TaskWithLabels) => void;
+  /** Shift-click: select every row from the last one picked to this one. */
+  onSelectionRange?: (task: TaskWithLabels) => void;
   /** How many tasks are selected, so a selected row's menu can say so. */
   selectionCount?: number;
   draggable?: boolean;
@@ -122,6 +126,8 @@ function TaskRowComponent({
   onError?: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  // Which submenu the l and v keys open the menu at.
+  const [menuSubmenu, setMenuSubmenu] = useState<"labels" | "move" | null>(null);
   const [addingSubtask, setAddingSubtask] = useState(false);
   const [addingTask, setAddingTask] = useState<"above" | "below" | null>(null);
   const [editingDue, setEditingDue] = useState(false);
@@ -197,6 +203,62 @@ function TaskRowComponent({
     }, reduceMotion ? 0 : 480);
   }
 
+  // Completing takes the row and its subtasks off the list, so focus moves on
+  // to the next row that stays, or back one from the bottom.
+  function focusPastSubtasks(row: HTMLElement) {
+    const rows = taskRows();
+    const index = rows.indexOf(row);
+    const next = rows.slice(index + 1).find((candidate) => Number(candidate.dataset.depth) <= depth)
+      ?? rows[index - 1];
+    next?.focus();
+  }
+
+  // Todoist's keys for the focused task. Returns false for a key it leaves alone.
+  function runRowKey(key: string, row: HTMLElement) {
+    switch (key) {
+      case "Enter":
+      case " ":
+        onOpenDetail(task);
+        return true;
+      case "x":
+        onSelectionStart?.(task);
+        return Boolean(onSelectionStart);
+      case "e":
+        if (!task.isCompleted && !repeats) focusPastSubtasks(row);
+        handleToggle();
+        return true;
+      case "1":
+      case "2":
+      case "3":
+      case "4":
+        onPriorityChange?.(task, Number(key));
+        return Boolean(onPriorityChange);
+      case "t":
+        setEditingDue(true);
+        return true;
+      case "Shift+t":
+        onQuickDueChange?.(task, null);
+        return Boolean(onQuickDueChange);
+      case "l":
+      case "v":
+        setMenuSubmenu(key === "l" ? "labels" : "move");
+        setMenuOpen(true);
+        return true;
+      case ".":
+        setMenuOpen(true);
+        return true;
+      case "Shift+r":
+        if (members.length < 2) return false;
+        setEditingAssignee(true);
+        return true;
+      case "Shift+e":
+        if (!directChildren.length || !onToggleCollapsed) return false;
+        onToggleCollapsed(task.id);
+        return true;
+    }
+    return false;
+  }
+
   return (
     <div
       ref={(node) => {
@@ -229,6 +291,7 @@ function TaskRowComponent({
       )}
       <div
         data-task-id={task.id}
+        data-depth={depth}
         data-task-content={task.content}
         data-has-children={directChildren.length > 0}
         {...listeners}
@@ -241,6 +304,11 @@ function TaskRowComponent({
           // would match every press and kill dragging entirely.
           const control = (event.target as Element).closest?.(ROW_CONTROLS);
           if (control && control !== event.currentTarget) return;
+          // A Shift-click selects a range: no drag and no text selection.
+          if (event.shiftKey && onSelectionRange) {
+            event.preventDefault();
+            return;
+          }
           listeners?.onMouseDown?.(event);
         }}
         onTouchStart={(event) => {
@@ -271,6 +339,10 @@ function TaskRowComponent({
           "--row-depth": depth,
         } as CSSProperties}
         onClick={(event) => {
+          if (event.shiftKey && onSelectionRange && !(event.target as Element).closest?.(ROW_CONTROLS)) {
+            onSelectionRange(task);
+            return;
+          }
           if (selecting) {
             onSelectionToggle?.(task);
             return;
@@ -298,11 +370,15 @@ function TaskRowComponent({
           setMenuOpen(true);
         }}
         onKeyDown={(event) => {
-          if (event.target !== event.currentTarget || selecting) return;
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            onOpenDetail(task);
+          if (event.target !== event.currentTarget || event.metaKey || event.ctrlKey || event.altKey) return;
+          // While selecting, x is the only key a row answers.
+          if (selecting) {
+            if (keyName(event) !== "x") return;
+            onSelectionToggle?.(task);
+          } else if (!runRowKey(keyName(event), event.currentTarget)) {
+            return;
           }
+          event.preventDefault();
         }}
       >
         {draggable && (
@@ -352,7 +428,11 @@ function TaskRowComponent({
               task={task}
               today={today}
               open={menuOpen}
-              onOpenChange={setMenuOpen}
+              onOpenChange={(open) => {
+                setMenuOpen(open);
+                if (!open) setMenuSubmenu(null);
+              }}
+              submenu={menuSubmenu}
               taskCount={menuTaskCount}
               onComplete={() => onToggle(task)}
               onAddAbove={() => setAddingTask("above")}
@@ -551,6 +631,7 @@ function TaskContextMenu({
   today,
   open,
   onOpenChange,
+  submenu,
   taskCount,
   onComplete,
   onAddAbove,
@@ -575,6 +656,8 @@ function TaskContextMenu({
   today: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** A submenu to open along with the menu, for the l and v keys. */
+  submenu: "labels" | "move" | null;
   /** More than one when the row stands for a selection. */
   taskCount: number;
   onComplete: () => void;
@@ -607,11 +690,28 @@ function TaskContextMenu({
     setOpen(false);
   }
 
-  async function loadProjects() {
+  function loadProjects() {
     if (projects.length) return;
-    const response = await fetch("/api/projects");
-    if (response.ok) setProjects(await response.json());
+    void fetch("/api/projects").then(async (response) => {
+      if (response.ok) setProjects(await response.json());
+    });
   }
+
+  // Opening straight at Move to skips the submenu's own open event.
+  const loadProjectsForKey = useEffectEvent(loadProjects);
+  useEffect(() => {
+    if (open && submenu === "move") loadProjectsForKey();
+  }, [open, submenu]);
+
+  // The menu takes focus when it opens, so l and v hand it on to the first
+  // item of their submenu, ready for the arrow keys.
+  useEffect(() => {
+    if (!open || !submenu) return;
+    const frame = requestAnimationFrame(() => document
+      .querySelector<HTMLElement>("[data-slot=dropdown-menu-sub-content] [role^=menuitem]")
+      ?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [open, submenu, projects.length]);
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
@@ -638,7 +738,7 @@ function TaskContextMenu({
           <DropdownMenuItem onClick={() => run(onSetDue)}><CalendarDays />Set date…</DropdownMenuItem>
           {canAssign && <DropdownMenuItem onClick={() => run(onAssign)}><UserPlus />Assign…</DropdownMenuItem>}
         </>}
-        <DropdownMenuSub>
+        <DropdownMenuSub defaultOpen={submenu === "labels"}>
           <DropdownMenuSubTrigger><Tag />Labels</DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="w-52">
             {labels.map((label) => {
@@ -687,7 +787,7 @@ function TaskContextMenu({
           <DropdownMenuItem onClick={() => run(onDeadline)}><CalendarDays />Deadline</DropdownMenuItem>
           <DropdownMenuItem onClick={() => run(onReminders)}><Bell />Reminders</DropdownMenuItem>
         </>}
-        <DropdownMenuSub onOpenChange={(nextOpen) => { if (nextOpen) void loadProjects(); }}>
+        <DropdownMenuSub defaultOpen={submenu === "move"} onOpenChange={(nextOpen) => { if (nextOpen) loadProjects(); }}>
           <DropdownMenuSubTrigger><FolderInput />Move to…</DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="w-52">
             {projects.map((project) => (

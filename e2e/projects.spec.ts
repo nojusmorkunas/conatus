@@ -248,3 +248,23 @@ test("projects drag from the whole row without a visible drag handle", async ({
   expect(hydrationErrors).toEqual([]);
   expect(runtimeErrors).toEqual([]);
 });
+
+test("a project saved as board reloads as board without a hydration error", async ({ page }) => {
+  await registerAndLogin(page, `board-reload-${Date.now()}-${test.info().workerIndex}`);
+  const response = await page.request.post("/api/projects", { data: { name: "Board reload", color: "blue" } });
+  const project = await response.json();
+  await page.request.post("/api/tasks", { data: { projectId: project.id, content: "On the board" } });
+
+  const errors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  page.on("pageerror", (error) => errors.push(error.message));
+
+  await page.goto(`/projects/${project.id}`);
+  await page.getByRole("button", { name: "Board view" }).click();
+  await page.reload();
+  await expect(page.getByText("(No section)")).toBeVisible();
+  await expect(page.getByText("On the board")).toBeVisible();
+  expect(errors.filter((text) => text.includes("Hydration"))).toEqual([]);
+});
