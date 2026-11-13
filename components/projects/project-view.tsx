@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useEffectEvent, useState, useSyncExternalStore } from "react";
 
 import type {
   labels as labelsTable,
@@ -9,8 +9,33 @@ import type {
 } from "@/lib/db/schema";
 import { Board } from "@/components/board/board";
 import { TaskList, type TaskWithLabels } from "@/components/tasks/task-list";
+import { keyName, shortcutsBlocked } from "@/lib/keyboard";
 import type { SortBy } from "@/lib/task-sort";
 import { ProjectHeader } from "./project-header";
+
+// Todoist's sort keys. Pressing the current one again goes back to manual order.
+const SORT_KEYS: Record<string, SortBy> = { d: "due", p: "priority", n: "name" };
+
+// Layout, sort and show-completed are saved per project in localStorage, which
+// the server can't read. It renders the defaults, hydration matches them, and
+// the saved value takes over right after.
+function subscribePreferences(callback: () => void) {
+  window.addEventListener("project-preference", callback);
+  return () => window.removeEventListener("project-preference", callback);
+}
+
+function useStoredPreference(key: string, fallback: string) {
+  return useSyncExternalStore(
+    subscribePreferences,
+    () => localStorage.getItem(key) ?? fallback,
+    () => fallback,
+  );
+}
+
+function storePreference(key: string, value: string) {
+  localStorage.setItem(key, value);
+  window.dispatchEvent(new Event("project-preference"));
+}
 
 type Project = typeof projects.$inferSelect;
 type Section = typeof sectionsTable.$inferSelect;
@@ -43,45 +68,46 @@ export function ProjectView({
   timezone: string;
   initialDetailTaskId?: string;
 }) {
-  // Lazy initializer only runs on the client during hydration, so this
-  // reads localStorage without an SSR/client mismatch or a post-mount effect.
-  const [view, setView] = useState<"list" | "board">(() =>
-    typeof window !== "undefined" &&
-    localStorage.getItem(`project-view:${project.id}`) === "board"
-      ? "board"
-      : "list",
-  );
-  const [sortBy, setSortBy] = useState<SortBy>(() => {
-    if (typeof window === "undefined") return "manual";
-    const stored = localStorage.getItem(`sort:${project.id}`);
-    return stored === "due" || stored === "priority" || stored === "name"
-      ? stored
-      : "manual";
-  });
-  const [showCompleted, setShowCompleted] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      localStorage.getItem(`show-completed:${project.id}`) === "true",
-  );
+  const view = useStoredPreference(`project-view:${project.id}`, "list") === "board" ? "board" : "list";
+  const storedSort = useStoredPreference(`sort:${project.id}`, "manual");
+  const sortBy: SortBy = storedSort === "due" || storedSort === "priority" || storedSort === "name"
+    ? storedSort
+    : "manual";
+  const showCompleted = useStoredPreference(`show-completed:${project.id}`, "false") === "true";
   const [, setOpenTaskCount] = useState(
     () => tasks.filter((task) => !task.isCompleted).length,
   );
   const taskMembers = members.map(({ userId: id, username }) => ({ id, username }));
 
   function switchView(next: "list" | "board") {
-    setView(next);
-    localStorage.setItem(`project-view:${project.id}`, next);
+    storePreference(`project-view:${project.id}`, next);
   }
 
   function changeSort(next: SortBy) {
-    setSortBy(next);
-    localStorage.setItem(`sort:${project.id}`, next);
+    storePreference(`sort:${project.id}`, next);
   }
 
   function changeShowCompleted(next: boolean) {
-    setShowCompleted(next);
-    localStorage.setItem(`show-completed:${project.id}`, String(next));
+    storePreference(`show-completed:${project.id}`, String(next));
   }
+
+  // Shift+V switches layout, as in Todoist.
+  const onProjectKey = useEffectEvent((event: KeyboardEvent) => {
+    if (shortcutsBlocked(event)) return;
+    const key = keyName(event);
+    const sort = SORT_KEYS[key];
+    if (key === "Shift+v") switchView(view === "list" ? "board" : "list");
+    else if (sort) changeSort(sortBy === sort ? "manual" : sort);
+    else return;
+    event.preventDefault();
+  });
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      onProjectKey(event);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   return (
     <div className="mx-auto w-full max-w-4xl px-3 pb-10 sm:px-6 md:px-8 lg:pl-10">
