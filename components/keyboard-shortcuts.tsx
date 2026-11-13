@@ -9,6 +9,7 @@ const HELP_TEXT = [
   ["g i", "Go to Inbox"],
   ["g t", "Go to Today"],
   ["g u", "Go to Upcoming"],
+  ["Delete", "Move selected tasks to Trash"],
 ];
 
 export function KeyboardShortcuts({ inboxProjectId }: { inboxProjectId: string | null }) {

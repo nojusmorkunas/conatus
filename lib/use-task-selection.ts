@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 
 // Selection mode, shared by every list that can act on several tasks at once.
 // The lists differ in how they reload afterwards, so running the requests is
-// here and the reload is the caller's.
-export function useTaskSelection() {
+// here and the reload is the caller's. The Delete key hands the selection to
+// `onDeleteKey`, the same as picking Move to Trash on a selected row.
+export function useTaskSelection(onDeleteKey?: (ids: string[]) => void) {
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
@@ -47,10 +48,26 @@ export function useTaskSelection() {
     return ok;
   }
 
+  // Backspace too: it's the key labelled "delete" on a Mac.
+  const deleteOnKey = useEffectEvent((event: KeyboardEvent) => {
+    const target = event.target as HTMLElement;
+    if (
+      !onDeleteKey ||
+      selectedIds.length === 0 ||
+      event.repeat ||
+      target.isContentEditable ||
+      target.closest("input, textarea, select, [role=dialog]")
+    ) return;
+    event.preventDefault();
+    onDeleteKey(selectedIds);
+    exit();
+  });
+
   useEffect(() => {
     if (!selecting) return;
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") exit();
+      if (event.key === "Delete" || event.key === "Backspace") deleteOnKey(event);
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);

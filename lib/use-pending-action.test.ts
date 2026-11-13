@@ -45,4 +45,21 @@ describe("PendingActionController", () => {
     expect(second).toHaveBeenCalledOnce();
     vi.useRealTimers();
   });
+
+  it("keeps the pending change on fresh data until it is sent or undone", () => {
+    vi.useFakeTimers();
+    const controller = new PendingActionController<string[]>(vi.fn());
+    const hide = (ids: string[]) => ids.filter((id) => id !== "a");
+
+    expect(controller.reapply(["a", "b"])).toEqual(["a", "b"]);
+    controller.schedule("Deleted a", vi.fn(), vi.fn(), hide);
+    expect(controller.reapply(["a", "b"])).toEqual(["b"]);
+    controller.undo();
+    expect(controller.reapply(["a", "b"])).toEqual(["a", "b"]);
+
+    controller.schedule("Deleted a", vi.fn(), vi.fn(), hide);
+    vi.advanceTimersByTime(5_000);
+    expect(controller.reapply(["a", "b"])).toEqual(["a", "b"]);
+    vi.useRealTimers();
+  });
 });

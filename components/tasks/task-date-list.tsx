@@ -36,19 +36,23 @@ export function TaskDateList({
   const [groups, setGroups] = useState(initialGroups);
   const [error, setError] = useState<string | null>(null);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
-  const { pending, schedule, undo } = usePendingAction();
+  const { pending, schedule, reapply, undo } = usePendingAction<TaskDateGroup[]>();
   const {
     selecting,
     selectedIds,
     start: startSelecting,
     toggle: toggleSelection,
     run: runOnSelection,
-  } = useTaskSelection();
+  } = useTaskSelection((ids) => {
+    const single = ids.length === 1 ? allTasks.find((task) => task.id === ids[0]) : undefined;
+    if (single) deleteTask(single);
+    else deleteSelected();
+  });
 
   const [syncedFrom, setSyncedFrom] = useState(initialGroups);
   if (initialGroups !== syncedFrom) {
     setSyncedFrom(initialGroups);
-    setGroups(initialGroups);
+    setGroups(reapply(initialGroups));
   }
 
   async function withError(action: () => Promise<Response>) {
@@ -107,7 +111,7 @@ export function TaskDateList({
       return;
     }
 
-    setGroups((current) =>
+    const complete = (current: TaskDateGroup[]) =>
       current.map((group) => ({
         ...group,
         tasks: group.tasks.map((existing) =>
@@ -115,25 +119,28 @@ export function TaskDateList({
             ? { ...existing, isCompleted: true }
             : existing,
         ),
-      })),
-    );
+      }));
+    setGroups(complete);
     schedule(
       `Completed "${truncate(task.content)}"`,
       () => patch(task.id, { completed: true }),
       () => setGroups(previousGroups),
+      complete,
     );
   }
 
   function deleteTask(task: TaskWithLabels) {
     const previousGroups = groups;
-    setGroups((current) => current.map((group) => ({
+    const hide = (current: TaskDateGroup[]) => current.map((group) => ({
       ...group,
       tasks: group.tasks.filter((existing) => existing.id !== task.id),
-    })));
+    }));
+    setGroups(hide);
     schedule(
       `Moved "${truncate(task.content)}" to Trash`,
       () => withError(() => fetch(`/api/tasks/${task.id}`, { method: "DELETE" })),
       () => setGroups(previousGroups),
+      hide,
     );
   }
 
@@ -170,6 +177,15 @@ export function TaskDateList({
     );
     if (!ok) setError("Some updates failed.");
     return ok;
+  }
+
+  // Trashing a task takes its subtasks along, so only the top of each
+  // selected branch is sent.
+  function deleteSelected() {
+    void bulkAction(
+      (task) => fetch(`/api/tasks/${task.id}`, { method: "DELETE" }),
+      selectionRoots(allTasks, selectedIds),
+    );
   }
 
   function patchSelected(body: Record<string, unknown>, ids?: string[]) {
@@ -227,11 +243,7 @@ export function TaskDateList({
               today={today}
               dateFormat={dateFormat}
               onToggle={(target) => actsOnSelection(target) ? patchSelected({ completed: true }) : toggleComplete(target)}
-              onDelete={(target) =>
-                actsOnSelection(target)
-                  ? void bulkAction((selected) => fetch(`/api/tasks/${selected.id}`, { method: "DELETE" }))
-                  : deleteTask(target)
-              }
+              onDelete={(target) => actsOnSelection(target) ? deleteSelected() : deleteTask(target)}
               onLabelsChange={(target, labelIds) =>
                 actsOnSelection(target)
                   ? changeSelectionLabels(target, labelIds)
