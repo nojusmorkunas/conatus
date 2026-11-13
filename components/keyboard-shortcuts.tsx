@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { focusTaskRow, keyName, shortcutsBlocked } from "@/lib/keyboard";
 
-// The keys are Todoist's, so people coming from it keep their habits. Two-key
+// Familiar controls: the keys other task apps use, so habits carry over. Two-key
 // sequences start with g (go to) or o (open); g i needs the Inbox's id.
 const SEQUENCES: Record<string, string> = {
   gh: "/",

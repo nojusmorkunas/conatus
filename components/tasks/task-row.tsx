@@ -213,7 +213,7 @@ function TaskRowComponent({
     next?.focus();
   }
 
-  // Todoist's keys for the focused task. Returns false for a key it leaves alone.
+  // Keys for the focused task. Returns false for a key it leaves alone.
   function runRowKey(key: string, row: HTMLElement) {
     switch (key) {
       case "Enter":
