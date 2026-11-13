@@ -132,8 +132,13 @@ export function TaskList({
     toggle: toggleTaskSelection,
     exit: exitSelection,
     run: runOnSelection,
-  } = useTaskSelection();
-  const { pending, schedule, undo } = usePendingAction();
+  } = useTaskSelection((ids) => {
+    const roots = selectionRoots(tasks, ids);
+    const single = roots.length === 1 ? tasks.find((task) => task.id === roots[0]) : undefined;
+    if (single) deleteTask(single);
+    else deleteSelectedTasks();
+  });
+  const { pending, schedule, reapply, undo } = usePendingAction<TaskWithLabels[]>();
   const router = useRouter();
   // Mouse dragging stays quick, while touch requires an intentional hold.
   // The touch movement tolerance lets a normal swipe remain native scrolling.
@@ -151,7 +156,7 @@ export function TaskList({
   const [syncedFrom, setSyncedFrom] = useState(initialTasks);
   if (initialTasks !== syncedFrom) {
     setSyncedFrom(initialTasks);
-    setTasks(initialTasks);
+    setTasks(reapply(initialTasks));
   }
 
   const openTaskCount = tasks.filter((task) => !task.isCompleted).length;
@@ -167,7 +172,7 @@ export function TaskList({
 
   async function refresh() {
     const response = await fetch(`/api/tasks?projectId=${projectId}`);
-    if (response.ok) setTasks(await response.json());
+    if (response.ok) setTasks(reapply(await response.json()));
   }
 
   async function withError(action: () => Promise<Response>) {
@@ -272,13 +277,9 @@ export function TaskList({
       isCompleted: true,
       completedAt: new Date(),
     };
-    setTasks((current) =>
-      current.map((existing) =>
-        existing.id === task.id
-          ? completedTask
-          : existing,
-      ),
-    );
+    const complete = (current: TaskWithLabels[]) =>
+      current.map((existing) => existing.id === task.id ? completedTask : existing);
+    setTasks(complete);
     schedule(
       `Completed "${truncate(task.content)}"`,
       async () => {
@@ -289,12 +290,14 @@ export function TaskList({
         if (!ok) await refresh();
       },
       () => setTasks(previousTasks),
+      complete,
     );
   }
 
   function deleteTask(task: TaskWithLabels) {
     const previousTasks = tasks;
-    setTasks((current) => current.filter((existing) => existing.id !== task.id));
+    const hide = (current: TaskWithLabels[]) => current.filter((existing) => existing.id !== task.id);
+    setTasks(hide);
     schedule(
       `Moved "${truncate(task.content)}" to Trash`,
       async () => {
@@ -305,6 +308,7 @@ export function TaskList({
         await refresh();
       },
       () => setTasks(previousTasks),
+      hide,
     );
   }
 
@@ -473,13 +477,13 @@ export function TaskList({
     const affectedIds = new Set(selectedTaskIds);
     const previousTasks = tasks;
     const completedAt = new Date();
-    setTasks((current) =>
+    const complete = (current: TaskWithLabels[]) =>
       current.map((task) =>
         affectedIds.has(task.id)
           ? { ...task, isCompleted: true, completedAt }
           : task,
-      ),
-    );
+      );
+    setTasks(complete);
     schedule(
       `Completed ${affectedIds.size} tasks`,
       async () => {
@@ -501,6 +505,7 @@ export function TaskList({
         }
       },
       () => setTasks(previousTasks),
+      complete,
     );
   }
 
@@ -508,16 +513,21 @@ export function TaskList({
     if (selectedTaskIds.length === 0) return;
     const affectedIds = new Set(selectedTaskIds);
     const previousTasks = tasks;
-    setTasks((current) => current.filter((task) => !affectedIds.has(task.id)));
+    const hide = (current: TaskWithLabels[]) => current.filter((task) => !affectedIds.has(task.id));
+    setTasks(hide);
     schedule(
       `Moved ${affectedIds.size} tasks to Trash`,
       async () => {
-        await bulkAction((task) =>
-          fetch(`/api/tasks/${task.id}`, { method: "DELETE" }),
+        // Trashing a task takes its subtasks along, so only the top of each
+        // selected branch is sent. Their own requests would find them gone.
+        await bulkAction(
+          (task) => fetch(`/api/tasks/${task.id}`, { method: "DELETE" }),
+          selectionRoots(tasks, [...affectedIds]),
         );
         affectedIds.forEach((id) => history.remove(id));
       },
       () => setTasks(previousTasks),
+      hide,
     );
   }
 
@@ -720,7 +730,7 @@ export function TaskList({
           if (!response.ok) throw new Error("Refresh failed");
           const saved: TaskWithLabels[] = await response.json();
           if (revision === moveRevision.current) {
-            setTasks(saved);
+            setTasks(reapply(saved));
             moveFailed.current = false;
             setError("Couldn't move the task. Your saved task order has been restored. Try again.");
           }
