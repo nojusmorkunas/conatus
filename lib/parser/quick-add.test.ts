@@ -57,6 +57,8 @@ const cases: [string, Partial<QuickAddParse>][] = [
   ["x 5.3", { content: "x", dueDate: "2027-03-05" }],
   ["x 29/2", { content: "x 29/2" }], // invalid both years
   ["x 32/1", { content: "x 32/1" }],
+  ["x 30.11.2026", { content: "x", dueDate: "2026-11-30" }], // with a year
+  ["x 1/7/2026", { content: "x", dueDate: "2026-07-01" }], // a year keeps a past date
   // recurrence: interval rules start today, weekday rules on the next one
   ["water plants every day", { content: "water plants", dueDate: "2026-07-14", recurrence: "every day" }],
   ["review every 2 weeks", { content: "review", dueDate: "2026-07-14", recurrence: "every 2 weeks" }],
@@ -148,6 +150,13 @@ describe("parseQuickAdd", () => {
   test("month rollover for in N days", () => {
     expect(parseQuickAdd("x in 30 days", { today }).dueDate).toBe("2026-08-13");
   });
+});
+
+test("numeric dates read month-first for the MM/dd/yyyy format", () => {
+  expect(parseQuickAdd("x 3/9", { today, dateFormat: "MM/dd/yyyy" }).dueDate).toBe("2027-03-09");
+  expect(parseQuickAdd("x 11/30/2026", { today, dateFormat: "MM/dd/yyyy" }).dueDate).toBe("2026-11-30");
+  expect(parseQuickAdd("x deadline 11/30", { today, dateFormat: "MM/dd/yyyy" }).deadlineDate).toBe("2026-11-30");
+  expect(parseQuickAdd("x 3/9", { today, dateFormat: "dd.MM.yyyy" }).dueDate).toBe("2026-09-03");
 });
 
 describe("live quick-add preview", () => {

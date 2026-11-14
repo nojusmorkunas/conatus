@@ -10,6 +10,7 @@ import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
 import { BetaInviteDialog } from "@/components/beta-invite-dialog";
 import { betaInviteFor } from "@/lib/beta-invites";
 import { Toaster } from "@/components/ui/toast";
+import { DatePreferencesProvider } from "@/components/date-input";
 import { todayInTimezone } from "@/lib/dates";
 // Read on the server so the client bundle carries the version string, not the whole package.json.
 import { version } from "@/package.json";
@@ -40,6 +41,8 @@ export default async function AppLayout({
         name: users.name,
         image: users.image,
         timezone: users.timezone,
+        dateFormat: users.dateFormat,
+        weekStart: users.weekStart,
         updatedAt: users.updatedAt,
         instanceRole: users.instanceRole,
         onboardingCompletedAt: users.onboardingCompletedAt,
@@ -73,34 +76,36 @@ export default async function AppLayout({
   const betaInvite = betaInviteFor(account);
 
   return (
-    <div className="flex h-dvh flex-col md:flex-row">
-      <KeyboardShortcuts inboxProjectId={inboxProjectId} />
-      <ProjectSidebar
-        initialProjects={userProjects}
-        initialLabels={userLabels}
-        initialFilters={userFilters}
-        username={account.username}
-        userName={account.name}
-        hasAvatar={!!account.image}
-        avatarVersion={String(account.updatedAt.getTime())}
-        appVersion={version}
-        inboxProjectId={inboxProjectId}
-        today={today}
-        labels={userLabels}
-        counts={counts}
-        todayCount={todayCount}
-      />
-      <main className="flex-1 min-w-0 overflow-y-auto pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0">{children}</main>
-      <Toaster />
-      <BetaInviteDialog
-        invite={betaInvite && {
-          id: betaInvite.id,
-          title: betaInvite.title,
-          body: betaInvite.body,
-          joinUrl: betaInvite.joinUrl,
-          alternative: betaInvite.alternative,
-        }}
-      />
-    </div>
+    <DatePreferencesProvider dateFormat={account.dateFormat} weekStart={account.weekStart}>
+      <div className="flex h-dvh flex-col md:flex-row">
+        <KeyboardShortcuts inboxProjectId={inboxProjectId} />
+        <ProjectSidebar
+          initialProjects={userProjects}
+          initialLabels={userLabels}
+          initialFilters={userFilters}
+          username={account.username}
+          userName={account.name}
+          hasAvatar={!!account.image}
+          avatarVersion={String(account.updatedAt.getTime())}
+          appVersion={version}
+          inboxProjectId={inboxProjectId}
+          today={today}
+          labels={userLabels}
+          counts={counts}
+          todayCount={todayCount}
+        />
+        <main className="flex-1 min-w-0 overflow-y-auto pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0">{children}</main>
+        <Toaster />
+        <BetaInviteDialog
+          invite={betaInvite && {
+            id: betaInvite.id,
+            title: betaInvite.title,
+            body: betaInvite.body,
+            joinUrl: betaInvite.joinUrl,
+            alternative: betaInvite.alternative,
+          }}
+        />
+      </div>
+    </DatePreferencesProvider>
   );
 }

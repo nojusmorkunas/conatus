@@ -62,14 +62,15 @@ function relative(words: string[], i: number, today: string): DateMatch | null {
 }
 
 // Calendar dates only. Also used by filters and the deadline parser; a time
-// such as {noon} must never turn into a date-only deadline.
-export function matchDate(source: string[], i: number, today: string): DateMatch | null {
+// such as {noon} must never turn into a date-only deadline. numericMonthFirst reads
+// numeric dates as month/day, for accounts using the MM/dd/yyyy format.
+export function matchDate(source: string[], i: number, today: string, numericMonthFirst = false): DateMatch | null {
   const words = source.map((word) => cleanWord(word).toLowerCase());
   const w = words[i];
   if (!w) return null;
   if (w === "on") {
     if (words[i + 1] === "on") return null;
-    const next = matchDate(words, i + 1, today);
+    const next = matchDate(words, i + 1, today, numericMonthFirst);
     return next && { ...next, length: next.length + 1 };
   }
   if (w === "the") {
@@ -109,10 +110,15 @@ export function matchDate(source: string[], i: number, today: string): DateMatch
   if (offset) return offset;
   const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(w);
   if (iso) return result(validDate(Number(iso[1]), Number(iso[2]), Number(iso[3])), 1);
-  // Numeric dates remain day-first. Punctuation around a date is optional;
-  // punctuation inside it is meaningful and must not be stripped.
-  const dm = /^(\d{1,2})[/.](\d{1,2})$/.exec(w);
-  if (dm) return result(nextCalendarDate(today, Number(dm[2]), Number(dm[1])), 1);
+  // Numeric dates follow the account's day/month order, with an optional
+  // year. Punctuation around a date is optional; punctuation inside it is
+  // meaningful and must not be stripped.
+  const numeric = /^(\d{1,2})[/.](\d{1,2})(?:[/.](\d{4}))?$/.exec(w);
+  if (numeric) {
+    const [first, second] = [Number(numeric[1]), Number(numeric[2])];
+    const year = numeric[3] ? Number(numeric[3]) : undefined;
+    return result(numericMonthFirst ? nextCalendarDate(today, first, second, year) : nextCalendarDate(today, second, first, year), 1);
+  }
   const monthFirst = monthIndex(w);
   const monthSecond = monthIndex(words[i + 1] ?? "");
   const dayWord = monthFirst >= 0 ? words[i + 1] : w;

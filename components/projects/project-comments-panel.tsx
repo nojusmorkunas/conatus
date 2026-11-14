@@ -8,6 +8,8 @@ import { jsonInit } from "@/lib/api-client";
 import type { comments as commentsTable } from "@/lib/db/schema";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useDatePreferences } from "@/components/date-input";
+import { formatDateTime } from "@/lib/dates";
 
 type Comment = typeof commentsTable.$inferSelect;
 
@@ -136,6 +138,7 @@ function CommentRow({
 }) {
   const [editing, setEditing] = useState(false);
   const [content, setContent] = useState(comment.content);
+  const { dateFormat } = useDatePreferences();
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -173,7 +176,7 @@ function CommentRow({
         )}
       </div>
       <span className="text-xs text-muted-foreground">
-        {new Date(comment.createdAt).toLocaleString()}
+        {formatDateTime(new Date(comment.createdAt), dateFormat)}
       </span>
     </div>
   );

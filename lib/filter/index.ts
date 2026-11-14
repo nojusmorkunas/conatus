@@ -10,7 +10,8 @@
 //           | '<N> days'                       -- today <= due <= today+N
 //           | 'p1'..'p4' | '#Project' | '@label'
 // Date phrases after before:/after: use the quick-add vocabulary
-// (today/tomorrow/weekdays/next week/in N days/YYYY-MM-DD/D.M).
+// (today/tomorrow/weekdays/next week/in N days/YYYY-MM-DD/D.M, or M/D for
+// accounts using the MM/dd/yyyy format).
 //
 // Documented semantics:
 // - Tasks with no due date never match any date term (only 'no date' and
@@ -138,7 +139,8 @@ function parse(tokens: Token[]): FilterAst {
     if (w === "due" && (next === "before:" || next === "after:")) {
       i += 2;
       const words = tokens.slice(i).map((t) => t.text);
-      const match = words.length ? matchDate(words, 0, REF_TODAY) : null;
+      // Either day/month order is valid here; the account's format decides at evaluation.
+      const match = words.length ? matchDate(words, 0, REF_TODAY) ?? matchDate(words, 0, REF_TODAY, true) : null;
       if (!match) fail(`expected a date after "due ${next}"`, tok);
       const phrase = words.slice(0, match.length);
       i += match.length;
@@ -175,12 +177,12 @@ function addDays(date: string, n: number): string {
 
 // null when the phrase can't land on a real date for this year, e.g.
 // "29.2" evaluated when neither this year nor next is a leap year.
-function resolve(phrase: string[], today: string): string | null {
-  const match = matchDate(phrase, 0, today);
+function resolve(phrase: string[], today: string, monthFirst = false): string | null {
+  const match = matchDate(phrase, 0, today, monthFirst);
   return match && match.length === phrase.length ? match.date : null;
 }
 
-export function evaluateFilter(ast: FilterAst, task: FilterableTask, opts: { today: string }): boolean {
+export function evaluateFilter(ast: FilterAst, task: FilterableTask, opts: { today: string; monthFirst?: boolean }): boolean {
   switch (ast.op) {
     case "and":
       return evaluateFilter(ast.left, task, opts) && evaluateFilter(ast.right, task, opts);
@@ -189,13 +191,13 @@ export function evaluateFilter(ast: FilterAst, task: FilterableTask, opts: { tod
     case "not":
       return !evaluateFilter(ast.child, task, opts);
     case "on":
-      return task.dueDate !== null && task.dueDate === resolve(ast.phrase, opts.today);
+      return task.dueDate !== null && task.dueDate === resolve(ast.phrase, opts.today, opts.monthFirst);
     case "before": {
-      const date = resolve(ast.phrase, opts.today);
+      const date = resolve(ast.phrase, opts.today, opts.monthFirst);
       return date !== null && task.dueDate !== null && task.dueDate < date;
     }
     case "after": {
-      const date = resolve(ast.phrase, opts.today);
+      const date = resolve(ast.phrase, opts.today, opts.monthFirst);
       return date !== null && task.dueDate !== null && task.dueDate > date;
     }
     case "days":

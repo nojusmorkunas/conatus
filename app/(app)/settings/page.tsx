@@ -192,6 +192,7 @@ export default async function SettingsPage({
           )}
           {user.instanceRole === "admin" && (
             <RegistrationInvites
+              timezone={user.timezone}
               initialInvitations={signupInvitations.map((invite) => ({
                 ...invite,
                 expiresAt: invite.expiresAt.toISOString(),

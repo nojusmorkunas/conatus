@@ -2,6 +2,7 @@ import { and, eq, isNull, lte } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { projects, reminders, tasks, users } from "@/lib/db/schema";
+import { formatDate } from "@/lib/dates";
 import { reportError } from "@/lib/error-reporter";
 import { isEmailConfigured, transporter } from "@/lib/mailer";
 
@@ -21,6 +22,7 @@ export async function sendDueReminders() {
       projectName: projects.name,
       userEmail: users.email,
       emailReminders: users.emailReminders,
+      dateFormat: users.dateFormat,
     })
     .from(reminders)
     .innerJoin(tasks, eq(reminders.taskId, tasks.id))
@@ -41,7 +43,7 @@ export async function sendDueReminders() {
         continue;
       }
       const due = reminder.dueDate
-        ? `${reminder.dueDate}${reminder.dueTime ? ` ${reminder.dueTime}` : ""}`
+        ? `${formatDate(reminder.dueDate, reminder.dateFormat)}${reminder.dueTime ? ` ${reminder.dueTime}` : ""}`
         : "no due date";
       await transporter.sendMail({
         from: process.env.SMTP_FROM,

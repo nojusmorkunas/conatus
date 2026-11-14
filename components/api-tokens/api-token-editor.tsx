@@ -12,6 +12,7 @@ import { buildProjectTree } from "@/components/projects/project-tree";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/date-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toastError } from "@/components/ui/toast";
 
@@ -160,7 +161,7 @@ export function ApiTokenEditor({ token, projects, timezone, dateFormat, onSaved,
             </SelectContent>
           </Select>
           {expiry === "custom" && (
-            <Input type="date" aria-label="Expiry date" aria-describedby={`${id}-expiry-preview`} min={tomorrow} value={customDate} onChange={(event) => setCustomDate(event.target.value)} className="w-auto" />
+            <DateInput aria-label="Expiry date" aria-describedby={`${id}-expiry-preview`} min={tomorrow} value={customDate} onChange={setCustomDate} className="w-auto" />
           )}
         </div>
         <FieldDescription id={`${id}-expiry-preview`}>{expiryPreview}</FieldDescription>

@@ -49,3 +49,21 @@ test("marks disabled email reminders sent without sending mail", async () => {
   expect(queries[1]).toContain('update "reminders" set "sent_at" = $1');
   expect(queries[1]).toContain('where "reminders"."id" = $2');
 });
+
+test("shows the due date in the account's date format", async () => {
+  dueRows.push([
+    "reminder-id",
+    new Date().toISOString(),
+    "A task",
+    "2026-11-30",
+    "09:30",
+    "Inbox",
+    "user@example.com",
+    true,
+    "dd.MM.yyyy",
+  ]);
+
+  await sendDueReminders();
+
+  expect(vi.mocked(transporter.sendMail).mock.calls[0][0].text).toContain("Due: 30.11.2026 09:30");
+});

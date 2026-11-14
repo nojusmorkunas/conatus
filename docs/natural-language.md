@@ -8,7 +8,7 @@ case-insensitive and tolerates trailing sentence punctuation.
 | --- | --- |
 | Due date | `today`, `tod`, `tomorrow`, `tmr`, `Friday`, `on Friday`, `this Friday`, `coming Monday`, `upcoming Monday` |
 | Relative date | `next week`, `next month`, `next year`, `next Friday`, `in two days`, `in 2 weeks`, `in a week`, `a week from now`, `2 days from now` |
-| Calendar date | `2027-09-15`, `15/9`, `15.9`, `September 15`, `Sep 15`, `15 Sep`, `15th September`, `September 15th`, `Sep. 15, 2027`, `on the 1st`, `the 15th` |
+| Calendar date | `2027-09-15`, `15/9`, `15.9`, `15.9.2027`, `September 15`, `Sep 15`, `15 Sep`, `15th September`, `September 15th`, `Sep. 15, 2027`, `on the 1st`, `the 15th` |
 | Time | `at noon`, `at midnight`, `at 5 pm`, `at 5 p.m.`, `at 17:30`, `5pm`, `17:30` |
 | Part of day | `tomorrow morning`, `this afternoon`, `this evening`, `tonight` |
 | Duration | `for 30m`, `for 1h30m`, `for 1h 30m`, `for 2 hours`, `for 90 minutes`, `for an hour`, `for half an hour`, `for 1.5 hours` |
@@ -16,6 +16,8 @@ case-insensitive and tolerates trailing sentence punctuation.
 | Deadline | `deadline Friday`, `deadline by September 15`, `{friday}`, `{in two weeks}`, `{next month}` |
 | Reminder | `Remind me tomorrow to call mom`, `Remind me at noon to call mom`, `Remind me to call mom tomorrow at 5pm` |
 | Priority, project, labels | `p1`–`p4`, `#Home office`, `@deep work`; the composer matches existing names |
+
+Numeric dates such as `15/9` are day-first unless the account's date format is MM/dd/yyyy, which reads them month-first (`9/15`). A year can follow, as in `15.9.2027`.
 
 ## Repeats
 

@@ -5,6 +5,7 @@ import { Flag, Timer } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/date-input";
 import {
   Select,
   SelectContent,
@@ -88,12 +89,12 @@ export function DueEditor({
 
   return (
     <form onSubmit={submit} className="flex flex-wrap items-center gap-2 py-1">
-      <Input
-        type="date"
+      <DateInput
         autoFocus
+        aria-label="Due date"
         className="w-auto"
         value={date}
-        onChange={(event) => setDate(event.target.value)}
+        onChange={setDate}
       />
       <Input
         type="time"
@@ -103,12 +104,11 @@ export function DueEditor({
       />
       <span className="flex items-center gap-1">
         <Flag className="size-3 text-muted-foreground" aria-hidden />
-        <Input
-          type="date"
+        <DateInput
           aria-label="Deadline"
           className="w-auto"
           value={deadline}
-          onChange={(event) => setDeadline(event.target.value)}
+          onChange={setDeadline}
         />
         {deadline && (
           <Button type="button" variant="ghost" size="sm" onClick={() => setDeadline("")}>

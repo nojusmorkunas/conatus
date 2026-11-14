@@ -7,6 +7,8 @@ import { Bell, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { toastError } from "@/components/ui/toast";
+import { useDatePreferences } from "@/components/date-input";
+import { formatDateTime } from "@/lib/dates";
 import { api } from "@/lib/api-client";
 
 type DueReminder = {
@@ -18,6 +20,7 @@ type DueReminder = {
 };
 
 export function ReminderBell() {
+  const { dateFormat } = useDatePreferences();
   const [reminders, setReminders] = useState<DueReminder[]>([]);
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ left: 8, top: 48, width: 288 });
@@ -112,7 +115,7 @@ export function ReminderBell() {
                 >
                   <p className="truncate font-medium">{reminder.taskContent}</p>
                   <p className="text-muted-foreground">
-                    {new Date(reminder.remindAt).toLocaleString()}
+                    {formatDateTime(new Date(reminder.remindAt), dateFormat)}
                   </p>
                 </Link>
                 <Button

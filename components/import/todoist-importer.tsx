@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { DateInput } from "@/components/date-input";
 import { cn } from "@/lib/utils";
 
 type ProjectPreview = {
@@ -412,16 +413,14 @@ export function TodoistImporter({ onboarding = false }: { onboarding?: boolean }
                           <span className="block truncate text-sm font-medium">{task.content}</span>
                           <span className="block truncate text-xs text-muted-foreground">{task.projectName} · {task.recurrence}</span>
                         </span>
-                        <input
-                          type="date"
+                        <DateInput
                           required
                           aria-label={`Current Todoist date for ${task.content}`}
                           value={recurrenceDueDates[task.reviewKey] ?? ""}
-                          onChange={(event) => setRecurrenceDueDates((current) => ({
+                          onChange={(date) => setRecurrenceDueDates((current) => ({
                             ...current,
-                            [task.reviewKey]: event.target.value,
+                            [task.reviewKey]: date,
                           }))}
-                          className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                         />
                       </label>
                     ))}
