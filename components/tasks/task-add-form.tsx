@@ -5,6 +5,7 @@ import { AlignLeft, ArrowUp, Bell, CalendarDays, Check, Flag, Hash, Inbox, Loade
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput, useDatePreferences } from "@/components/date-input";
 import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { parseQuickAddPreview, removeQuickAddTokens, type QuickAddToken } from "@/lib/parser/quick-add";
@@ -74,6 +75,7 @@ export function TaskAddForm({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hintId = useId();
+  const { dateFormat } = useDatePreferences();
 
   const availableLabels = useMemo(() => [...labels, ...createdLabels.filter((label) => !labels.some((existing) => existing.id === label.id))], [labels, createdLabels]);
   const { parsed, tokens } = useMemo(() => parseQuickAddPreview(content, {
@@ -96,7 +98,7 @@ export function TaskAddForm({
   const targetSection = sections.find((section) => section.id === targetSectionId);
   const selectedLabels = availableLabels.filter((label) => manualLabelIds.includes(label.id) || parsed.labelNames.some((name) => name.toLowerCase() === label.name.toLowerCase()));
   const frozen = pending || Boolean(recovery);
-  const dateText = dueDate ? `${dueLabel(dueDate, today, "dd/MM/yyyy")}${dueTime ? ` · ${dueTime}` : ""}` : "Date";
+  const dateText = dueDate ? `${dueLabel(dueDate, today, dateFormat)}${dueTime ? ` · ${dueTime}` : ""}` : "Date";
 
   useEffect(() => {
     function onFocusRequest() {
@@ -244,7 +246,7 @@ export function TaskAddForm({
   }
 
   const selectedNames = selectedLabels.map((label) => label.name).join(", ");
-  const recognitionSummary = [dueDate && `Date: ${dateText}`, recurrence && `Repeat: ${recurrence}`, priority < 4 && `Priority ${priority}`, selectedNames && `Labels: ${selectedNames}`, deadline && `Deadline: ${dueLabel(deadline, today, "dd/MM/yyyy")}`, duration && `Duration: ${duration} minutes`, parsedProject && `Project: ${parsedProject.name}`, parsed.reminderAt && `Reminder: ${new Date(parsed.reminderAt).toLocaleString()}`].filter(Boolean).join(". ");
+  const recognitionSummary = [dueDate && `Date: ${dateText}`, recurrence && `Repeat: ${recurrence}`, priority < 4 && `Priority ${priority}`, selectedNames && `Labels: ${selectedNames}`, deadline && `Deadline: ${dueLabel(deadline, today, dateFormat)}`, duration && `Duration: ${duration} minutes`, parsedProject && `Project: ${parsedProject.name}`, parsed.reminderAt && `Reminder: ${new Date(parsed.reminderAt).toLocaleString()}`].filter(Boolean).join(". ");
 
   if (!expanded) return (
     <button ref={rootRef as React.Ref<HTMLButtonElement>} type="button" data-quick-add className={cn("group/add-task flex w-full items-center gap-2 rounded-lg border border-dashed border-transparent py-2 text-left text-sm text-muted-foreground transition-colors hover:border-border hover:bg-muted/35 hover:text-foreground", alignWithTask ? "relative pr-2 pl-9 md:pl-[72px]" : "px-2")} onClick={() => setExpanded(true)}>
@@ -306,7 +308,7 @@ export function TaskAddForm({
             {recurrence && panel !== "date" && <RecurrencePicker value={recurrence} onChange={(rule) => changeSchedule({ date: dueDate, time: dueTime, recurrence: rule })} anchorDate={dueDate || today} />}
             {priority < 4 && <ComposerChip icon={Flag} label="Priority" onClick={() => setPanel("priority")} onRemove={() => { strip(["priority"]); setManualPriority(4); }} className={composerPriorityColors[priority]}>{`P${priority}`}</ComposerChip>}
             {selectedLabels.map((label) => <ComposerChip key={label.id} icon={Tag} label={`Label ${label.name}`} onClick={() => setPanel("labels")} onRemove={() => removeLabel(label)}>{label.name}</ComposerChip>)}
-            {deadline && <ComposerChip icon={Flag} label="Deadline" onClick={() => setPanel("deadline")} onRemove={() => { strip(["deadline"]); setManualDeadline(""); }}>{`Deadline: ${dueLabel(deadline, today, "dd/MM/yyyy")}`}</ComposerChip>}
+            {deadline && <ComposerChip icon={Flag} label="Deadline" onClick={() => setPanel("deadline")} onRemove={() => { strip(["deadline"]); setManualDeadline(""); }}>{`Deadline: ${dueLabel(deadline, today, dateFormat)}`}</ComposerChip>}
             {duration && <ComposerChip icon={Timer} label="Duration" onClick={() => setPanel("duration")} onRemove={() => { strip(["duration"]); setManualDuration(""); }}>{humanizeDuration(Number(duration))}</ComposerChip>}
             {selectedReminders.map((reminder) => <ComposerChip key={reminder} icon={Bell} label={`Reminder ${new Date(reminder).toLocaleString()}`} onClick={() => { setEditingReminder(reminder); setReminderDraft(reminder); setPanel("reminders"); }} onRemove={() => { if (reminder === parsed.reminderAt) strip(["reminder"]); setReminders((current) => current.filter((item) => item !== reminder)); }}>{new Date(reminder).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</ComposerChip>)}
             {files.map((file, index) => <ComposerChip key={`${file.name}-${index}`} icon={Paperclip} label={`Attachment ${file.name}`} onClick={() => fileInputRef.current?.click()} onRemove={() => setFiles((current) => current.filter((_, i) => i !== index))}>{file.name}</ComposerChip>)}
@@ -328,7 +330,7 @@ export function TaskAddForm({
               <Button type="button" size="sm" variant="ghost" onClick={() => { changeSchedule(emptySchedule); closePanel(); }}>No date</Button>
             </div>
             <div className="flex flex-wrap items-end gap-2">
-              <label className="min-w-0 flex-1 text-xs text-muted-foreground">Date<Input autoFocus type="date" aria-label="Due date" className="mt-1" value={dueDate} onChange={(event) => changeSchedule(event.target.value ? { date: event.target.value, time: dueTime, recurrence } : emptySchedule)} /></label>
+              <label className="min-w-0 flex-1 text-xs text-muted-foreground">Date<DateInput autoFocus aria-label="Due date" className="mt-1" value={dueDate} onChange={(date) => changeSchedule(date ? { date, time: dueTime, recurrence } : emptySchedule)} /></label>
               <label className="min-w-0 flex-1 text-xs text-muted-foreground">Time<Input type="time" aria-label="Due time" className="mt-1" value={dueTime} onChange={(event) => changeSchedule({ date: dueDate || today, time: event.target.value, recurrence })} /></label>
               <RecurrencePicker value={recurrence} onChange={(rule) => changeSchedule({ date: dueDate || (rule ? firstOccurrence(rule, today) : ""), time: dueTime, recurrence: rule })} anchorDate={dueDate || today} />
             </div>
@@ -336,7 +338,7 @@ export function TaskAddForm({
           {panel === "priority" && <ComposerPriorityPicker value={priority} onChange={(value) => { strip(["priority"]); setManualPriority(value); closePanel(); }} />}
           {panel === "deadline" && <>
             <p className="mb-2 text-xs text-muted-foreground">The date this must be finished by.</p>
-            <div className="flex flex-wrap gap-2"><Input autoFocus type="date" aria-label="Deadline date" className="w-auto max-w-full" value={deadline} onChange={(event) => { strip(["deadline"]); setManualDeadline(event.target.value); }} /><Button type="button" variant="ghost" size="sm" onClick={() => { strip(["deadline"]); setManualDeadline(""); closePanel(); }}>No deadline</Button></div>
+            <div className="flex flex-wrap gap-2"><DateInput autoFocus aria-label="Deadline date" className="w-auto max-w-full" value={deadline} onChange={(date) => { strip(["deadline"]); setManualDeadline(date); }} /><Button type="button" variant="ghost" size="sm" onClick={() => { strip(["deadline"]); setManualDeadline(""); closePanel(); }}>No deadline</Button></div>
           </>}
           {panel === "duration" && <label className="block text-xs text-muted-foreground">Estimated time in minutes<Input autoFocus type="number" aria-label="Duration in minutes" min={1} max={1440} step={1} placeholder="30" className="mt-1 w-32" value={duration} onChange={(event) => { strip(["duration"]); setManualDuration(event.target.value); }} /></label>}
           {panel === "reminders" && <>

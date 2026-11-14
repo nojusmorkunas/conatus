@@ -18,7 +18,7 @@ import {
 } from "@dnd-kit/core";
 
 import type { tasks as tasksTable } from "@/lib/db/schema";
-import { addDays, formatDate, monthGridStart } from "@/lib/dates";
+import { addDays, addMonths, formatDate, monthGridStart, WEEKDAY_LABELS } from "@/lib/dates";
 import { priorityColors } from "@/components/tasks/priority";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -26,14 +26,7 @@ import { cn } from "@/lib/utils";
 type StoredTask = typeof tasksTable.$inferSelect;
 type Task = CalendarOccurrence<StoredTask>;
 
-const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const HOUR_HEIGHT = 48;
-
-function addMonths(month: string, delta: number): string {
-  const [year, m] = month.split("-").map(Number);
-  const total = year * 12 + (m - 1) + delta;
-  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`;
-}
 
 export function CalendarView({
   view,

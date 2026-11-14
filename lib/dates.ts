@@ -20,6 +20,18 @@ export function formatDate(date: string, dateFormat: string): string {
     .replace("dd", day);
 }
 
+// Reads a date typed in the user's format. Null until it names a real calendar day.
+export function parseDate(text: string, dateFormat: string): string | null {
+  const parts = text.trim().split(/\D+/);
+  const order = dateFormat.split(/[^a-zA-Z]+/);
+  if (parts.length !== 3 || order.length !== 3) return null;
+  const pick = (token: string) => parts[order.indexOf(token)] ?? "";
+  const iso = `${pick("yyyy")}-${pick("MM").padStart(2, "0")}-${pick("dd").padStart(2, "0")}`;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+  const date = new Date(`${iso}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(iso) ? iso : null;
+}
+
 export function dueLabel(dueDate: string, today: string, dateFormat: string): string {
   if (dueDate === today) return "Today";
   if (dueDate === addDays(today, 1)) return "Tomorrow";
@@ -30,6 +42,16 @@ export function dueLabel(dueDate: string, today: string, dateFormat: string): st
     });
   }
   return formatDate(dueDate, dateFormat);
+}
+
+// Indexed like users.weekStart: Sunday=0 .. Saturday=6.
+export const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+// "2026-11" plus delta months.
+export function addMonths(month: string, delta: number): string {
+  const [year, m] = month.split("-").map(Number);
+  const total = year * 12 + (m - 1) + delta;
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`;
 }
 
 // Sunday=0 .. Saturday=6, matching users.weekStart and Date#getUTCDay.

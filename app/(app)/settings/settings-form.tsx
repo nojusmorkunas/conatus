@@ -91,6 +91,8 @@ export function SettingsForm({
     try {
       await api.patch("/api/settings", values);
       setSaved(true);
+      // The app layout reads the date format and week start; it survives navigation.
+      router.refresh();
     } catch (error) {
       toastError(error, "Couldn't save your settings.");
     }

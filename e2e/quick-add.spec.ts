@@ -162,7 +162,7 @@ test("failed task creation keeps the draft and supports a single retry", async (
 test("natural-language dates, spaced times and durations preview and save together", async ({ page }) => {
   const { composer, input, projectId } = await openComposer(page);
   await input.fill("Plan release September 15, 2027 at 5 pm. for 1.5 hours deadline September 20, 2027");
-  await expect(composer.getByRole("button", { name: "Date", exact: true })).toHaveText("15/09/2027 · 17:00");
+  await expect(composer.getByRole("button", { name: "Date", exact: true })).toHaveText("2027-09-15 · 17:00");
   await expect(composer.getByRole("button", { name: "Duration", exact: true })).toHaveText("1h 30m");
   await expect(composer.locator('[data-token-kind="time"]')).toHaveText("at 5 pm.");
   await expect(composer.locator('[data-token-kind="duration"]')).toHaveText("for 1.5 hours");
