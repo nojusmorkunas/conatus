@@ -95,7 +95,7 @@ export default async function FilterPage({
       projectName: task.projectName,
       labelNames: task.labels.map((label) => label.name),
     };
-    return evaluateFilter(parsed.ast, filterable, { today });
+    return evaluateFilter(parsed.ast, filterable, { today, monthFirst: settings.dateFormat === "MM/dd/yyyy" });
   });
 
   return (

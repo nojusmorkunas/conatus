@@ -97,7 +97,8 @@ test("plus menu applies description, dates, labels, reminders and retries only f
   await expect(composer.getByRole("checkbox", { name: "workshop" })).toBeChecked();
   await composer.getByRole("button", { name: "Close labels" }).click();
   await openAction(page, "Reminders");
-  await composer.getByLabel("Reminder date and time").fill("2027-01-12T09:30");
+  await composer.getByLabel("Reminder date").fill("2027-01-12");
+  await composer.getByLabel("Reminder time").fill("09:30");
   await composer.getByRole("button", { name: "Add reminder", exact: true }).click();
 
   // Simulate an unavailable attachment service, then a successful retry.
@@ -230,8 +231,9 @@ test.describe("natural-language reminders", () => {
     const { composer, input, projectId } = await openComposer(page);
     await input.fill("Remind me tomorrow to call mom");
     await composer.getByRole("button", { name: /^Reminder / }).click();
-    await expect(composer.getByLabel("Reminder date and time")).toHaveValue(/T09:00$/);
-    await composer.getByLabel("Reminder date and time").fill("2027-02-10T16:00");
+    await expect(composer.getByLabel("Reminder time")).toHaveValue("09:00");
+    await composer.getByLabel("Reminder date").fill("2027-02-10");
+    await composer.getByLabel("Reminder time").fill("16:00");
     await composer.getByRole("button", { name: "Save reminder", exact: true }).click();
     await expect(input).toHaveValue("call mom");
     await input.press("Enter");

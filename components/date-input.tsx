@@ -3,7 +3,7 @@
 import { createContext, useContext, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 
-import { addDays, addMonths, dateInTimezone, formatDate, monthGridStart, parseDate, WEEKDAY_LABELS } from "@/lib/dates";
+import { addDays, addMonths, dateInTimezone, formatDate, monthGridStart, monthLabel, parseDate, WEEKDAY_LABELS } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -75,9 +75,7 @@ export function DateInput({ value, onChange, min, className, disabled, ...props 
         <PopoverContent align="end" className="w-auto">
           <div className="mb-2 flex items-center justify-between gap-2">
             <Button type="button" variant="ghost" size="icon-sm" aria-label="Previous month" onClick={() => setMonth(addMonths(month, -1))}><ChevronLeft /></Button>
-            <span className="text-sm font-medium" aria-live="polite">
-              {month && new Date(`${month}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" })}
-            </span>
+            <span className="text-sm font-medium" aria-live="polite">{month && monthLabel(month)}</span>
             <Button type="button" variant="ghost" size="icon-sm" aria-label="Next month" onClick={() => setMonth(addMonths(month, 1))}><ChevronRight /></Button>
           </div>
           <div className="grid grid-cols-7 gap-0.5 text-center">
@@ -105,6 +103,25 @@ export function DateInput({ value, onChange, min, className, disabled, ...props 
           </div>
         </PopoverContent>
       </Popover>
+    </div>
+  );
+}
+
+// A local "YYYY-MM-DDTHH:mm", as reminders use. Until both halves are filled
+// in the value doesn't parse as a date, which keeps Add buttons disabled.
+export function DateTimeInput({ value, onChange, label, autoFocus, className }: {
+  value: string;
+  onChange: (value: string) => void;
+  label: string;
+  autoFocus?: boolean;
+  className?: string;
+}) {
+  const [date = "", time = ""] = value.split("T");
+  const join = (nextDate: string, nextTime: string) => onChange(nextDate || nextTime ? `${nextDate}T${nextTime}` : "");
+  return (
+    <div className={cn("flex min-w-0 flex-wrap gap-1", className)}>
+      <DateInput autoFocus={autoFocus} aria-label={`${label} date`} className="min-w-36 flex-1" value={date} onChange={(next) => join(next, time)} />
+      <Input type="time" aria-label={`${label} time`} className="w-auto" value={time} onChange={(event) => join(date, event.target.value)} />
     </div>
   );
 }

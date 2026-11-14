@@ -18,7 +18,7 @@ import {
 } from "@dnd-kit/core";
 
 import type { tasks as tasksTable } from "@/lib/db/schema";
-import { addDays, addMonths, formatDate, monthGridStart, WEEKDAY_LABELS } from "@/lib/dates";
+import { addDays, addMonths, formatDate, monthGridStart, monthLabel, WEEKDAY_LABELS } from "@/lib/dates";
 import { priorityColors } from "@/components/tasks/priority";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -121,7 +121,7 @@ export function CalendarView({
             ›
           </Link>
           <span className="order-last w-full text-sm font-medium sm:order-none sm:ml-2 sm:w-auto">
-            {view === "month" ? month : `${formatDate(week, dateFormat)} – ${formatDate(addDays(week, 6), dateFormat)}`}
+            {view === "month" ? monthLabel(month) : `${formatDate(week, dateFormat)} – ${formatDate(addDays(week, 6), dateFormat)}`}
           </span>
         </div>
         <div className="flex items-center gap-2">

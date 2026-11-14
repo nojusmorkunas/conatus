@@ -6,6 +6,8 @@ import { Copy, Link2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { jsonInit } from "@/lib/api-client";
+import { useDatePreferences } from "@/components/date-input";
+import { formatDateTime } from "@/lib/dates";
 
 type Invitation = {
   id: string;
@@ -16,9 +18,12 @@ type Invitation = {
 
 export function RegistrationInvites({
   initialInvitations,
+  timezone,
 }: {
   initialInvitations: Invitation[];
+  timezone: string;
 }) {
+  const { dateFormat } = useDatePreferences();
   const [username, setUsername] = useState("");
   const [invitations, setInvitations] = useState(initialInvitations);
   const [createdUrl, setCreatedUrl] = useState<string | null>(null);
@@ -119,7 +124,7 @@ export function RegistrationInvites({
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{invite.username ?? "Anyone with the link"}</p>
                 <p className="text-xs text-muted-foreground">
-                  Expires {new Date(invite.expiresAt).toLocaleString()}
+                  Expires {formatDateTime(new Date(invite.expiresAt), dateFormat, timezone)}
                 </p>
               </div>
               <Button

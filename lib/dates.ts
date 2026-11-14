@@ -20,6 +20,18 @@ export function formatDate(date: string, dateFormat: string): string {
     .replace("dd", day);
 }
 
+// A moment in the user's date format with a 24-hour time, like due times.
+// Defaults to this device's time zone, where reminders are entered.
+export function formatDateTime(moment: Date, dateFormat: string, timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone): string {
+  const time = new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(moment);
+  return `${formatDate(dateInTimezone(moment, timeZone), dateFormat)} ${time}`;
+}
+
+// "2026-11" as "November 2026".
+export function monthLabel(month: string): string {
+  return new Date(`${month}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+}
+
 // Reads a date typed in the user's format. Null until it names a real calendar day.
 export function parseDate(text: string, dateFormat: string): string | null {
   const parts = text.trim().split(/\D+/);

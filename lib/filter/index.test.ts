@@ -131,3 +131,12 @@ describe("parseFilter errors", () => {
     if ("error" in parsed) expect(parsed.error).toMatch(message);
   });
 });
+
+test("numeric filter dates follow the account's day/month order", () => {
+  const parsed = parseFilter("due before: 11/30");
+  if ("error" in parsed) throw new Error(parsed.error);
+  const task = { ...base, dueDate: "2026-11-29" };
+  expect(evaluateFilter(parsed.ast, task, { today, monthFirst: true })).toBe(true);
+  // Day-first, 11/30 isn't a date, so nothing matches.
+  expect(evaluateFilter(parsed.ast, task, { today })).toBe(false);
+});

@@ -28,7 +28,7 @@ export async function POST(request: Request) {
 
       const [[settings], projects, userLabels] = await Promise.all([
         db
-          .select({ timezone: users.timezone })
+          .select({ timezone: users.timezone, dateFormat: users.dateFormat })
           .from(users)
           .where(eq(users.id, actor.id))
           .limit(1),
@@ -37,6 +37,7 @@ export async function POST(request: Request) {
       ]);
       const parsed = parseQuickAdd(body.text, {
         today: todayInTimezone(settings?.timezone ?? "UTC"),
+        dateFormat: settings?.dateFormat,
       });
       const remindAt = parsed.reminderAt ? localDateTimeToUtc(parsed.reminderAt, settings?.timezone ?? "UTC") : null;
       if (parsed.reminderAt) {
