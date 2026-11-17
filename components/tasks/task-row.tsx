@@ -29,7 +29,8 @@ import { keyName, taskRows } from "@/lib/keyboard";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { LabelChip } from "@/components/labels/label-chip";
-import { ProjectColorDot } from "@/components/projects/project-color-dot";
+import { projectColorTextClass } from "@/components/projects/project-color-dot";
+import { ProjectIcon } from "@/components/projects/project-icons";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -600,9 +601,12 @@ function TaskRowDetails({ task, directChildren, members, currentUserId, today, d
                 <LabelChip key={label.id} label={label} subtle />
               ))}
               {task.projectName && (
-                <span className="ml-auto flex min-w-0 items-center gap-1.5 text-muted-foreground">
+                <span className="ml-auto flex min-w-0 items-center gap-1 text-muted-foreground">
+                  <ProjectIcon
+                    icon={task.projectIcon ?? null}
+                    className={cn("size-3.5 shrink-0", projectColorTextClass[task.projectColor as keyof typeof projectColorTextClass] ?? projectColorTextClass.gray)}
+                  />
                   <span className="truncate">{task.projectName}</span>
-                  <ProjectColorDot color={task.projectColor ?? "gray"} className="size-2" />
                 </span>
               )}
             </div>

@@ -78,6 +78,7 @@ export default async function FilterPage({
           updatedAt: tasks.updatedAt,
           projectName: projects.name,
           projectColor: projects.color,
+          projectIcon: projects.icon,
         })
         .from(tasks)
         .innerJoin(projects, eq(projects.id, tasks.projectId))

@@ -25,7 +25,7 @@ export default async function TodayPage() {
   const dueTasks = await withCommentCounts(
     await withLabels(
       await db
-        .select({ ...getTableColumns(tasks), projectName: projects.name, projectColor: projects.color })
+        .select({ ...getTableColumns(tasks), projectName: projects.name, projectColor: projects.color, projectIcon: projects.icon })
         .from(tasks)
         .innerJoin(projects, eq(projects.id, tasks.projectId))
         .where(

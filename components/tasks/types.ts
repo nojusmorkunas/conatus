@@ -17,6 +17,7 @@ export type TaskWithLabels = typeof tasksTable.$inferSelect & {
   // Set only by views that mix projects, so the row can say where it lives.
   projectName?: string;
   projectColor?: string;
+  projectIcon?: string | null;
 };
 
 export type ProjectMember = { id: string; username: string };
