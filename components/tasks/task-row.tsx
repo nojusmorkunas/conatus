@@ -28,6 +28,7 @@ import { addDays } from "@/lib/dates";
 import { keyName, taskRows } from "@/lib/keyboard";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { LinkifiedText } from "@/components/linkified-text";
 import { LabelChip } from "@/components/labels/label-chip";
 import { projectColorTextClass } from "@/components/projects/project-color-dot";
 import { ProjectIcon } from "@/components/projects/project-icons";
@@ -569,7 +570,7 @@ function TaskRowDetails({ task, directChildren, members, currentUserId, today, d
 
           {task.description?.trim() && (
             <p className="mt-0.5 truncate text-[13px] text-muted-foreground sm:text-xs">
-              {task.description}
+              <LinkifiedText text={task.description} />
             </p>
           )}
 
@@ -635,7 +636,8 @@ export function TaskDragPreview({ task, allTasks, depth, members, currentUserId,
 }
 
 function TaskContent({ task }: { task: TaskWithLabels }) {
-  return <div className="text-base select-none sm:text-sm">{task.content}</div>;
+  // Links are row controls, so clicking one follows it instead of opening the task.
+  return <div className="text-base select-none sm:text-sm"><LinkifiedText text={task.content} /></div>;
 }
 
 function TaskContextMenu({
