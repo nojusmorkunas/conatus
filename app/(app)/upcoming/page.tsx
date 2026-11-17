@@ -1,9 +1,9 @@
-import { and, eq, gte, inArray, isNull } from "drizzle-orm";
+import { and, eq, getTableColumns, gte, inArray, isNull } from "drizzle-orm";
 
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { accessibleProjectIds } from "@/lib/db/access";
-import { labels, tasks, users } from "@/lib/db/schema";
+import { labels, projects, tasks, users } from "@/lib/db/schema";
 import { withCommentCounts, withLabels } from "@/lib/db/task-labels";
 import { dueOrder } from "@/lib/db/task-order";
 import { dueLabel, formatDate, todayInTimezone } from "@/lib/dates";
@@ -26,8 +26,9 @@ export default async function UpcomingPage() {
   const dueTasks = await withCommentCounts(
     await withLabels(
       await db
-        .select()
+        .select({ ...getTableColumns(tasks), projectName: projects.name, projectColor: projects.color })
         .from(tasks)
+        .innerJoin(projects, eq(projects.id, tasks.projectId))
         .where(
           and(
             inArray(tasks.projectId, await accessibleProjectIds(user)),

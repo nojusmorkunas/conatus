@@ -54,4 +54,6 @@ test("Focus lists each day's timed tasks in time order, then the rest by priorit
     "Task: Organize pantry",
     "Task: Clean garage",
   ]);
+  await expect(page.getByRole("group", { name: "Task: School pickup" })).toContainText("Family");
+  await expect(page.getByRole("group", { name: "Task: Clean garage" })).toContainText("Inbox");
 });
