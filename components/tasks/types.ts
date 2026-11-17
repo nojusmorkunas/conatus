@@ -14,6 +14,10 @@ export type Section = typeof sectionsTable.$inferSelect;
 export type TaskWithLabels = typeof tasksTable.$inferSelect & {
   labels: Label[];
   commentCount: number;
+  // Set only by views that mix projects, so the row can say where it lives.
+  projectName?: string;
+  projectColor?: string;
+  projectIcon?: string | null;
 };
 
 export type ProjectMember = { id: string; username: string };

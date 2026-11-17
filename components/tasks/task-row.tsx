@@ -29,6 +29,8 @@ import { keyName, taskRows } from "@/lib/keyboard";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { LabelChip } from "@/components/labels/label-chip";
+import { projectColorTextClass } from "@/components/projects/project-color-dot";
+import { ProjectIcon } from "@/components/projects/project-icons";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -559,7 +561,8 @@ function TaskRowDetails({ task, directChildren, members, currentUserId, today, d
     directChildren.length > 0 ||
     Boolean(task.dueDate || task.deadlineDate || task.durationMinutes || task.commentCount) ||
     (members.length > 1 && Boolean(task.assigneeId)) ||
-    task.labels.length > 0;
+    task.labels.length > 0 ||
+    Boolean(task.projectName);
   return (
         <div className="min-w-0 flex-1">
           <TaskContent task={task} />
@@ -597,6 +600,15 @@ function TaskRowDetails({ task, directChildren, members, currentUserId, today, d
               {task.labels.map((label) => (
                 <LabelChip key={label.id} label={label} subtle />
               ))}
+              {task.projectName && (
+                <span className="ml-auto flex min-w-0 items-center gap-1 text-muted-foreground">
+                  <ProjectIcon
+                    icon={task.projectIcon ?? null}
+                    className={cn("size-3.5 shrink-0", projectColorTextClass[task.projectColor as keyof typeof projectColorTextClass] ?? projectColorTextClass.gray)}
+                  />
+                  <span className="truncate">{task.projectName}</span>
+                </span>
+              )}
             </div>
           )}
         </div>

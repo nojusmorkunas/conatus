@@ -58,6 +58,8 @@ export default async function LabelPage({
             createdAt: tasks.createdAt,
             updatedAt: tasks.updatedAt,
             projectName: projects.name,
+            projectColor: projects.color,
+            projectIcon: projects.icon,
           })
           .from(tasks)
           .innerJoin(projects, eq(projects.id, tasks.projectId))
