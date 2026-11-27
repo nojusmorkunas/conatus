@@ -11,6 +11,8 @@ export type TaskEntity = {
   projectId: string;
   sectionId: string | null;
   parentId: string | null;
+  /** Set only in shared projects. Changed online only, so sync is the one writer. */
+  assigneeId: string | null;
   content: string;
   description: string;
   priority: number;
@@ -43,6 +45,8 @@ export type ProjectEntity = {
   isFavorite: boolean;
   isInbox: boolean;
   order: string;
+  /** Where it sits among the pinned projects; none until it has been placed there. Local copies from before this field have none. */
+  favoriteOrder?: string | null;
   shared: boolean;
   /** Archived projects hide from every list; the server stops sending them and their tasks. */
   isArchived: boolean;
@@ -62,6 +66,14 @@ export type LabelEntity = {
   id: string;
   name: string;
   color: string;
+  isFavorite: boolean;
+  order: string;
+};
+
+export type FilterEntity = {
+  id: string;
+  name: string;
+  query: string;
   isFavorite: boolean;
   order: string;
 };
@@ -87,7 +99,7 @@ export type ReminderEntity = {
 /** [Place] moves a task among its siblings: {sectionId, parentId, afterId}, as drag and drop does. */
 export type ChangeKind = "Create" | "Update" | "Complete" | "Reopen" | "SetLabels" | "Delete" | "Restore" | "Place";
 
-export type Target = "Task" | "Project" | "Section" | "Label" | "Comment" | "Reminder";
+export type Target = "Task" | "Project" | "Section" | "Label" | "Filter" | "Comment" | "Reminder";
 
 /**
  * A change made here that the server hasn't confirmed yet. Changes go out in [seq] order. [body]
@@ -129,6 +141,7 @@ export type TaskDto = {
   projectId: string;
   sectionId: string | null;
   parentId: string | null;
+  assigneeId: string | null;
   content: string;
   description: string | null;
   priority: number;
@@ -154,6 +167,8 @@ export type ProjectDto = Omit<ProjectEntity, "shared" | "deletedAt"> & { shared?
 export type SectionDto = SectionEntity;
 
 export type LabelDto = LabelEntity;
+
+export type FilterDto = FilterEntity;
 
 export type CommentDto = CommentEntity;
 

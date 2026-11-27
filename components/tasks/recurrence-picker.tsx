@@ -55,7 +55,7 @@ function capitalize(text: string) {
 }
 
 /** "every! 3 days" → "Every 3 days, from completion" for display. */
-function recurrenceLabel(rule: string) {
+export function recurrenceLabel(rule: string) {
   const plain = rule.replace("every!", "every");
   const preset = PRESETS.find((option) => option.rule === plain);
   const base = preset

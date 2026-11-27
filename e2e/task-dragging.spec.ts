@@ -69,6 +69,7 @@ test("a cross-section drop lands before the indicated row and survives reload", 
   await page.mouse.up();
   await expect.poll(async () => (await persisted(page, f.beta.id)).sectionId).toBe(f.second.id);
   await page.reload();
+  await expect(row(page, "Alpha")).toBeVisible();
   const names = await page.locator("[data-task-content]").evaluateAll(nodes => nodes.map(node => node.getAttribute("data-task-content")));
   expect(names).toEqual(["Alpha", "Gamma", "Beta", "Parent", "Child one", "Child two", "Last"]);
 });
@@ -114,6 +115,7 @@ test("nests and outdents in place using deliberate horizontal movement", async (
   await moveToRow(page, "Gamma", "Gamma", "before", -28);
   await expect.poll(async () => (await persisted(page, f.gamma.id)).parentId).toBeNull();
   await page.reload();
+  await expect(row(page, "Alpha")).toBeVisible();
   expect((await names(page)).slice(0, 3)).toEqual(["Alpha", "Beta", "Gamma"]);
 });
 
@@ -141,6 +143,7 @@ test("moves an entire subtree into an empty section", async ({ page }) => {
     expect(await persisted(page, child.id)).toMatchObject({ sectionId: f.empty.id, parentId: f.parent.id });
   }
   await page.reload();
+  await expect(row(page, "Alpha")).toBeVisible();
   expect((await names(page)).slice(-3)).toEqual(["Parent", "Child one", "Child two"]);
 });
 
@@ -245,15 +248,20 @@ test("keyboard dragging reorders, nests, outdents and cancels", async ({ page })
   expect((await names(page)).slice(0, 3)).toEqual(["Alpha", "Gamma", "Beta"]);
 });
 
-test("a failed save restores the stored order and a retry works", async ({ page }) => {
+test("a move the network drops stays in place and is sent again", async ({ page }) => {
   const f = await fixture(page);
-  await page.route(`**/api/tasks/${f.beta.id}`, route => route.fulfill({ status: 500, json: { error: "Test failure" } }));
+  let attempts = 0;
+  await page.route(`**/api/v1/tasks/${f.beta.id}`, route => {
+    attempts += 1;
+    return attempts === 1 ? route.abort() : route.continue();
+  });
   await moveToRow(page, "Beta", "Gamma", "after");
-  await expect(page.getByRole("alert").filter({ hasText: "Couldn't move the task" })).toBeVisible();
-  await expect.poll(async () => (await names(page)).slice(0, 3)).toEqual(["Alpha", "Beta", "Gamma"]);
-  await page.unroute(`**/api/tasks/${f.beta.id}`);
-  await moveToRow(page, "Beta", "Gamma", "after");
+  await expect.poll(() => attempts).toBe(1);
+  expect((await names(page)).slice(0, 3)).toEqual(["Alpha", "Gamma", "Beta"]);
+  // The browser coming back online makes the next attempt without waiting out the backoff.
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await expect.poll(async () => (await persisted(page, f.beta.id)).order > (await persisted(page, f.gamma.id)).order).toBe(true);
+  expect((await names(page)).slice(0, 3)).toEqual(["Alpha", "Gamma", "Beta"]);
 });
 
 test("rapid optimistic moves persist in the same order under a slow connection", async ({ page }) => {
@@ -261,7 +269,7 @@ test("rapid optimistic moves persist in the same order under a slow connection",
   let release!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; });
   let requests = 0;
-  await page.route("**/api/tasks/*", async route => {
+  await page.route("**/api/v1/tasks/*", async route => {
     if (route.request().method() !== "PATCH") return route.continue();
     requests += 1;
     if (requests === 1) await held;
@@ -277,6 +285,7 @@ test("rapid optimistic moves persist in the same order under a slow connection",
   await expect.poll(() => requests).toBe(2);
   await expect.poll(async () => (await persisted(page, f.alpha.id)).order > (await persisted(page, f.beta.id)).order).toBe(true);
   await page.reload();
+  await expect(row(page, "Alpha")).toBeVisible();
   expect((await names(page)).slice(0, 3)).toEqual(["Gamma", "Beta", "Alpha"]);
 });
 

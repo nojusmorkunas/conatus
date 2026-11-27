@@ -1,6 +1,6 @@
 import { ApiError } from "@/lib/api-client";
 
-import type { LabelDto, ProjectDto, SectionDto, TaskDto, TaskPage } from "./types";
+import type { CommentDto, FilterDto, LabelDto, ProjectDto, ReminderDto, SectionDto, TaskDto, TaskPage } from "./types";
 
 // The parts of /api/v1 that sync uses, over the browser's own session.
 
@@ -47,6 +47,9 @@ export type ConatusApi = {
   projects(): Promise<ProjectDto[]>;
   sections(): Promise<SectionDto[]>;
   labels(): Promise<LabelDto[]>;
+  filters(): Promise<FilterDto[]>;
+  comments(scope: { taskId: string } | { projectId: string }): Promise<CommentDto[]>;
+  reminders(taskId: string): Promise<ReminderDto[]>;
   /** Sends [body] as it is, so a retry is byte-identical. Resolves to the parsed answer, null when it has none. */
   write(method: "POST" | "PATCH" | "DELETE", path: string, body?: string, idempotencyKey?: string | null): Promise<unknown>;
 };
@@ -81,6 +84,9 @@ export const api: ConatusApi = {
   projects: () => request("GET", "/api/v1/projects") as Promise<ProjectDto[]>,
   sections: () => request("GET", "/api/v1/sections") as Promise<SectionDto[]>,
   labels: () => request("GET", "/api/v1/labels") as Promise<LabelDto[]>,
+  filters: () => request("GET", "/api/v1/filters") as Promise<FilterDto[]>,
+  comments: (scope) => request("GET", `/api/v1/comments?${new URLSearchParams(scope)}`) as Promise<CommentDto[]>,
+  reminders: (taskId) => request("GET", `/api/v1/reminders?${new URLSearchParams({ taskId })}`) as Promise<ReminderDto[]>,
   write: (method, path, body, idempotencyKey) => request(method, path, { body, idempotencyKey }),
 };
 

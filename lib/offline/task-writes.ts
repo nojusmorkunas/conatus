@@ -123,6 +123,7 @@ export function quickAddTask(
       projectId: place.projectId ?? "",
       sectionId: place.sectionId ?? null,
       parentId: place.parentId ?? null,
+      assigneeId: null,
       content: parsed.content,
       description: "",
       priority: parsed.priority,
@@ -408,5 +409,15 @@ export class TaskWrites {
       if (insert) tx.tasks.upsert(tasks);
       queueCreates(tx, tasks);
     });
+  }
+
+  /** Adds a copy of [task] right after it: open, with its labels, and without its sub-tasks, comments and reminders. */
+  duplicate(task: TaskEntity): TaskEntity {
+    const siblings = [...this.store.getSnapshot().tasks.values()].filter((other) => other.deletedAt === null && other.parentId === task.parentId && other.projectId === task.projectId && (task.parentId !== null || other.sectionId === task.sectionId));
+    const copy: TaskEntity = { ...task, id: newLocalId(), order: placeKey(siblings, task.id), isCompleted: false, completedAt: null, commentCount: 0, assigneeId: null, updatedAt: "" };
+    this.create([copy], true);
+    // The server adds a task at the end, so the copy's place goes out as a move.
+    this.place(copy, copy.sectionId, copy.parentId, task.id);
+    return copy;
   }
 }

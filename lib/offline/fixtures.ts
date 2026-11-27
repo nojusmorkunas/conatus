@@ -1,10 +1,11 @@
-import type { LabelEntity, PendingChange, ProjectEntity, SectionEntity, TaskDto, TaskEntity } from "./types";
+import type { FilterEntity, LabelEntity, PendingChange, ProjectEntity, SectionEntity, TaskDto, TaskEntity } from "./types";
 
 export const taskEntity = (fields: Partial<TaskEntity> = {}): TaskEntity => ({
   id: "t",
   projectId: "p",
   sectionId: null,
   parentId: null,
+  assigneeId: null,
   content: "Pay rent",
   description: "",
   priority: 4,
@@ -29,6 +30,7 @@ export const taskDto = (id: string, updatedAt: string, fields: Partial<TaskDto> 
   projectId: "p",
   sectionId: null,
   parentId: null,
+  assigneeId: null,
   content: id,
   description: null,
   priority: 4,
@@ -80,3 +82,4 @@ export const projectEntity = (fields: Partial<ProjectEntity> = {}): ProjectEntit
 export const sectionEntity = (fields: Partial<SectionEntity> = {}): SectionEntity => ({ id: "s", projectId: "p", name: "Later", order: "a0", isArchived: false, ...fields });
 
 export const labelEntity = (fields: Partial<LabelEntity> = {}): LabelEntity => ({ id: "x", name: "errand", color: "gray", isFavorite: false, order: "a0", ...fields });
+export const filterEntity = (fields: Partial<FilterEntity> = {}): FilterEntity => ({ id: "f", name: "Urgent", query: "p1", isFavorite: false, order: "a0", ...fields });

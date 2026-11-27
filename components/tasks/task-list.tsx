@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
   DndContext,
@@ -21,20 +21,17 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { generateKeyBetween } from "fractional-indexing";
 
 import { TaskDragPreview } from "./task-row";
 import { taskCollisionDetection, taskDropAnimation, taskKeyboardCoordinates } from "./task-drag";
-import { jsonInit } from "@/lib/api-client";
-import { truncate } from "@/lib/utils";
 import { projectTaskDrop, type TaskDropProjection, type TaskDropTarget } from "@/lib/task-drop";
 import { TaskModal } from "./task-modal";
 import { TaskGroup } from "./task-group";
-import { CompletedTasks, useCompletedHistory } from "./completed-tasks";
+import { CompletedTasks } from "./completed-tasks";
 import { CreateSectionForm } from "./create-section-form";
-import { usePendingAction } from "@/lib/use-pending-action";
+import { useProjectLists, useRenamed, useWrites } from "@/lib/offline/hooks";
+import { useTaskActions } from "@/lib/use-task-actions";
 import { useTaskSelection } from "@/lib/use-task-selection";
-import { completeRecurring } from "@/lib/recurring-complete";
 import { compareTasks, type SortBy } from "@/lib/task-sort";
 import {
   flattenTaskGroup,
@@ -42,7 +39,7 @@ import {
   subtreeIds,
   taskDepth,
 } from "@/lib/task-tree";
-import type { Label, ProjectMember, Section, TaskWithLabels } from "./types";
+import type { ProjectMember, TaskWithLabels } from "./types";
 
 export type { ProjectMember, TaskWithLabels };
 
@@ -78,11 +75,15 @@ function heldInPlace(event: DragEndEvent) {
   );
 }
 
+function setDetailTaskId(id: string | null) {
+  const url = new URL(location.href);
+  if (id) url.searchParams.set("task", id);
+  else url.searchParams.delete("task");
+  history.replaceState(null, "", url);
+}
+
 export function TaskList({
   projectId,
-  sections,
-  initialTasks,
-  labels,
   members,
   currentUserId,
   today,
@@ -90,13 +91,8 @@ export function TaskList({
   timezone,
   sortBy,
   showCompleted,
-  initialDetailTaskId,
-  onOpenCountChange,
 }: {
   projectId: string;
-  sections: Section[];
-  initialTasks: TaskWithLabels[];
-  labels: Label[];
   members: ProjectMember[];
   currentUserId: string;
   today: string;
@@ -104,11 +100,13 @@ export function TaskList({
   timezone: string;
   sortBy: SortBy;
   showCompleted: boolean;
-  initialDetailTaskId?: string;
-  onOpenCountChange: (count: number) => void;
 }) {
-  const [tasks, setTasks] = useState(initialTasks);
-  const [orderedSections, setOrderedSections] = useState(sections);
+  // The open task lives in the address, so links, back and a cached page opened at another URL all open or close it.
+  const detailTaskId = useSearchParams().get("task");
+  const { tasks, completedRoots, labels, sections } = useProjectLists(projectId, detailTaskId ?? undefined);
+  const stateTasks = useMemo(() => [...tasks, ...completedRoots], [tasks, completedRoots]);
+  const writes = useWrites();
+  const actions = useTaskActions(writes.tasks);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [projection, setProjection] = useState<TaskDropProjection | null>(null);
   const projectionRef = useRef<TaskDropProjection | null>(null);
@@ -116,14 +114,7 @@ export function TaskList({
   const indentWidth = useRef(28);
   const sidebarDropRow = useRef<HTMLElement | null>(null);
   const pointer = useRef<{ x: number; y: number } | null>(null);
-  const moveQueue = useRef(Promise.resolve());
-  const moveRevision = useRef(0);
-  const moveFailed = useRef(false);
   const [error, setError] = useState<string | null>(null);
-  const history = useCompletedHistory(projectId, () =>
-    setError("That didn't work. Try again."),
-  );
-  const [detailTaskId, setDetailTaskId] = useState<string | null>(initialDetailTaskId ?? null);
   const [collapsedTaskIds, setCollapsedTaskIds] = useState<Set<string>>(() => new Set());
   const {
     selecting,
@@ -132,15 +123,12 @@ export function TaskList({
     toggle: toggleTaskSelection,
     range: selectTaskRange,
     exit: exitSelection,
-    run: runOnSelection,
   } = useTaskSelection((ids) => {
     const roots = selectionRoots(tasks, ids);
     const single = roots.length === 1 ? tasks.find((task) => task.id === roots[0]) : undefined;
     if (single) deleteTask(single);
     else deleteSelectedTasks();
   });
-  const { pending, schedule, reapply, undo } = usePendingAction<TaskWithLabels[]>();
-  const router = useRouter();
   // Mouse dragging stays quick, while touch requires an intentional hold.
   // The touch movement tolerance lets a normal swipe remain native scrolling.
   const sensors = useSensors(
@@ -151,189 +139,22 @@ export function TaskList({
     useSensor(KeyboardSensor, { coordinateGetter: taskKeyboardCoordinates, scrollBehavior: "auto" }),
   );
 
-  // Re-sync when the server gives us a fresh task list (e.g. a section was
-  // added or deleted elsewhere on the page), without clobbering in-flight
-  // optimistic edits between refreshes.
-  const [syncedFrom, setSyncedFrom] = useState(initialTasks);
-  if (initialTasks !== syncedFrom) {
-    setSyncedFrom(initialTasks);
-    setTasks(reapply(initialTasks));
-  }
-
-  const openTaskCount = tasks.filter((task) => !task.isCompleted).length;
-  useEffect(() => {
-    onOpenCountChange(openTaskCount);
-  }, [onOpenCountChange, openTaskCount]);
-
-  const [syncedSectionsFrom, setSyncedSectionsFrom] = useState(sections);
-  if (sections !== syncedSectionsFrom) {
-    setSyncedSectionsFrom(sections);
-    setOrderedSections(sections);
-  }
-
-  async function refresh() {
-    const response = await fetch(`/api/tasks?projectId=${projectId}`);
-    if (response.ok) setTasks(reapply(await response.json()));
-  }
-
-  async function withError(action: () => Promise<Response>) {
-    setError(null);
-    const response = await action();
-    if (!response.ok) {
-      setError("That didn't work. Try again.");
-      return false;
-    }
-    return true;
-  }
-
-  async function restoreCompleted(task: TaskWithLabels) {
-    const ok = await history.restore(task, setTasks);
-    if (!ok) {
-      setError("That didn't work. Try again.");
-      await refresh();
-    }
-  }
-
-  function syncModalCompletion(task: TaskWithLabels) {
-    if (task.isCompleted) {
-      setTasks((current) =>
-        current.map((existing) => existing.id === task.id ? task : existing),
-      );
-      if (task.parentId === null) history.add(task);
-      return;
-    }
-
-    history.remove(task.id);
-    setTasks((current) =>
-      current.some((existing) => existing.id === task.id)
-        ? current.map((existing) => existing.id === task.id ? task : existing)
-        : [...current, task],
-    );
-  }
-
-  async function mutateSection(action: () => Promise<Response>) {
-    const ok = await withError(action);
-    if (ok) router.refresh();
-    return ok;
-  }
-
-  async function toggleComplete(task: TaskWithLabels) {
-    const completed = !task.isCompleted;
-    if (!completed) {
-      setTasks((current) =>
-        current.map((existing) =>
-          existing.id === task.id
-            ? { ...existing, isCompleted: false, completedAt: null }
-            : existing,
-        ),
-      );
-      const ok = await withError(() =>
-        fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", { completed: false })),
-      );
-      if (!ok) await refresh();
-      return;
-    }
-
-    if (task.recurrence && task.dueDate) {
-      setError(null);
-      const result = await completeRecurring(task);
-      if (!result) {
-        setError("That didn't work. Try again.");
-        return;
-      }
-      // The advanced row carries no labels, so spreading it over the existing
-      // task keeps the ones already on screen.
-      const completedTask = { ...task, ...result.updated };
-      setTasks((current) =>
-        current.map((existing) =>
-          existing.id === task.id ? completedTask : existing,
-        ),
-      );
-      if (completedTask.isCompleted && completedTask.parentId === null) {
-        history.add(completedTask);
-      }
-      schedule(
-        `Completed "${truncate(task.content)}"`,
-        // Already written, so the toast only has an inverse left to offer.
-        () => {},
-        () => {
-          if (completedTask.isCompleted) history.remove(task.id);
-          setTasks((current) =>
-            current.map((existing) => (existing.id === task.id ? task : existing)),
-          );
-          void withError(() => patchTask(task.id, result.undo)).then((ok) => {
-            if (!ok) {
-              if (completedTask.isCompleted) history.add(completedTask);
-              void refresh();
-            }
-          });
-        },
-      );
-      return;
-    }
-
-    const previousTasks = tasks;
-    const completedTask = {
-      ...task,
-      isCompleted: true,
-      completedAt: new Date(),
-    };
-    const complete = (current: TaskWithLabels[]) =>
-      current.map((existing) => existing.id === task.id ? completedTask : existing);
-    setTasks(complete);
-    schedule(
-      `Completed "${truncate(task.content)}"`,
-      async () => {
-        const ok = await withError(() =>
-          fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", { completed: true })),
-        );
-        if (ok && completedTask.parentId === null) history.add(completedTask);
-        if (!ok) await refresh();
-      },
-      () => setTasks(previousTasks),
-      complete,
-    );
+  function restoreCompleted(task: TaskWithLabels) {
+    actions.toggleComplete(task);
   }
 
   function deleteTask(task: TaskWithLabels) {
-    const previousTasks = tasks;
-    const hide = (current: TaskWithLabels[]) => current.filter((existing) => existing.id !== task.id);
-    setTasks(hide);
-    schedule(
-      `Moved "${truncate(task.content)}" to Trash`,
-      async () => {
-        const ok = await withError(() =>
-          fetch(`/api/tasks/${task.id}`, { method: "DELETE" }),
-        );
-        if (ok) history.remove(task.id);
-        await refresh();
-      },
-      () => setTasks(previousTasks),
-      hide,
-    );
+    actions.deleteTask(task);
   }
 
-  async function changeDue(
+  function changeDue(
     task: TaskWithLabels,
     dueDate: string | null,
     dueTime: string | null,
     deadlineDate: string | null,
     durationMinutes: number | null,
   ) {
-    const ok = await withError(() =>
-      fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", { dueDate, dueTime, deadlineDate, durationMinutes })),
-    );
-    if (ok) await refresh();
-  }
-
-  async function quickChangeDue(task: TaskWithLabels, dueDate: string | null) {
-    const ok = await withError(() => patchTask(task.id, { dueDate }));
-    if (ok) await refresh();
-  }
-
-  async function changePriority(task: TaskWithLabels, priority: number) {
-    const ok = await withError(() => patchTask(task.id, { priority }));
-    if (ok) await refresh();
+    actions.update(task, { dueDate, dueTime, deadlineDate, durationMinutes });
   }
 
   // Selecting a task selects what hangs off it. The clicked task comes first
@@ -348,83 +169,30 @@ export function TaskList({
   }
 
   // Dragging any one of the selected tasks takes the rest with it.
-  async function moveSelectedTasks(targetProjectId: string) {
-    const ok = await bulkAction(
-      (task) => patchTask(task.id, { projectId: targetProjectId }),
-      selectionRoots(tasks, selectedTaskIds),
-    );
-    router.refresh();
-    return ok;
+  function moveSelectedTasks(targetProjectId: string) {
+    actions.moveMany(selectionRoots(tasks, selectedTaskIds), targetProjectId);
+    exitSelection();
   }
 
-  async function dropOnProject(task: TaskWithLabels, targetProjectId: string, projectName: string) {
-    const rootIds = selectionRoots(tasks, selectedTaskIds);
-    const moved = actsOnSelection(task)
-      ? tasks.filter((candidate) => rootIds.includes(candidate.id))
-      : [task];
+  function dropOnProject(task: TaskWithLabels, targetProjectId: string, projectName: string) {
+    if (!actsOnSelection(task) && targetProjectId === task.projectId) return;
+    const movedIds = actsOnSelection(task) ? selectionRoots(tasks, selectedTaskIds) : [task.id];
     // Where each task sat, so undo can put it back in its section rather than
     // only in this project. Its place in the order is not restored: a project
     // move appends, and the server has no memory of the old position.
-    const origin = moved.map((item) => ({ id: item.id, sectionId: item.sectionId }));
-    const ok = actsOnSelection(task)
-      ? await moveSelectedTasks(targetProjectId)
-      : await moveTask(task, targetProjectId);
-    if (!ok) return;
+    const origin = movedIds.map((id) => ({ id, sectionId: tasks.find((item) => item.id === id)?.sectionId ?? null }));
+    if (actsOnSelection(task)) moveSelectedTasks(targetProjectId);
+    else moveTask(task, targetProjectId);
 
-    schedule(
-      `${moved.length} ${moved.length === 1 ? "task" : "tasks"} added to ${projectName}`,
-      // The move is already written, so the toast only has an inverse to offer.
-      () => {},
-      () => {
-        void Promise.all(
-          origin.map((item) => patchTask(item.id, { projectId, sectionId: item.sectionId })),
-        ).then(async () => {
-          await refresh();
-          router.refresh();
-        });
-      },
+    actions.offerUndo(
+      `${movedIds.length} ${movedIds.length === 1 ? "task" : "tasks"} added to ${projectName}`,
+      () => origin.forEach((item) => actions.move(item.id, projectId, item.sectionId)),
     );
   }
 
-  async function moveTask(task: TaskWithLabels, targetProjectId: string) {
-    if (targetProjectId === task.projectId) return false;
-    const ok = await withError(() => patchTask(task.id, { projectId: targetProjectId }));
-    if (ok) {
-      await refresh();
-      // Re-run the server layout so the sidebar's per-project counts reflect
-      // the task leaving one project and joining another.
-      router.refresh();
-    }
-    return ok;
-  }
-
-  // Copying labels needs a second request, so the caller gets whichever
-  // response decides the outcome.
-  async function duplicateRequest(task: TaskWithLabels) {
-    const response = await fetch("/api/tasks", jsonInit("POST", {
-          projectId: task.projectId,
-          sectionId: task.sectionId,
-          parentId: task.parentId,
-        content: task.content,
-        description: task.description ?? undefined,
-        priority: task.priority,
-        dueDate: task.dueDate,
-        dueTime: task.dueTime,
-        deadlineDate: task.deadlineDate,
-        durationMinutes: task.durationMinutes,
-        recurrence: task.recurrence,
-        afterId: task.id,
-      }));
-    if (!response.ok || !task.labels.length) return response;
-    const duplicate: { id: string } = await response.json();
-    return patchTask(duplicate.id, { labelIds: task.labels.map((label) => label.id) });
-  }
-
-  async function duplicateTask(task: TaskWithLabels) {
-    setError(null);
-    const response = await duplicateRequest(task);
-    if (!response.ok) setError("That didn't work. Try again.");
-    await refresh();
+  function moveTask(task: TaskWithLabels, targetProjectId: string) {
+    if (targetProjectId === task.projectId) return;
+    actions.move(task, targetProjectId);
   }
 
   // The menu reports the clicked row's new label list; the rest of the
@@ -432,104 +200,25 @@ export function TaskList({
   function changeSelectionLabels(task: TaskWithLabels, labelIds: string[]) {
     const added = labelIds.filter((id) => !task.labels.some((label) => label.id === id));
     const removed = task.labels.filter((label) => !labelIds.includes(label.id)).map((label) => label.id);
-    return bulkAction((selected) =>
-      patchTask(selected.id, {
-        labelIds: [...new Set([...selected.labels.map((label) => label.id), ...added])]
-          .filter((id) => !removed.includes(id)),
-      }),
-    );
+    actions.changeLabelsMany(selectedTaskIds, (current) => [...new Set([...current, ...added])].filter((id) => !removed.includes(id)));
+    exitSelection();
   }
 
-  async function changeLabels(task: TaskWithLabels, labelIds: string[]) {
-    const ok = await withError(() =>
-      fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", { labelIds })),
-    );
-    if (ok) await refresh();
-  }
-
-  async function changeAssignee(
-    task: TaskWithLabels,
-    assigneeId: string | null,
-  ) {
-    const ok = await withError(() =>
-      fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", { assigneeId })),
-    );
-    if (ok) await refresh();
-  }
-
-  async function bulkAction(action: (task: TaskWithLabels) => Promise<Response>, ids?: string[]) {
+  async function changeAssignee(task: TaskWithLabels, assigneeId: string | null) {
     setError(null);
-    const byId = new Map(tasks.map((task) => [task.id, task]));
-    const ok = await runOnSelection(
-      (taskId) => action(byId.get(taskId)!),
-      refresh,
-      ids,
-    );
-    if (!ok) setError("Some updates failed.");
-    return ok;
-  }
-
-  function patchTask(taskId: string, body: object) {
-    return fetch(`/api/tasks/${taskId}`, jsonInit("PATCH", body));
+    if (!(await actions.assign(task, assigneeId))) setError("That didn't work. Try again.");
   }
 
   function completeSelectedTasks() {
     if (selectedTaskIds.length === 0) return;
-    const affectedIds = new Set(selectedTaskIds);
-    const previousTasks = tasks;
-    const completedAt = new Date();
-    const complete = (current: TaskWithLabels[]) =>
-      current.map((task) =>
-        affectedIds.has(task.id)
-          ? { ...task, isCompleted: true, completedAt }
-          : task,
-      );
-    setTasks(complete);
-    schedule(
-      `Completed ${affectedIds.size} tasks`,
-      async () => {
-        const committed: TaskWithLabels[] = [];
-        try {
-          await bulkAction(async (task) => {
-            const response = await patchTask(task.id, { completed: true });
-            if (response.ok && task.parentId === null) {
-              const updated = await response.json() as Partial<TaskWithLabels>;
-              const completedTask = { ...task, ...updated };
-              if (completedTask.isCompleted && completedTask.completedAt) {
-                committed.push(completedTask);
-              }
-            }
-            return response;
-          });
-        } finally {
-          committed.forEach((task) => history.add(task));
-        }
-      },
-      () => setTasks(previousTasks),
-      complete,
-    );
+    actions.completeMany(selectedTaskIds);
+    exitSelection();
   }
 
   function deleteSelectedTasks() {
     if (selectedTaskIds.length === 0) return;
-    const affectedIds = new Set(selectedTaskIds);
-    const previousTasks = tasks;
-    const hide = (current: TaskWithLabels[]) => current.filter((task) => !affectedIds.has(task.id));
-    setTasks(hide);
-    schedule(
-      `Moved ${affectedIds.size} tasks to Trash`,
-      async () => {
-        // Trashing a task takes its subtasks along, so only the top of each
-        // selected branch is sent. Their own requests would find them gone.
-        await bulkAction(
-          (task) => fetch(`/api/tasks/${task.id}`, { method: "DELETE" }),
-          selectionRoots(tasks, [...affectedIds]),
-        );
-        affectedIds.forEach((id) => history.remove(id));
-      },
-      () => setTasks(previousTasks),
-      hide,
-    );
+    actions.deleteMany(selectionRoots(tasks, selectedTaskIds), selectedTaskIds.length);
+    exitSelection();
   }
 
   const visible = useMemo(() => tasks.filter((task) => !task.isCompleted), [tasks]);
@@ -540,18 +229,17 @@ export function TaskList({
 
   const groups: { id: string | null; name: string | null }[] = [
     { id: null, name: null },
-    ...orderedSections.map((section) => ({ id: section.id, name: section.name })),
+    ...sections.map((section) => ({ id: section.id, name: section.name })),
   ];
-  const detailTask = detailTaskId
-    ? tasks.find((task) => task.id === detailTaskId) ?? history.find(detailTaskId) ?? null
-    : null;
+  // A task made here keeps the id it was opened by, so follow it to the server's once it has one.
+  const openTaskId = useRenamed(detailTaskId ?? "") ?? detailTaskId;
   const flatOrder = groups.flatMap((group) => roots(group.id).map((task) => task.id));
-  const detailIndex = detailTaskId ? flatOrder.indexOf(detailTaskId) : -1;
+  const detailIndex = openTaskId ? flatOrder.indexOf(openTaskId) : -1;
   const activeTask = tasks.find((task) => task.id === activeId) ?? null;
   const draggingSelection = Boolean(activeTask && selectedTaskIds.includes(activeTask.id));
   const draggedCount = draggingSelection ? selectedTaskIds.length : 1;
   const activeDepth = activeTask ? taskDepth(tasks, activeTask.id) : 0;
-  const activeSection = orderedSections.find((section) => section.id === activeId) ?? null;
+  const activeSection = sections.find((section) => section.id === activeId) ?? null;
   const draggedIds = useMemo(() => activeId ? subtreeIds(tasks, activeId) : new Set<string>(), [tasks, activeId]);
 
   // dnd-kit reports how far a drag has travelled, but that figure is batched
@@ -597,9 +285,9 @@ export function TaskList({
   }
 
   const flatTasks = useMemo(
-    () => [null, ...orderedSections.map((section) => section.id)]
+    () => [null, ...sections.map((section) => section.id)]
       .flatMap((sectionId) => flattenTaskGroup(tasks, sectionId)),
-    [tasks, orderedSections],
+    [tasks, sections],
   );
 
   // Only the top of a selected branch moves: its subtasks come along with it,
@@ -613,22 +301,12 @@ export function TaskList({
   // A drop inside the list puts the whole selection at the drop point, in the
   // order the rows appear now. Each task lands after the previous one, so the
   // group keeps its shape instead of arriving reversed.
-  async function moveSelectionTo(target: TaskDropProjection) {
-    setError(null);
+  function moveSelectionTo(target: TaskDropProjection) {
     let afterId = target.afterId;
     for (const id of orderedSelectionRoots()) {
-      const response = await patchTask(id, {
-        sectionId: target.sectionId,
-        parentId: target.parentId,
-        afterId,
-      });
-      if (!response.ok) {
-        setError("Some updates failed.");
-        break;
-      }
+      actions.place(id, target.sectionId, target.parentId, afterId);
       afterId = id;
     }
-    await refresh();
     exitSelection();
   }
 
@@ -658,7 +336,7 @@ export function TaskList({
 
   function describeDrop({ active, over }: Pick<DragMoveEvent, "active" | "over">) {
     if (active.data.current?.type === "section") {
-      const section = orderedSections.find((item) => item.id === over?.id);
+      const section = sections.find((item) => item.id === over?.id);
       return section ? `Over section ${section.name}.` : undefined;
     }
     const next = projectionRef.current;
@@ -668,7 +346,7 @@ export function TaskList({
     return `${before ? `Before ${before.content}` : "At the end of the section"}${parent ? `, under ${parent.content}` : ", at the top level"}.`;
   }
 
-  async function handleTaskDragEnd({ active, over, delta }: DragEndEvent) {
+  function handleTaskDragEnd({ active, over, delta }: DragEndEvent) {
     if (!over) return;
     const task = tasks.find((candidate) => candidate.id === active.id);
     const target = dragProjection({ active, over, delta });
@@ -680,94 +358,30 @@ export function TaskList({
     if (task.parentId === target.parentId && task.sectionId === target.sectionId &&
       (currentSiblings[currentIndex - 1]?.id ?? null) === target.afterId) return;
 
-    const siblings = tasks
-      .filter((candidate) =>
-        candidate.id !== task.id &&
-        candidate.parentId === target.parentId &&
-        (target.parentId !== null || candidate.sectionId === target.sectionId)
-      )
-      .sort((a, b) => (a.order < b.order ? -1 : 1));
-    const beforeIndex = target.afterId
-      ? siblings.findIndex((candidate) => candidate.id === target.afterId)
-      : -1;
-    const before = beforeIndex >= 0 ? siblings[beforeIndex] : null;
-    const after = siblings[beforeIndex + 1] ?? null;
-    const order = generateKeyBetween(before?.order ?? null, after?.order ?? null);
-    const movedIds = subtreeIds(tasks, task.id);
-    setTasks((current) =>
-      current.map((existing) =>
-        existing.id === task.id
-          ? { ...existing, sectionId: target.sectionId, parentId: target.parentId, order }
-          : movedIds.has(existing.id)
-            ? { ...existing, sectionId: target.sectionId }
-            : existing,
-      ),
-    );
+    actions.place(task, target.sectionId, target.parentId, target.afterId);
     if (target.parentId) setCollapsedTaskIds((current) => {
       if (!current.has(target.parentId!)) return current;
       const next = new Set(current);
       next.delete(target.parentId!);
       return next;
     });
-
-    // Preserve the order of rapid drops even when requests take different
-    // amounts of time. Recover once the queue drains, without erasing a later
-    // optimistic move with an older response.
-    const revision = ++moveRevision.current;
-    setError(null);
-    moveQueue.current = moveQueue.current.then(async () => {
-      try {
-        const response = await patchTask(task.id, {
-          sectionId: target.sectionId, parentId: target.parentId, afterId: before?.id ?? null,
-        });
-        if (!response.ok) throw new Error("Move failed");
-      } catch {
-        moveFailed.current = true;
-        setError("Couldn't move the task. Restoring the saved order…");
-      }
-      if (revision === moveRevision.current && moveFailed.current) {
-        try {
-          const response = await fetch(`/api/tasks?projectId=${projectId}`);
-          if (!response.ok) throw new Error("Refresh failed");
-          const saved: TaskWithLabels[] = await response.json();
-          if (revision === moveRevision.current) {
-            setTasks(reapply(saved));
-            moveFailed.current = false;
-            setError("Couldn't move the task. Your saved task order has been restored. Try again.");
-          }
-        } catch {
-          setError("Couldn't save the task order. Check your connection and reload to see the saved order.");
-        }
-      }
-    });
   }
 
-  async function handleSectionDragEnd({ active, over }: DragEndEvent) {
+  function handleSectionDragEnd({ active, over }: DragEndEvent) {
     if (!over || active.id === over.id) return;
-    const section = orderedSections.find((candidate) => candidate.id === active.id);
-    const overSection = orderedSections.find((candidate) => candidate.id === over.id);
+    const section = sections.find((candidate) => candidate.id === active.id);
+    const overSection = sections.find((candidate) => candidate.id === over.id);
     if (!section || !overSection) return;
 
-    const others = orderedSections.filter((candidate) => candidate.id !== section.id);
+    const others = sections.filter((candidate) => candidate.id !== section.id);
     let index = others.findIndex((candidate) => candidate.id === overSection.id);
     if (section.order < overSection.order) index += 1;
-    const before = index > 0 ? others[index - 1] : null;
-    const after = others[index] ?? null;
-    const order = generateKeyBetween(before?.order ?? null, after?.order ?? null);
-    setOrderedSections((current) =>
-      current.map((existing) => existing.id === section.id ? { ...existing, order } : existing)
-        .sort((a, b) => (a.order < b.order ? -1 : 1)),
-    );
-
-    const ok = await withError(() =>
-      fetch(`/api/sections/${section.id}`, jsonInit("PATCH", { afterId: before?.id ?? null })),
-    );
-    if (!ok) router.refresh();
+    writes.lists.placeSection(section, index > 0 ? others[index - 1].id : null);
   }
 
   return (
     <div className="flex flex-col gap-7" data-task-dragging={activeTask ? "true" : undefined}>
-      {tasks.length === 0 && orderedSections.length === 0 && (
+      {tasks.length === 0 && sections.length === 0 && (
         <EmptyState
           icon={Plus}
           title="No tasks yet"
@@ -816,19 +430,19 @@ export function TaskList({
           const droppedOnProjectId = projectIdOf(droppedRow);
           highlightSidebarDrop(null);
           const task = tasks.find((candidate) => candidate.id === event.active.id);
-          if (orderedSections.some((section) => section.id === event.active.id)) {
-            void handleSectionDragEnd(event);
+          if (sections.some((section) => section.id === event.active.id)) {
+            handleSectionDragEnd(event);
           } else if (task && droppedOnProjectId) {
-            void dropOnProject(task, droppedOnProjectId, projectNameOf(droppedRow));
+            dropOnProject(task, droppedOnProjectId, projectNameOf(droppedRow));
           } else if (task && !selecting && heldInPlace(event)) {
             startSelecting(selectionIdsFor(task));
           } else if (task && sortBy === "manual") {
             // A selection lands as a group; anything else reorders on its own.
             const target = projectionRef.current;
             if (actsOnSelection(task)) {
-              if (target) void moveSelectionTo(target);
+              if (target) moveSelectionTo(target);
             } else {
-              void handleTaskDragEnd(event);
+              handleTaskDragEnd(event);
             }
           }
           updateProjection(null);
@@ -850,14 +464,14 @@ export function TaskList({
         }}
       >
         <SortableContext
-          items={orderedSections.map((section) => section.id)}
+          items={sections.map((section) => section.id)}
           strategy={verticalListSortingStrategy}
         >
           {groups.map((group, index) => (
             <div key={group.id ?? "unsectioned"} className="flex flex-col">
               <TaskGroup
                 id={group.id}
-                section={group.name ? orderedSections[index - 1] : undefined}
+                section={group.name ? sections[index - 1] : undefined}
                 tasks={visible}
                 allTasks={tasks}
                 projectId={projectId}
@@ -873,49 +487,39 @@ export function TaskList({
                 projection={projection}
                 collapsedTaskIds={collapsedTaskIds}
                 selectedTaskIds={selectedTaskIds}
-                onToggle={(task) => actsOnSelection(task) ? completeSelectedTasks() : toggleComplete(task)}
+                onToggle={(task) => actsOnSelection(task) ? completeSelectedTasks() : actions.toggleComplete(task)}
                 onDelete={(task) => actsOnSelection(task) ? deleteSelectedTasks() : deleteTask(task)}
                 onLabelsChange={(task, labelIds) =>
-                  actsOnSelection(task) ? changeSelectionLabels(task, labelIds) : changeLabels(task, labelIds)
+                  actsOnSelection(task) ? changeSelectionLabels(task, labelIds) : actions.setLabels(task, labelIds)
                 }
                 onAssigneeChange={changeAssignee}
                 onDueChange={changeDue}
-                onQuickDueChange={(task, dueDate) =>
-                  actsOnSelection(task)
-                    ? void bulkAction((selected) => patchTask(selected.id, { dueDate }))
-                    : quickChangeDue(task, dueDate)
-                }
-                onPriorityChange={(task, priority) =>
-                  actsOnSelection(task)
-                    ? void bulkAction((selected) => patchTask(selected.id, { priority }))
-                    : changePriority(task, priority)
-                }
-                onMove={(task, targetProjectId) =>
-                  actsOnSelection(task) ? void moveSelectedTasks(targetProjectId) : moveTask(task, targetProjectId)
-                }
-                onDuplicate={(task) =>
-                  actsOnSelection(task)
-                    ? void bulkAction((selected) => duplicateRequest(selected))
-                    : duplicateTask(task)
-                }
-                onSubtaskAdded={refresh}
+                onQuickDueChange={(task, dueDate) => {
+                  if (!actsOnSelection(task)) return actions.update(task, { dueDate });
+                  actions.updateMany(selectedTaskIds, { dueDate });
+                  exitSelection();
+                }}
+                onPriorityChange={(task, priority) => {
+                  if (!actsOnSelection(task)) return actions.update(task, { priority });
+                  actions.updateMany(selectedTaskIds, { priority });
+                  exitSelection();
+                }}
+                onMove={(task, targetProjectId) => actsOnSelection(task) ? moveSelectedTasks(targetProjectId) : moveTask(task, targetProjectId)}
+                onDuplicate={(task) => {
+                  if (!actsOnSelection(task)) return actions.duplicate(task);
+                  actions.duplicateMany(selectedTaskIds);
+                  exitSelection();
+                }}
                 onOpenDetail={(task) => setDetailTaskId(task.id)}
                 onSelectionToggle={(task) => toggleTaskSelection(selectionIdsFor(task))}
                 onSelectionStart={(task) => startSelecting(selectionIdsFor(task))}
                 onSelectionRange={(task) => selectTaskRange(task.id, tasks.map(({ id }) => id))}
                 onToggleTaskCollapsed={toggleTaskCollapsed}
-                onRenameSection={(section, name) =>
-                  mutateSection(() => fetch(`/api/sections/${section.id}`, jsonInit("PATCH", { name })))
-                }
-                onDeleteSection={(section) =>
-                  mutateSection(() => fetch(`/api/sections/${section.id}`, { method: "DELETE" }))
-                }
                 onError={() => setError("That didn't work. Try again.")}
                 footer={showCompleted ? (
                   <CompletedTasks
                     sectionId={group.id}
-                    stateTasks={tasks}
-                    history={history}
+                    stateTasks={stateTasks}
                     today={today}
                     dateFormat={dateFormat}
                     timezone={timezone}
@@ -926,12 +530,7 @@ export function TaskList({
                 ) : undefined}
               />
               {!selecting && (
-                <CreateSectionForm
-                  projectId={projectId}
-                  afterId={group.id}
-                  onCreated={() => router.refresh()}
-                  onError={() => setError("That didn't work. Try again.")}
-                />
+                <CreateSectionForm projectId={projectId} afterId={group.id} />
               )}
             </div>
           ))}
@@ -970,30 +569,24 @@ export function TaskList({
 
       {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
 
-      {pending && (
+      {actions.pending && (
         <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-foreground px-4 py-2 text-sm text-background shadow-lg">
-          <span>{pending.label}</span>
-          <button type="button" className="font-medium underline" onClick={undo}>
+          <span>{actions.pending.label}</span>
+          <button type="button" className="font-medium underline" onClick={actions.undo}>
             Undo
           </button>
         </div>
       )}
 
-      {detailTask && (
+      {detailTaskId && (
         <TaskModal
-          key={detailTask.id}
-          task={detailTask}
-          labels={labels}
+          key={detailTaskId}
+          taskId={detailTaskId}
           members={members}
           currentUserId={currentUserId}
           today={today}
           dateFormat={dateFormat}
-          onClose={() => {
-            setDetailTaskId(null);
-            refresh();
-          }}
-          onChanged={refresh}
-          onCompletionChanged={syncModalCompletion}
+          onClose={() => setDetailTaskId(null)}
           onDelete={deleteTask}
           onPrev={detailIndex > 0 ? () => setDetailTaskId(flatOrder[detailIndex - 1]) : undefined}
           onNext={detailIndex !== -1 && detailIndex < flatOrder.length - 1 ? () => setDetailTaskId(flatOrder[detailIndex + 1]) : undefined}

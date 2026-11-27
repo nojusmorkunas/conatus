@@ -5,39 +5,20 @@ import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { jsonInit } from "@/lib/api-client";
+import { useWrites } from "@/lib/offline/hooks";
 
-export function CreateSectionForm({
-  projectId,
-  afterId,
-  onCreated,
-  onError,
-}: {
-  projectId: string;
-  afterId: string | null;
-  onCreated: () => void;
-  onError: () => void;
-}) {
+export function CreateSectionForm({ projectId, afterId }: { projectId: string; afterId: string | null }) {
   const [expanded, setExpanded] = useState(false);
   const [name, setName] = useState("");
-  const [pending, setPending] = useState(false);
+  const { lists } = useWrites();
 
-  async function submit(event: React.FormEvent) {
+  function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!name.trim()) return;
-
-    setPending(true);
-    const response = await fetch("/api/sections", jsonInit("POST", { projectId, name: name.trim(), afterId }));
-    setPending(false);
-
-    if (!response.ok) {
-      onError();
-      return;
-    }
-
+    // Added at the end, then moved to where the button was.
+    lists.placeSection(lists.createSection(projectId, name.trim()), afterId);
     setName("");
     setExpanded(false);
-    onCreated();
   }
 
   if (!expanded) {
@@ -66,7 +47,7 @@ export function CreateSectionForm({
         value={name}
         onChange={(event) => setName(event.target.value)}
       />
-      <Button type="submit" size="sm" disabled={pending}>
+      <Button type="submit" size="sm">
         Add
       </Button>
       <Button

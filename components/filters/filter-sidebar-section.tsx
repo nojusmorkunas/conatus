@@ -5,8 +5,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Filter as FilterIcon, MoreHorizontal } from "lucide-react";
 
-import type { filters as filtersTable } from "@/lib/db/schema";
-import { api } from "@/lib/api-client";
+import { parseFilter } from "@/lib/filter";
+import { useWrites } from "@/lib/offline/hooks";
+import type { FilterEntity } from "@/lib/offline/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,18 +17,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { toastError } from "@/components/ui/toast";
-
-type Filter = typeof filtersTable.$inferSelect;
+import { toastManager } from "@/components/ui/toast";
 
 export function FilterRow({
   filter,
-  onChanged,
   className,
   menuAlwaysVisible = false,
 }: {
-  filter: Filter;
-  onChanged: () => void;
+  filter: FilterEntity;
   className?: string;
   menuAlwaysVisible?: boolean;
 }) {
@@ -38,37 +35,26 @@ export function FilterRow({
   const [name, setName] = useState(filter.name);
   const [query, setQuery] = useState(filter.query);
 
-  async function patch(body: Record<string, unknown>) {
-    try {
-      await api.patch(`/api/filters/${filter.id}`, body);
-    } catch (error) {
-      toastError(error, "Couldn't update the filter.");
-    } finally {
-      onChanged();
-    }
-  }
-
-  async function submitRename(event: React.FormEvent) {
+  const { lists } = useWrites();
+  function submitRename(event: React.FormEvent) {
     event.preventDefault();
     setRenaming(false);
-    if (name.trim() && name !== filter.name) await patch({ name: name.trim() });
+    if (name.trim()) lists.editFilter(filter, name, filter.query);
   }
 
-  async function submitQuery(event: React.FormEvent) {
+  function submitQuery(event: React.FormEvent) {
     event.preventDefault();
     setEditingQuery(false);
-    if (query.trim() && query !== filter.query) await patch({ query: query.trim() });
+    if (!query.trim()) return;
+    // The server would reject a query that doesn't parse, long after the form is gone.
+    const parsed = parseFilter(query.trim());
+    if ("error" in parsed) toastManager.add({ title: parsed.error, type: "error" });
+    else lists.editFilter(filter, filter.name, query);
   }
 
-  async function remove() {
+  function remove() {
     if (!confirm(`Delete filter "${filter.name}"?`)) return;
-    try {
-      await api.delete(`/api/filters/${filter.id}`);
-    } catch (error) {
-      toastError(error, "Couldn't delete the filter.");
-    } finally {
-      onChanged();
-    }
+    lists.deleteFilter(filter);
   }
 
   if (renaming) {
@@ -79,6 +65,7 @@ export function FilterRow({
           value={name}
           onChange={(event) => setName(event.target.value)}
           onBlur={submitRename}
+          maxLength={120}
         />
       </form>
     );
@@ -145,7 +132,7 @@ export function FilterRow({
           >
             Edit query
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => patch({ isFavorite: !filter.isFavorite })}>
+          <DropdownMenuItem onClick={() => lists.favoriteFilter(filter, !filter.isFavorite)}>
             {filter.isFavorite ? "Unpin it!" : "Pin it!"}
           </DropdownMenuItem>
           <DropdownMenuItem variant="destructive" onClick={remove}>

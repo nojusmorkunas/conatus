@@ -73,6 +73,9 @@ function setup(server: Partial<ConatusApi> & { tasks?: ConatusApi["tasks"] } = {
     projects: vi.fn(async () => [inbox, projectP]),
     sections: vi.fn(async () => []),
     labels: vi.fn(async () => []),
+    filters: vi.fn(async () => []),
+    comments: vi.fn(async () => []),
+    reminders: vi.fn(async () => []),
     write: vi.fn(async () => null),
     ...server,
   };
@@ -122,6 +125,21 @@ describe("SyncRepository", () => {
     const { projects, tasks } = store.getSnapshot();
     expect([...projects.keys()].sort()).toEqual(["archived", "inbox", "local:new", "p", "queued"]);
     expect([...tasks.keys()]).toEqual(["local:task"]);
+  });
+
+  test("filters come whole: the server's replace the local ones, except local ones and ones with queued changes", async () => {
+    const theirs = { id: "f", name: "From server", query: "p1", isFavorite: true, order: "a0", userId: "u", createdAt: "x", updatedAt: "y" };
+    const { store, sync } = setup({ filters: async () => [theirs, { ...theirs, id: "queued", name: "Server copy" }] });
+    const mine = { id: "f", name: "Old", query: "p2", isFavorite: false, order: "a0" };
+    store.transaction((tx) => {
+      tx.filters.upsert([mine, { ...mine, id: "queued", name: "Edited here" }, { ...mine, id: "local:new" }, { ...mine, id: "gone" }]);
+      tx.changes.add({ id: "queued", kind: "Update", target: "Filter", body: "{}", summary: "" });
+    });
+    await sync.sync();
+    const { filters } = store.getSnapshot();
+    expect([...filters.keys()].sort()).toEqual(["f", "local:new", "queued"]);
+    expect(filters.get("f")).toEqual({ id: "f", name: "From server", query: "p1", isFavorite: true, order: "a0" });
+    expect(filters.get("queued")?.name).toBe("Edited here");
   });
 
   test("the server's task replaces the local one unless a change is queued, then they are merged", async () => {
@@ -187,7 +205,7 @@ describe("SyncRepository", () => {
     const projects = vi.fn<ConatusApi["projects"]>();
     const onRevoked = vi.fn();
     const store = new OfflineStore();
-    const api = { projects, sections: async () => [], labels: async () => [], tasks: vi.fn(), task: vi.fn(), write: vi.fn() } as ConatusApi;
+    const api = { projects, sections: async () => [], labels: async () => [], filters: async () => [], comments: vi.fn(), reminders: vi.fn(), tasks: vi.fn(), task: vi.fn(), write: vi.fn() } as ConatusApi;
     const sync = new SyncRepository("u", store, new Outbox(store), api, onRevoked);
     const states: string[] = [];
     sync.subscribe(() => states.push(sync.getState().status));
@@ -236,3 +254,53 @@ describe("SyncRepository", () => {
     expect(request).toHaveBeenCalledWith("conatus-sync-u", expect.any(Function));
   });
 });
+
+describe("refreshNotes", () => {
+  const server = { id: "c1", taskId: "t", projectId: null, content: "from server", createdAt: "2026-10-26T10:00:00.000Z", updatedAt: "2026-10-26T10:00:00.000Z", userId: "u" };
+
+  test("takes the server's comments and reminders, keeps local and queued ones, drops the rest and recounts", async () => {
+    const comments = vi.fn(async () => [server, { ...server, id: "queued", content: "server copy" }]);
+    const reminders = vi.fn(async () => [{ id: "r1", taskId: "t", remindAt: "2026-10-27T09:00:00Z" }]);
+    const { store, sync } = setup({ comments, reminders });
+    const mine = { ...server, id: "mine", content: "edited here" };
+    store.transaction((tx) => {
+      tx.tasks.upsert([taskEntity({ id: "t", commentCount: 7 })]);
+      tx.comments.upsert([
+        mine,
+        { ...server, id: "queued", content: "edited here" },
+        { ...server, id: "local:new" },
+        { ...server, id: "gone" },
+        { ...server, id: "other", taskId: "elsewhere" },
+      ]);
+      tx.reminders.upsert([{ id: "r-gone", taskId: "t", remindAt: "2026-10-26T10:00:00.000Z" }, { id: "local:r", taskId: "t", remindAt: "2026-10-26T10:00:00.000Z" }]);
+      tx.changes.add({ id: "queued", kind: "Update", target: "Comment", body: "{}", summary: "" });
+    });
+    expect(await sync.refreshNotes({ taskId: "t" })).toBe(true);
+    const snapshot = store.getSnapshot();
+    expect([...snapshot.comments.keys()].sort()).toEqual(["c1", "local:new", "other", "queued"]);
+    expect(snapshot.comments.get("queued")?.content).toBe("edited here");
+    expect([...snapshot.reminders.values()].map((r) => r.id).sort()).toEqual(["local:r", "r1"]);
+    expect(snapshot.reminders.get("r1")?.remindAt).toBe("2026-10-27T09:00:00.000Z");
+    expect(snapshot.tasks.get("t")?.commentCount).toBe(3);
+  });
+
+  test("leaves the local copy alone when the server can't be reached or the id is local", async () => {
+    const comments = vi.fn().mockRejectedValue(new OfflineError());
+    const { store, sync } = setup({ comments });
+    store.transaction((tx) => tx.comments.upsert([server]));
+    expect(await sync.refreshNotes({ taskId: "t" })).toBe(false);
+    expect(await sync.refreshNotes({ taskId: "local:t" })).toBe(false);
+    expect(comments).toHaveBeenCalledTimes(1);
+    expect(store.getSnapshot().comments.has("c1")).toBe(true);
+  });
+
+  test("a project's comments are refreshed without reminders", async () => {
+    const reminders = vi.fn();
+    const { store, sync } = setup({ comments: vi.fn(async () => [{ ...server, id: "pc", taskId: null, projectId: "p" }]), reminders });
+    store.transaction((tx) => tx.comments.upsert([{ ...server, id: "old", taskId: null, projectId: "p" }, server]));
+    await sync.refreshNotes({ projectId: "p" });
+    expect([...store.getSnapshot().comments.keys()].sort()).toEqual(["c1", "pc"]);
+    expect(reminders).not.toHaveBeenCalled();
+  });
+});
+

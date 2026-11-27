@@ -3,9 +3,8 @@
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { CircleHelp, Repeat2 } from "lucide-react";
-import { jsonInit } from "@/lib/api-client";
-import { calendarOccurrences, type CalendarOccurrence } from "@/lib/calendar";
-import { useRouter } from "next/navigation";
+import { calendarOccurrences, calendarPeriod, type CalendarOccurrence } from "@/lib/calendar";
+import { useSearchParams } from "next/navigation";
 import {
   DndContext,
   MouseSensor,
@@ -17,37 +16,34 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 
-import type { tasks as tasksTable } from "@/lib/db/schema";
 import { addDays, addMonths, formatDate, monthGridStart, monthLabel, WEEKDAY_LABELS } from "@/lib/dates";
 import { priorityColors } from "@/components/tasks/priority";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { StoreReady, useSnapshot, useTodayDate, useWrites } from "@/lib/offline/hooks";
+import type { TaskEntity } from "@/lib/offline/types";
+import { calendarTasks } from "@/lib/task-views";
+import { useTaskActions } from "@/lib/use-task-actions";
 import { cn } from "@/lib/utils";
 
-type StoredTask = typeof tasksTable.$inferSelect;
-type Task = CalendarOccurrence<StoredTask>;
+type Task = CalendarOccurrence<TaskEntity>;
 
 const HOUR_HEIGHT = 48;
 
-export function CalendarView({
-  view,
-  month,
-  week,
-  tasks: initialTasks,
-  today,
-  dateFormat,
-  weekStart,
-}: {
-  view: "month" | "week";
-  month: string;
-  week: string;
-  tasks: StoredTask[];
-  today: string;
-  dateFormat: string;
-  weekStart: number;
-}) {
-  const router = useRouter();
-  const [tasks, setTasks] = useState(initialTasks);
-  const [error, setError] = useState<string | null>(null);
+export function CalendarView({ dateFormat, weekStart }: { dateFormat: string; weekStart: number }) {
+  return (
+    <StoreReady fallback={<div className="min-h-0 flex-1 animate-pulse rounded-md bg-muted" />}>
+      <Calendar dateFormat={dateFormat} weekStart={weekStart} />
+    </StoreReady>
+  );
+}
+
+function Calendar({ dateFormat, weekStart }: { dateFormat: string; weekStart: number }) {
+  const search = useSearchParams();
+  const today = useTodayDate();
+  const taskRows = useSnapshot((snapshot) => snapshot.tasks);
+  const projectRows = useSnapshot((snapshot) => snapshot.projects);
+  const writes = useWrites();
+  const actions = useTaskActions(writes.tasks);
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, {
@@ -55,21 +51,23 @@ export function CalendarView({
     }),
   );
 
-  const [syncedFrom, setSyncedFrom] = useState(initialTasks);
-  if (initialTasks !== syncedFrom) {
-    setSyncedFrom(initialTasks);
-    setTasks(initialTasks);
-  }
-
-  const [moving, setMoving] = useState(false);
-  const rangeStart = view === "week" ? week : monthGridStart(month, weekStart);
-  const rangeEnd = addDays(rangeStart, view === "week" ? 6 : 41);
+  const viewParam = search.get("view") ?? undefined;
+  const monthParam = search.get("month") ?? undefined;
+  const weekParam = search.get("week") ?? undefined;
+  const period = useMemo(
+    () => calendarPeriod({ view: viewParam, month: monthParam, week: weekParam }, today, weekStart),
+    [viewParam, monthParam, weekParam, today, weekStart],
+  );
+  const { view, month, week, rangeStart, rangeEnd } = period;
+  const tasks = useMemo(
+    () => calendarTasks(taskRows.values(), projectRows, rangeStart, rangeEnd), [taskRows, projectRows, rangeStart, rangeEnd],
+  );
   const occurrences = useMemo(
     () => calendarOccurrences(tasks, rangeStart, rangeEnd), [tasks, rangeStart, rangeEnd],
   );
 
-  async function handleDragEnd({ active, over }: DragEndEvent) {
-    if (!over || moving) return;
+  function handleDragEnd({ active, over }: DragEndEvent) {
+    if (!over) return;
     const taskId = active.data.current?.taskId as string | undefined;
     const date = over.data.current?.date as string | undefined;
     const task = tasks.find((candidate) => candidate.id === taskId);
@@ -77,23 +75,7 @@ export function CalendarView({
     const dueTime = over.data.current?.dueTime === undefined
       ? task.dueTime : over.data.current.dueTime as string | null;
     if (task.dueDate === date && task.dueTime === dueTime) return;
-
-    const previous = tasks;
-    setError(null);
-    setMoving(true);
-    setTasks((current) => current.map((existing) =>
-      existing.id === taskId ? { ...existing, dueDate: date, dueTime } : existing,
-    ));
-    try {
-      const response = await fetch(`/api/tasks/${taskId}`, jsonInit("PATCH", { dueDate: date, dueTime }));
-      if (!response.ok) throw new Error("Move failed");
-      router.refresh();
-    } catch {
-      setTasks(previous);
-      setError("Couldn't move the task. Check your connection and try again.");
-    } finally {
-      setMoving(false);
-    }
+    actions.update(task, { dueDate: date, dueTime });
   }
 
   const prevHref =
@@ -142,8 +124,6 @@ export function CalendarView({
           </div>
         </div>
       </div>
-
-      {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
 
       <DndContext id="calendar-view" sensors={sensors} onDragEnd={handleDragEnd}>
         {view === "month" ? (

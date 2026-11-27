@@ -150,6 +150,19 @@ describe("Outbox.push", () => {
     expect(outbox.renamedTo("local:t")).toBe("T");
   });
 
+  test("remembers the server id in the store, so a reload still resolves the old one", async () => {
+    serve({ "POST /api/v1/tasks": { body: { id: "T" } } });
+    const { store, outbox } = queue((tx) => {
+      tx.tasks.upsert([taskEntity({ id: "local:t" })]);
+      tx.changes.add({ id: "local:t", kind: "Create", body: "{}", summary: "", idempotencyKey: "k" });
+    });
+    await outbox.push(api);
+    expect(store.getSnapshot().meta.aliases).toEqual({ "local:t": "T" });
+    const reloaded = new OfflineStore();
+    reloaded.load({ tasks: [], projects: [], sections: [], labels: [], filters: [], comments: [], reminders: [], changes: [], conflicts: [], meta: store.getSnapshot().meta });
+    expect(new Outbox(reloaded).renamedTo("local:t")).toBe("T");
+  });
+
   test("renames labels in tasks, sections in tasks, and a task's comments and reminders", async () => {
     serve({ "POST /api/v1/labels": { body: { id: "L" } }, "POST /api/v1/sections": { body: { id: "S" } }, "POST /api/v1/tasks": { body: { id: "T" } } });
     const { store, outbox } = queue((tx) => {
@@ -167,6 +180,19 @@ describe("Outbox.push", () => {
     expect(after.labels.has("L")).toBe(true);
     expect(after.comments.get("c")?.taskId).toBe("T");
     expect(after.reminders.get("r")?.taskId).toBe("T");
+  });
+
+  test("a filter goes to /api/v1/filters and takes its server id", async () => {
+    const fetch = serve({ "POST /api/v1/filters": { body: { id: "F" } }, "PATCH /api/v1/filters/F": {}, "DELETE /api/v1/filters/F": {} });
+    const { store, outbox } = queue((tx) => {
+      tx.filters.upsert([{ id: "local:f", name: "n", query: "p1", isFavorite: false, order: "a" }]);
+      tx.changes.add({ id: "local:f", kind: "Create", target: "Filter", body: '{"name":"n","query":"p1"}', summary: "", idempotencyKey: "a" });
+      tx.changes.add({ id: "local:f", kind: "Update", target: "Filter", body: '{"isFavorite":true}', summary: "" });
+      tx.changes.add({ id: "local:f", kind: "Delete", target: "Filter", body: "{}", summary: "" });
+    });
+    await outbox.push(api);
+    expect(sent(fetch)).toEqual(["POST /api/v1/filters", "PATCH /api/v1/filters/F", "DELETE /api/v1/filters/F"]);
+    expect(store.getSnapshot().filters.has("F")).toBe(true);
   });
 
   test("a rejected change keeps its reason and holds back its own later changes only", async () => {

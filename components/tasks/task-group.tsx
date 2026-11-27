@@ -43,14 +43,11 @@ export function TaskGroup({
   onPriorityChange,
   onMove,
   onDuplicate,
-  onSubtaskAdded,
   onOpenDetail,
   onSelectionToggle,
   onSelectionStart,
   onSelectionRange,
   onToggleTaskCollapsed,
-  onRenameSection,
-  onDeleteSection,
   onError,
   footer,
 }: {
@@ -80,14 +77,11 @@ export function TaskGroup({
   onPriorityChange: (task: TaskWithLabels, priority: number) => void;
   onMove: (task: TaskWithLabels, projectId: string) => void;
   onDuplicate: (task: TaskWithLabels) => void;
-  onSubtaskAdded: () => void;
   onOpenDetail: (task: TaskWithLabels) => void;
   onSelectionToggle: (task: TaskWithLabels) => void;
   onSelectionStart: (task: TaskWithLabels) => void;
   onSelectionRange: (task: TaskWithLabels) => void;
   onToggleTaskCollapsed: (taskId: string) => void;
-  onRenameSection: (section: Section, name: string) => void;
-  onDeleteSection: (section: Section) => void;
   onError: () => void;
   footer?: ReactNode;
 }) {
@@ -135,8 +129,6 @@ export function TaskGroup({
           selecting={selecting}
           collapsed={collapsed}
           onToggleCollapsed={toggleCollapsed}
-          onRename={onRenameSection}
-          onDelete={onDeleteSection}
         />
       )}
 
@@ -164,7 +156,6 @@ export function TaskGroup({
                 onPriorityChange={onPriorityChange}
                 onMove={onMove}
                 onDuplicate={onDuplicate}
-                onSubtaskAdded={onSubtaskAdded}
                 onOpenDetail={onOpenDetail}
                 selecting={selecting}
                 selected={selectedTaskIds.includes(task.id)}
@@ -188,9 +179,7 @@ export function TaskGroup({
             projectId={projectId}
             sectionId={id}
             today={today}
-            labels={labels}
             alignWithTask
-            onCreated={onSubtaskAdded}
             onError={onError}
           />
         </div>

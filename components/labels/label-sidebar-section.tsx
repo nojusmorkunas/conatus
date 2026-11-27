@@ -4,8 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { MoreHorizontal } from "lucide-react";
 
-import type { labels as labelsTable } from "@/lib/db/schema";
-import { api } from "@/lib/api-client";
+import { useSnapshot, useWrites } from "@/lib/offline/hooks";
+import type { LabelEntity } from "@/lib/offline/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,18 +17,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ProjectColorDot } from "@/components/projects/project-color-dot";
 import { ProjectColorPicker } from "@/components/projects/project-color-picker";
-import { toastError } from "@/components/ui/toast";
 
-type Label = typeof labelsTable.$inferSelect;
+type Label = Pick<LabelEntity, "id" | "name" | "color" | "isFavorite">;
 
 export function LabelRow({
   label,
-  onChanged,
   className,
   menuAlwaysVisible = false,
 }: {
   label: Label;
-  onChanged: () => void;
   className?: string;
   menuAlwaysVisible?: boolean;
 }) {
@@ -36,31 +33,23 @@ export function LabelRow({
   const [recoloring, setRecoloring] = useState(false);
   const [name, setName] = useState(label.name);
 
-  async function patch(body: Record<string, unknown>) {
-    try {
-      await api.patch(`/api/labels/${label.id}`, body);
-    } catch (error) {
-      toastError(error, "Couldn't update the label.");
-    } finally {
-      onChanged();
-    }
+  const { lists } = useWrites();
+  // The row may come from a list that is a sync behind the local copy.
+  const entity = useSnapshot((snapshot) => snapshot.labels.get(label.id));
+
+  function change(write: (entity: LabelEntity) => void) {
+    if (entity) write(entity);
   }
 
-  async function submitRename(event: React.FormEvent) {
+  function submitRename(event: React.FormEvent) {
     event.preventDefault();
     setRenaming(false);
-    if (name.trim() && name !== label.name) await patch({ name: name.trim() });
+    if (name.trim()) change((current) => lists.editLabel(current, name, current.color));
   }
 
-  async function remove() {
+  function remove() {
     if (!confirm(`Delete label "${label.name}"?`)) return;
-    try {
-      await api.delete(`/api/labels/${label.id}`);
-    } catch (error) {
-      toastError(error, "Couldn't delete the label.");
-    } finally {
-      onChanged();
-    }
+    change((current) => lists.deleteLabel(current));
   }
 
   if (renaming) {
@@ -83,7 +72,7 @@ export function LabelRow({
           value={label.color}
           onChange={(color) => {
             setRecoloring(false);
-            patch({ color });
+            change((current) => lists.editLabel(current, current.name, color));
           }}
         />
       </div>
@@ -130,7 +119,7 @@ export function LabelRow({
             Change color
           </DropdownMenuItem>
           <DropdownMenuItem
-            onClick={() => patch({ isFavorite: !label.isFavorite })}
+            onClick={() => change((current) => lists.favoriteLabel(current, !label.isFavorite))}
           >
             {label.isFavorite ? "Unpin it!" : "Pin it!"}
           </DropdownMenuItem>

@@ -1,75 +1,29 @@
-import { and, eq, getTableColumns, gte, inArray, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
+import { CalendarDays } from "lucide-react";
 
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { accessibleProjectIds } from "@/lib/db/access";
-import { labels, projects, tasks, users } from "@/lib/db/schema";
-import { withCommentCounts, withLabels } from "@/lib/db/task-labels";
-import { dueOrder } from "@/lib/db/task-order";
-import { dueLabel, formatDate, todayInTimezone } from "@/lib/dates";
-import { TaskDateList } from "@/components/tasks/task-date-list";
-import type { TaskDateGroup } from "@/components/tasks/task-date-list";
+import { users } from "@/lib/db/schema";
+import { UpcomingScreen } from "@/components/tasks/task-date-screens";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MobilePageHeader } from "@/components/projects/mobile-sidebar-trigger";
-import { CalendarDays } from "lucide-react";
 
 export default async function UpcomingPage() {
   const user = await requireUser();
   if (!user) return null;
 
   const [settings] = await db
-    .select({ timezone: users.timezone, dateFormat: users.dateFormat })
+    .select({ dateFormat: users.dateFormat })
     .from(users)
     .where(eq(users.id, user.id));
-  const today = todayInTimezone(settings.timezone);
-
-  const dueTasks = await withCommentCounts(
-    await withLabels(
-      await db
-        .select({ ...getTableColumns(tasks), projectName: projects.name, projectColor: projects.color, projectIcon: projects.icon })
-        .from(tasks)
-        .innerJoin(projects, eq(projects.id, tasks.projectId))
-        .where(
-          and(
-            inArray(tasks.projectId, await accessibleProjectIds(user)),
-            eq(tasks.isCompleted, false),
-            isNull(tasks.deletedAt),
-            gte(tasks.dueDate, today),
-          ),
-        )
-        .orderBy(...dueOrder),
-      user.id,
-    ),
-  );
-
-  const userLabels = await db
-    .select()
-    .from(labels)
-    .where(eq(labels.userId, user.id))
-    .orderBy(labels.order);
-
-  const groups: TaskDateGroup[] = [];
-  for (const task of dueTasks) {
-    const label = dueLabel(task.dueDate!, today, settings.dateFormat);
-    const heading =
-      label === formatDate(task.dueDate!, settings.dateFormat)
-        ? label
-        : `${label} · ${formatDate(task.dueDate!, settings.dateFormat)}`;
-    const group = groups.at(-1);
-    if (group?.heading === heading) group.tasks.push(task);
-    else groups.push({ heading, tasks: [task] });
-  }
 
   return (
     <div className="mx-auto w-full max-w-4xl px-3 py-6 sm:p-6">
       <MobilePageHeader className="mb-6">
         <h1 className="text-xl font-semibold">Upcoming</h1>
       </MobilePageHeader>
-      <TaskDateList
-        initialGroups={groups}
-        labels={userLabels}
+      <UpcomingScreen
         currentUserId={user.id}
-        today={today}
         dateFormat={settings.dateFormat}
         emptyState={<EmptyState icon={CalendarDays} title="Nothing coming up" description="Add dates to tasks to plan what is next." />}
       />

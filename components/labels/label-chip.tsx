@@ -1,4 +1,4 @@
-import type { labels } from "@/lib/db/schema";
+import type { Label } from "@/components/tasks/types";
 import { Tag } from "lucide-react";
 
 import {
@@ -7,8 +7,6 @@ import {
 } from "@/components/projects/project-color-dot";
 import { cn } from "@/lib/utils";
 import { projectColors } from "@/lib/validation";
-
-type Label = typeof labels.$inferSelect;
 
 export function LabelChip({
   label,

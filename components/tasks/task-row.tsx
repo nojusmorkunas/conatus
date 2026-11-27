@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useEffectEvent, useRef, useState, type CSSProperties } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -25,6 +25,8 @@ import {
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 
 import { addDays } from "@/lib/dates";
+import { useSnapshot } from "@/lib/offline/hooks";
+import { visibleProjects } from "@/lib/task-views";
 import { keyName, taskRows } from "@/lib/keyboard";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -111,7 +113,7 @@ function TaskRowComponent({
   onPriorityChange?: (task: TaskWithLabels, priority: number) => void;
   onMove?: (task: TaskWithLabels, projectId: string) => void;
   onDuplicate?: (task: TaskWithLabels) => void;
-  onSubtaskAdded: () => void;
+  onSubtaskAdded?: () => void;
   onOpenDetail: (task: TaskWithLabels) => void;
   selecting?: boolean;
   selected?: boolean;
@@ -285,9 +287,8 @@ function TaskRowComponent({
             parentId={task.parentId ?? undefined}
             afterId={previousSiblingId()}
             today={today}
-            labels={labels}
             initiallyExpanded
-            onCreated={() => { setAddingTask(null); onSubtaskAdded(); }}
+            onCreated={() => { setAddingTask(null); onSubtaskAdded?.(); }}
             onError={onError}
           />
         </div>
@@ -467,9 +468,8 @@ function TaskRowComponent({
             parentId={task.parentId ?? undefined}
             afterId={task.id}
             today={today}
-            labels={labels}
             initiallyExpanded
-            onCreated={() => { setAddingTask(null); onSubtaskAdded(); }}
+            onCreated={() => { setAddingTask(null); onSubtaskAdded?.(); }}
             onError={onError}
           />
         </div>
@@ -512,10 +512,9 @@ function TaskRowComponent({
             sectionId={task.sectionId}
             parentId={task.id}
             today={today}
-            labels={labels}
             onCreated={() => {
               setAddingSubtask(false);
-              onSubtaskAdded();
+              onSubtaskAdded?.();
             }}
             onError={() => {}}
           />
@@ -693,7 +692,6 @@ function TaskContextMenu({
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
-  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   // Adding a task next to "these seven", opening them, or copying a link to
   // them means nothing. What is left applies to one task or to many alike.
   const many = taskCount > 1;
@@ -704,19 +702,6 @@ function TaskContextMenu({
     setOpen(false);
   }
 
-  function loadProjects() {
-    if (projects.length) return;
-    void fetch("/api/projects").then(async (response) => {
-      if (response.ok) setProjects(await response.json());
-    });
-  }
-
-  // Opening straight at Move to skips the submenu's own open event.
-  const loadProjectsForKey = useEffectEvent(loadProjects);
-  useEffect(() => {
-    if (open && submenu === "move") loadProjectsForKey();
-  }, [open, submenu]);
-
   // The menu takes focus when it opens, so l and v hand it on to the first
   // item of their submenu, ready for the arrow keys.
   useEffect(() => {
@@ -725,7 +710,7 @@ function TaskContextMenu({
       .querySelector<HTMLElement>("[data-slot=dropdown-menu-sub-content] [role^=menuitem]")
       ?.focus());
     return () => cancelAnimationFrame(frame);
-  }, [open, submenu, projects.length]);
+  }, [open, submenu]);
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
@@ -801,23 +786,27 @@ function TaskContextMenu({
           <DropdownMenuItem onClick={() => run(onDeadline)}><CalendarDays />Deadline</DropdownMenuItem>
           <DropdownMenuItem onClick={() => run(onReminders)}><Bell />Reminders</DropdownMenuItem>
         </>}
-        <DropdownMenuSub defaultOpen={submenu === "move"} onOpenChange={(nextOpen) => { if (nextOpen) loadProjects(); }}>
+        <DropdownMenuSub defaultOpen={submenu === "move"}>
           <DropdownMenuSubTrigger><FolderInput />Move to…</DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="w-52">
-            {projects.map((project) => (
-              <DropdownMenuItem key={project.id} onClick={() => run(() => onMove(project.id))}>{project.name}</DropdownMenuItem>
-            ))}
-            {projects.length === 0 && <p className="px-1.5 py-1 text-xs text-muted-foreground">Loading projects…</p>}
+            <MoveTargets onPick={(projectId) => run(() => onMove(projectId))} />
           </DropdownMenuSubContent>
         </DropdownMenuSub>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => run(onDuplicate)}><Copy />Duplicate</DropdownMenuItem>
         {!many && <DropdownMenuItem onClick={() => run(() => {
-          void navigator.clipboard.writeText(`${location.origin}/projects/${task.projectId}?task=${task.id}`);
+          void navigator.clipboard.writeText(`${location.origin}/projects/${encodeURIComponent(task.projectId)}?task=${encodeURIComponent(task.id)}`);
         })}><Link />Copy link to task</DropdownMenuItem>}
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onClick={() => run(onDelete)}><Trash2 />Move to Trash</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
+}
+
+// A component of its own so only an open menu listens to the store.
+function MoveTargets({ onPick }: { onPick: (projectId: string) => void }) {
+  const rows = useSnapshot((snapshot) => snapshot.projects);
+  const projects = useMemo(() => visibleProjects(rows.values()), [rows]);
+  return projects.map((project) => <DropdownMenuItem key={project.id} onClick={() => onPick(project.id)}>{project.name}</DropdownMenuItem>);
 }

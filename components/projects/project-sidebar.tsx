@@ -2,6 +2,7 @@
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { useSidebarLists, useSnapshot, useTodayDate, useWrites } from "@/lib/offline/hooks";
 import { signOutAndClearCache } from "@/lib/sign-out";
 import {
   CalendarDays,
@@ -38,9 +39,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { generateKeyBetween } from "fractional-indexing";
 
-import { jsonInit } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -63,54 +62,40 @@ import { CreateProjectForm } from "./create-project-form";
 import { ProfileAvatar } from "./profile-avatar";
 import { ProjectTile } from "./project-icon-picker";
 import { buildProjectTree, ProjectBranch, ProjectRow } from "./project-tree";
-import type { Filter, Label, Project, ProjectDropIndicator } from "./project-types";
+import type { ProjectDropIndicator } from "./project-types";
 import { SidebarGroupHeader, SidebarSearch, ViewLink } from "./sidebar-nav";
 import { SidebarResizeHandle } from "./sidebar-resize-handle";
 
 export function ProjectSidebar({
-  initialProjects,
-  initialLabels,
-  initialFilters,
   username,
   userName,
   hasAvatar,
   avatarVersion,
   appVersion,
   inboxProjectId,
-  today,
-  labels,
-  counts,
-  todayCount,
 }: {
-  initialProjects: Project[];
-  initialLabels: Label[];
-  initialFilters: Filter[];
   username: string;
   userName: string | null;
   hasAvatar: boolean;
   avatarVersion: string;
   appVersion: string;
   inboxProjectId: string | null;
-  today: string;
-  labels: { id: string; name: string }[];
-  counts: Record<string, number>;
-  todayCount: number;
 }) {
   const router = useRouter();
+  const { lists } = useWrites();
+  const today = useTodayDate();
+  const { projects, labels: favoriteLabels, filters: allFilters, counts: openCount } = useSidebarLists();
+  const counts = openCount.byProject;
+  const todayCount = openCount.today;
   const pathname = usePathname();
   const sidebarRef = useRef<HTMLElement>(null);
-  const [projects, setProjects] = useState(initialProjects);
-  const [favoriteLabels, setFavoriteLabels] = useState(initialLabels);
-  const [favoriteFilters, setFavoriteFilters] = useState(initialFilters);
   const [creating, setCreating] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickAddError, setQuickAddError] = useState(false);
-  const [projectMoveError, setProjectMoveError] = useState<string | null>(null);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [activeFavoriteId, setActiveFavoriteId] = useState<string | null>(null);
-  const [favoriteMoveError, setFavoriteMoveError] = useState<string | null>(null);
   const [projectProjection, setProjectProjection] = useState<
     ReturnType<typeof projectTaskDepth>
   >(null);
@@ -121,14 +106,17 @@ export function ProjectSidebar({
   // Adding a task from anywhere inside a project means adding it to that
   // project. Everywhere else — Focus, Calendar, a label — falls back to Inbox.
   const openProjectId = pathname?.startsWith("/projects/")
-    ? pathname.split("/")[2]
+    ? decodeURIComponent(pathname.split("/")[2])
     : null;
   const quickAddProjectId =
-    projects.find((project) => project.id === openProjectId && !project.isArchived)?.id ??
+    projects.find((project) => project.id === openProjectId)?.id ??
     inboxProjectId;
 
   // A shared project can be its owner's Inbox; only my own Inbox is pinned.
   const inbox = projects.find((project) => project.isInbox && !project.shared);
+  // Until the local copy has loaded, the Inbox is the one the server named.
+  const inboxId = inbox?.id ?? inboxProjectId;
+  const loaded = useSnapshot((snapshot) => snapshot.meta.lastSyncAt !== null);
   const rest = projects.filter((project) => project !== inbox);
   const favorites = rest
     .filter((project) => project.isFavorite && !project.shared)
@@ -155,7 +143,7 @@ export function ProjectSidebar({
       }
     : null;
   const favoriteLabelsOnly = favoriteLabels.filter((label) => label.isFavorite);
-  const favoriteFiltersOnly = favoriteFilters.filter((filter) => filter.isFavorite);
+  const favoriteFiltersOnly = allFilters.filter((filter) => filter.isFavorite);
   const hasFavorites = favorites.length + favoriteLabelsOnly.length + favoriteFiltersOnly.length > 0;
   const fallbackName = username.charAt(0).toUpperCase() + username.slice(1);
   const displayName = userName?.trim() || fallbackName;
@@ -174,42 +162,6 @@ export function ProjectSidebar({
       setProjectsExpanded(localStorage.getItem("sidebar:projects") !== "collapsed");
     });
     return () => cancelAnimationFrame(frame);
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    async function refreshImportedProjects() {
-      const response = await fetch("/api/projects");
-      if (active && response.ok) setProjects(await response.json());
-    }
-    function onProjectsChanged() {
-      void refreshImportedProjects();
-    }
-    window.addEventListener("sidebar:projects:refresh", onProjectsChanged);
-    return () => {
-      active = false;
-      window.removeEventListener("sidebar:projects:refresh", onProjectsChanged);
-    };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    async function refreshPinned() {
-      const [labelsResponse, filtersResponse] = await Promise.all([
-        fetch("/api/labels"),
-        fetch("/api/filters"),
-      ]);
-      if (active && labelsResponse.ok) setFavoriteLabels(await labelsResponse.json());
-      if (active && filtersResponse.ok) setFavoriteFilters(await filtersResponse.json());
-    }
-    function onFavoritesChanged() {
-      void refreshPinned();
-    }
-    window.addEventListener("sidebar:favorites:refresh", onFavoritesChanged);
-    return () => {
-      active = false;
-      window.removeEventListener("sidebar:favorites:refresh", onFavoritesChanged);
-    };
   }, []);
 
   function setSidebarCollapsed(value: boolean) {
@@ -255,34 +207,6 @@ export function ProjectSidebar({
     };
   }, []);
 
-  async function refresh() {
-    const response = await fetch("/api/projects");
-    if (response.ok) {
-      const next: Project[] = await response.json();
-      setProjects(next);
-      // The open project (or a parent of it) just went to Trash, so refreshing
-      // its page would hit notFound(). Archived projects never appear in the list.
-      if (
-        projects.some((project) => project.id === openProjectId) &&
-        !next.some((project) => project.id === openProjectId)
-      ) {
-        router.replace("/today");
-        return;
-      }
-    }
-    router.refresh();
-  }
-
-  async function refreshFavorites() {
-    const [labelsResponse, filtersResponse] = await Promise.all([
-      fetch("/api/labels"),
-      fetch("/api/filters"),
-    ]);
-    if (labelsResponse.ok) setFavoriteLabels(await labelsResponse.json());
-    if (filtersResponse.ok) setFavoriteFilters(await filtersResponse.json());
-    router.refresh();
-  }
-
   function updateProjectProjection(next: ReturnType<typeof projectTaskDepth>) {
     const current = projectProjectionRef.current;
     if (
@@ -308,65 +232,15 @@ export function ProjectSidebar({
     });
   }
 
-  async function moveProject({ active, over, delta }: DragEndEvent) {
+  function moveProject({ active, over, delta }: DragEndEvent) {
     if (!over) return;
     const moving = projects.find((project) => project.id === active.id);
     const target = projectProjectionRef.current ?? dragProjectProjection({ active, over, delta });
     if (!moving || !target || moving.shared || moving.isInbox) return;
-
-    const parentId = target.parentId;
-    const afterId = target.afterId;
-
-    const siblings = projects.filter((project) =>
-      project.id !== moving.id && project.parentId === parentId && !project.shared && !project.isInbox,
-    ).sort((a, b) => (a.order < b.order ? -1 : 1));
-    const afterIndex = afterId ? siblings.findIndex((project) => project.id === afterId) : -1;
-    if (afterId && afterIndex < 0) return;
-    let order: string;
-    try {
-      order = generateKeyBetween(
-        afterIndex < 0 ? null : siblings[afterIndex].order,
-        siblings[afterIndex + 1]?.order ?? null,
-      );
-    } catch {
-      setProjectMoveError("Couldn't calculate that project position. Try again.");
-      return;
-    }
-    const previousProjects = projects;
-    setProjectMoveError(null);
-    setProjects((current) => current.map((project) =>
-      project.id === moving.id ? { ...project, parentId, order } : project,
-    ).sort((a, b) => (a.order < b.order ? -1 : 1)));
-
-    try {
-      const response = await fetch(`/api/projects/${moving.id}`, jsonInit("PATCH", { parentId, afterId }));
-      if (!response.ok) {
-        const body = await response.json().catch(() => null) as { error?: unknown } | null;
-        setProjects(previousProjects);
-        setProjectMoveError(
-          typeof body?.error === "string"
-            ? body.error
-            : "Couldn't move the project. Try again.",
-        );
-        return;
-      }
-
-      // Keep the optimistic UI mounted because router.refresh() after every drop can
-      // race a navigation/render and surface a transient Next.js error. Apply
-      // the server's canonical fractional order without refreshing the page.
-      const updated = await response.json() as Project;
-      setProjects((current) => current.map((project) =>
-        project.id === updated.id
-          ? { ...project, parentId: updated.parentId, order: updated.order }
-          : project,
-      ).sort((a, b) => (a.order < b.order ? -1 : 1)));
-    } catch {
-      setProjects(previousProjects);
-      setProjectMoveError("Couldn't move the project. Check your connection and try again.");
-    }
+    lists.placeProject(moving, target.parentId, target.afterId);
   }
 
-  async function moveFavoriteProject({ active, over }: DragEndEvent) {
+  function moveFavoriteProject({ active, over }: DragEndEvent) {
     if (!over || active.id === over.id) return;
     const activeIndex = favorites.findIndex((project) => project.id === active.id);
     const overIndex = favorites.findIndex((project) => project.id === over.id);
@@ -374,48 +248,7 @@ export function ProjectSidebar({
 
     const reordered = arrayMove(favorites, activeIndex, overIndex);
     const movedIndex = reordered.findIndex((project) => project.id === active.id);
-    const previous = reordered[movedIndex - 1];
-    const next = reordered[movedIndex + 1];
-    const moving = reordered[movedIndex];
-    let favoriteOrder: string;
-    try {
-      favoriteOrder = generateKeyBetween(
-        previous ? previous.favoriteOrder ?? previous.order : null,
-        next ? next.favoriteOrder ?? next.order : null,
-      );
-    } catch {
-      setFavoriteMoveError("Couldn't calculate that favorite position. Try again.");
-      return;
-    }
-
-    const previousProjects = projects;
-    setFavoriteMoveError(null);
-    setProjects((current) => current.map((project) =>
-      project.id === moving.id ? { ...project, favoriteOrder } : project,
-    ));
-
-    try {
-      const response = await fetch(`/api/projects/${moving.id}`, jsonInit("PATCH", { favoriteAfterId: previous?.id ?? null }));
-      if (!response.ok) {
-        const body = await response.json().catch(() => null) as { error?: unknown } | null;
-        setProjects(previousProjects);
-        setFavoriteMoveError(
-          typeof body?.error === "string"
-            ? body.error
-            : "Couldn't move the favorite. Try again.",
-        );
-        return;
-      }
-      const updated = await response.json() as Project;
-      setProjects((current) => current.map((project) =>
-        project.id === updated.id
-          ? { ...project, favoriteOrder: updated.favoriteOrder }
-          : project,
-      ));
-    } catch {
-      setProjects(previousProjects);
-      setFavoriteMoveError("Couldn't move the favorite. Check your connection and try again.");
-    }
+    lists.placeFavorite(reordered[movedIndex], reordered[movedIndex - 1]?.id ?? null);
   }
 
   function toggleGroup(group: "favorites" | "projects") {
@@ -501,11 +334,11 @@ export function ProjectSidebar({
           <div className="mb-5">
             <p className="mb-1 flex h-8 items-center px-1.5 text-xs font-semibold text-muted-foreground">Navigate</p>
             <div className="flex flex-col gap-0.5 rounded-xl bg-sidebar-accent/45 p-1">
-              {inbox && (
+              {inboxId && (
                 <ViewLink
-                  href={`/projects/${inbox.id}`}
+                  href={`/projects/${encodeURIComponent(inboxId)}`}
                   icon={<Inbox className="size-4" />}
-                  count={counts[inbox.id]}
+                  count={counts[inboxId]}
                 >
                   Inbox
                 </ViewLink>
@@ -545,7 +378,7 @@ export function ProjectSidebar({
                     }}
                     onDragEnd={(event) => {
                       setActiveFavoriteId(null);
-                      void moveFavoriteProject(event);
+                      moveFavoriteProject(event);
                     }}
                     onDragCancel={() => setActiveFavoriteId(null)}
                   >
@@ -562,7 +395,6 @@ export function ProjectSidebar({
                           hasSubProjects={projects.some(
                             (candidate) => !candidate.shared && candidate.parentId === project.id,
                           )}
-                          onChanged={refresh}
                         />
                       ))}
                     </SortableContext>
@@ -580,16 +412,11 @@ export function ProjectSidebar({
                       ) : null}
                     </DragOverlay>
                   </DndContext>
-                  {favoriteMoveError && (
-                    <p role="alert" className="px-2 py-1 text-xs text-destructive">
-                      {favoriteMoveError}
-                    </p>
-                  )}
                   {favoriteLabelsOnly.map((label) => (
-                    <LabelRow key={label.id} label={label} onChanged={refreshFavorites} />
+                    <LabelRow key={label.id} label={label} />
                   ))}
                   {favoriteFiltersOnly.map((filter) => (
-                    <FilterRow key={filter.id} filter={filter} onChanged={refreshFavorites} />
+                    <FilterRow key={filter.id} filter={filter} />
                   ))}
               </div>
               )}
@@ -609,7 +436,7 @@ export function ProjectSidebar({
             </SidebarGroupHeader>
             {projectsExpanded && (
               <div className="flex flex-col gap-0.5">
-                {others.length === 0 && (
+                {loaded && others.length === 0 && (
                   <p className="px-2 py-1 text-sm text-muted-foreground">
                     No projects yet.
                   </p>
@@ -627,7 +454,7 @@ export function ProjectSidebar({
                   onDragOver={(event) => updateProjectProjection(dragProjectProjection(event))}
                   onDragEnd={(event) => {
                     setActiveProjectId(null);
-                    void moveProject(event);
+                    moveProject(event);
                     updateProjectProjection(null);
                   }}
                   onDragCancel={() => {
@@ -651,7 +478,6 @@ export function ProjectSidebar({
                         allProjects={projects}
                         activeProjectId={activeProjectId}
                         dropIndicator={projectDropIndicator}
-                        onChanged={refresh}
                       />
                     ))}
                   </SortableContext>
@@ -669,16 +495,10 @@ export function ProjectSidebar({
                     ) : null}
                   </DragOverlay>
                 </DndContext>
-                {projectMoveError && (
-                  <p role="alert" className="px-2 py-1 text-xs text-destructive">
-                    {projectMoveError}
-                  </p>
-                )}
                 {creating ? (
                   <CreateProjectForm
                     projects={projects}
                     onDone={() => setCreating(false)}
-                    onCreated={refresh}
                   />
                 ) : null}
               </div>
@@ -769,12 +589,8 @@ export function ProjectSidebar({
               projectId={quickAddProjectId ?? inboxProjectId}
               sectionId={null}
               today={today}
-              labels={labels}
               initiallyExpanded
-              onCreated={() => {
-                setQuickAddOpen(false);
-                router.refresh();
-              }}
+              onCreated={() => setQuickAddOpen(false)}
               onError={() => setQuickAddError(true)}
               onCancel={() => setQuickAddOpen(false)}
             />

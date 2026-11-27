@@ -55,18 +55,17 @@ const COLLECTION: Record<Target, string> = {
   Project: "projects",
   Section: "sections",
   Label: "labels",
+  Filter: "filters",
   Comment: "comments",
   Reminder: "reminders",
 };
 
 /** Sends queued changes in order, handles the server's answers and settles conflicts. */
 export class Outbox {
-  private readonly aliases = new Map<string, string>();
-
   constructor(private readonly store: OfflineStore) {}
 
   /** The server id something made here took, so an open screen can follow it. */
-  renamedTo = (localId: string): string | undefined => this.aliases.get(localId);
+  renamedTo = (localId: string): string | undefined => this.store.getSnapshot().meta.aliases?.[localId];
 
   async push(api: ConatusApi): Promise<PushResult> {
     for (;;) {
@@ -107,7 +106,7 @@ export class Outbox {
       if (!local) return;
       // For the others, the next sync replaces the whole list, now that nothing queued holds this one back.
       // Task details fetch a task's comments and reminders again when they open.
-      const table = { Task: tx.tasks, Project: tx.projects, Section: tx.sections, Label: tx.labels, Comment: tx.comments, Reminder: tx.reminders }[change.target];
+      const table = { Task: tx.tasks, Project: tx.projects, Section: tx.sections, Label: tx.labels, Filter: tx.filters, Comment: tx.comments, Reminder: tx.reminders }[change.target];
       table.delete([change.id]);
     });
     if (change.target !== "Task" || local) return;
@@ -179,6 +178,7 @@ export class Outbox {
   /** An Inbox made here before the server's was known becomes the account's Inbox. */
   adoptProject(tx: Tx, localId: string, serverId: string) {
     this.moveProject(tx, localId, serverId);
+    tx.setMeta({ aliases: { ...tx.getMeta().aliases, [localId]: serverId } });
     tx.changes.replaceInBodies(`"${localId}"`, `"${serverId}"`);
     tx.projects.delete([localId]);
   }
@@ -194,7 +194,7 @@ export class Outbox {
    * is shown, and changes queued after the create follow it.
    */
   private adopt(tx: Tx, target: Target, localId: string, serverId: string) {
-    this.aliases.set(localId, serverId);
+    tx.setMeta({ aliases: { ...tx.getMeta().aliases, [localId]: serverId } });
     // The row under its new id, then the old one gone.
     const rename = <T extends { id: string }>(table: { get(id: string): T | undefined; upsert(rows: T[]): void; delete(ids: string[]): void }) => {
       const row = table.get(localId);
@@ -221,6 +221,9 @@ export class Outbox {
       case "Label":
         rename(tx.labels);
         tx.tasks.upsert(tx.tasks.all().filter((task) => task.labelIds.includes(localId)).map((task) => ({ ...task, labelIds: task.labelIds.map((id) => (id === localId ? serverId : id)) })));
+        break;
+      case "Filter":
+        rename(tx.filters);
         break;
       case "Comment":
         rename(tx.comments);

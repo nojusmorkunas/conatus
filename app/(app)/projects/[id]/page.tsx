@@ -1,85 +1,70 @@
-import { notFound } from "next/navigation";
-import { and, count, eq } from "drizzle-orm";
+import { eq, count } from "drizzle-orm";
+import { z } from "zod";
 
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { requireProjectAccess } from "@/lib/db/access";
-import { comments, labels, projectCollaborators, sections, users } from "@/lib/db/schema";
+import { comments, projectCollaborators, users } from "@/lib/db/schema";
 import { loadProjectTasks } from "@/lib/db/project-tasks";
-import { todayInTimezone } from "@/lib/dates";
-import { ProjectView } from "@/components/projects/project-view";
+import { ProjectScreen } from "@/components/projects/project-screen";
 
-export default async function ProjectPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<{ task?: string | string[] }>;
-}) {
+function decoded(id: string) {
+  try {
+    return decodeURIComponent(id);
+  } catch {
+    return id;
+  }
+}
+
+export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
   if (!user) return null;
 
-  const { id } = await params;
-  const taskParam = (await searchParams).task;
-  const initialDetailTaskId = typeof taskParam === "string" ? taskParam : undefined;
-  const access = await requireProjectAccess(user, id);
-  if (!access) notFound();
-  const project = access.project;
-
-  const [owner] = await db
-    .select({ id: users.id, username: users.username })
-    .from(users)
-    .where(eq(users.id, project.userId));
-  const collaborators = await db
-    .select({ userId: projectCollaborators.userId, username: users.username })
-    .from(projectCollaborators)
-    .innerJoin(users, eq(users.id, projectCollaborators.userId))
-    .where(eq(projectCollaborators.projectId, id))
-    .orderBy(projectCollaborators.createdAt);
-  const members = [
-    { userId: owner.id, username: owner.username, role: "owner" as const },
-    ...collaborators.map((member) => ({ ...member, role: "editor" as const })),
-  ];
-
-  const projectSections = await db
-    .select()
-    .from(sections)
-    .where(and(eq(sections.projectId, id), eq(sections.isArchived, false)))
-    .orderBy(sections.order);
-
-  const projectTasks = await loadProjectTasks(id, user.id, initialDetailTaskId);
-
-  const userLabels = await db
-    .select()
-    .from(labels)
-    .where(eq(labels.userId, user.id))
-    .orderBy(labels.order);
-
-  const [projectCommentCount] = await db
-    .select({ count: count() })
-    .from(comments)
-    .where(eq(comments.projectId, id));
-
+  const id = decoded((await params).id);
   const [settings] = await db
     .select({ timezone: users.timezone, dateFormat: users.dateFormat })
     .from(users)
     .where(eq(users.id, user.id));
 
+  // The project itself comes from the browser's local copy. Only what that copy lacks is read
+  // here, and only for a project the server knows: one made offline has an id that isn't a uuid yet.
+  const access = z.uuid().safeParse(id).success ? await requireProjectAccess(user, id) : null;
+  let members: { userId: string; username: string; role: "owner" | "editor" }[] = [];
+  let projectCommentCount = 0;
+  // Archived projects never reach the local copy, so the page carries the one thing it can show.
+  let archived: { id: string; name: string; tasks: { id: string; content: string }[] } | null = null;
+  if (access?.project.isArchived) {
+    const rows = await loadProjectTasks(id, user.id);
+    archived = { id, name: access.project.name, tasks: rows.filter((task) => !task.isCompleted).map(({ id, content }) => ({ id, content })) };
+  }
+  if (access) {
+    const [owner] = await db
+      .select({ id: users.id, username: users.username })
+      .from(users)
+      .where(eq(users.id, access.project.userId));
+    const collaborators = await db
+      .select({ userId: projectCollaborators.userId, username: users.username })
+      .from(projectCollaborators)
+      .innerJoin(users, eq(users.id, projectCollaborators.userId))
+      .where(eq(projectCollaborators.projectId, id))
+      .orderBy(projectCollaborators.createdAt);
+    members = [
+      { userId: owner.id, username: owner.username, role: "owner" },
+      ...collaborators.map((member) => ({ ...member, role: "editor" as const })),
+    ];
+    [{ count: projectCommentCount }] = await db.select({ count: count() }).from(comments).where(eq(comments.projectId, id));
+  }
+
   return (
-    <ProjectView
-      key={project.id}
-      project={project}
-      role={access.role}
+    <ProjectScreen
+      serverProjectId={id}
+      role={access?.role ?? "owner"}
       members={members}
       currentUserId={user.id}
-      projectCommentCount={projectCommentCount.count}
-      sections={projectSections}
-      tasks={projectTasks}
-      labels={userLabels}
-      today={todayInTimezone(settings.timezone)}
+      projectCommentCount={projectCommentCount}
+      archived={archived}
       dateFormat={settings.dateFormat}
       timezone={settings.timezone}
-      initialDetailTaskId={initialDetailTaskId}
     />
   );
 }

@@ -34,6 +34,7 @@ test("a quick add, a comment and a repeat go to the right endpoints with the rig
     ],
     "GET /api/v1/sections": [],
     "GET /api/v1/labels": [errand],
+    "GET /api/v1/filters": [],
     "GET /api/v1/tasks": { items: [], nextCursor: null, serverTime: "2026-10-26T12:00:00.000Z" },
     "POST /api/v1/tasks": { id: "srv-task" },
     "PATCH /api/v1/tasks/srv-task": {},

@@ -438,6 +438,19 @@ describe("quickAddTask", () => {
   });
 });
 
+describe("duplicate", () => {
+  test("adds an open copy with the labels right after the original, and queues its create, labels and place", () => {
+    const { writes, store, task, queue } = setup({ id: "a", order: "a0", labelIds: ["x"], isCompleted: true, completedAt: "2026-10-01T00:00:00.000Z", commentCount: 3 }, { id: "b", order: "a1", labelIds: [] });
+    const copy = writes.duplicate(task("a"));
+    expect(copy.id.startsWith("local:")).toBe(true);
+    expect(store.getSnapshot().tasks.get(copy.id)).toMatchObject({ content: "Pay rent", labelIds: ["x"], isCompleted: false, completedAt: null, commentCount: 0 });
+    const order = [...store.getSnapshot().tasks.values()].sort((p, q) => (p.order < q.order ? -1 : 1)).map((t) => t.id);
+    expect(order).toEqual(["a", copy.id, "b"]);
+    expect(queue().map((change) => [change.id, change.kind])).toEqual([[copy.id, "Create"], [copy.id, "SetLabels"], [copy.id, "Place"]]);
+    expect(JSON.parse(queue()[2].body)).toEqual({ sectionId: null, parentId: null, afterId: "a" });
+  });
+});
+
 describe("helpers", () => {
   test("uploadOrder creates parents before sub-tasks and completes sub-tasks first", () => {
     const [creates, completes] = uploadOrder([

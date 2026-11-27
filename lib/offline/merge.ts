@@ -93,5 +93,7 @@ export function merge(local: TaskEntity, theirs: TaskEntity, queued: PendingChan
     // The local value stays on screen, conflicting or not, until the user decides.
     task = withField(task, name, ours);
   }
+  // A task moved here keeps its new place among its siblings until the move has gone out; its old order from the server would put it back.
+  if (bases.has("sectionId") || bases.has("parentId") || bases.has("projectId")) task = { ...task, order: local.order };
   return { task, conflicts };
 }

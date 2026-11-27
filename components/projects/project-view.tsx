@@ -1,15 +1,12 @@
 "use client";
 
-import { useEffect, useEffectEvent, useState, useSyncExternalStore } from "react";
+import { useEffect, useEffectEvent, useMemo, useSyncExternalStore } from "react";
 
-import type {
-  labels as labelsTable,
-  projects,
-  sections as sectionsTable,
-} from "@/lib/db/schema";
 import { Board } from "@/components/board/board";
-import { TaskList, type TaskWithLabels } from "@/components/tasks/task-list";
+import { TaskList } from "@/components/tasks/task-list";
 import { keyName, shortcutsBlocked } from "@/lib/keyboard";
+import { useTodayDate } from "@/lib/offline/hooks";
+import type { ProjectEntity } from "@/lib/offline/types";
 import type { SortBy } from "@/lib/task-sort";
 import { ProjectHeader } from "./project-header";
 
@@ -37,36 +34,22 @@ function storePreference(key: string, value: string) {
   window.dispatchEvent(new Event("project-preference"));
 }
 
-type Project = typeof projects.$inferSelect;
-type Section = typeof sectionsTable.$inferSelect;
-type Label = typeof labelsTable.$inferSelect;
-
 export function ProjectView({
   project,
   role,
   members,
   currentUserId,
   projectCommentCount,
-  sections,
-  tasks,
-  labels,
-  today,
   dateFormat,
   timezone,
-  initialDetailTaskId,
 }: {
-  project: Project;
+  project: ProjectEntity;
   role: "owner" | "editor";
   members: { userId: string; username: string; role: "owner" | "editor" }[];
   currentUserId: string;
   projectCommentCount: number;
-  sections: Section[];
-  tasks: TaskWithLabels[];
-  labels: Label[];
-  today: string;
   dateFormat: string;
   timezone: string;
-  initialDetailTaskId?: string;
 }) {
   const view = useStoredPreference(`project-view:${project.id}`, "list") === "board" ? "board" : "list";
   const storedSort = useStoredPreference(`sort:${project.id}`, "manual");
@@ -74,10 +57,8 @@ export function ProjectView({
     ? storedSort
     : "manual";
   const showCompleted = useStoredPreference(`show-completed:${project.id}`, "false") === "true";
-  const [, setOpenTaskCount] = useState(
-    () => tasks.filter((task) => !task.isCompleted).length,
-  );
-  const taskMembers = members.map(({ userId: id, username }) => ({ id, username }));
+  const today = useTodayDate();
+  const taskMembers = useMemo(() => members.map(({ userId: id, username }) => ({ id, username })), [members]);
 
   function switchView(next: "list" | "board") {
     storePreference(`project-view:${project.id}`, next);
@@ -128,9 +109,6 @@ export function ProjectView({
       {view === "list" ? (
         <TaskList
           projectId={project.id}
-          sections={sections}
-          initialTasks={tasks}
-          labels={labels}
           members={taskMembers}
           currentUserId={currentUserId}
           today={today}
@@ -138,22 +116,16 @@ export function ProjectView({
           timezone={timezone}
           sortBy={sortBy}
           showCompleted={showCompleted}
-          initialDetailTaskId={initialDetailTaskId}
-          onOpenCountChange={setOpenTaskCount}
         />
       ) : (
         <Board
           projectId={project.id}
-          sections={sections}
-          initialTasks={tasks}
-          labels={labels}
           members={taskMembers}
           currentUserId={currentUserId}
           today={today}
           dateFormat={dateFormat}
           timezone={timezone}
           showCompleted={showCompleted}
-          onOpenCountChange={setOpenTaskCount}
         />
       )}
     </div>

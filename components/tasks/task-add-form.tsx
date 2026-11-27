@@ -12,20 +12,24 @@ import { parseQuickAddPreview, removeQuickAddTokens, type QuickAddToken } from "
 import { firstOccurrence } from "@/lib/recurrence";
 import { addDays, dueLabel, formatDateTime, humanizeDuration, weekStartOf } from "@/lib/dates";
 import { cn } from "@/lib/utils";
-import { api, newIdempotencyKey } from "@/lib/api-client";
+import { api } from "@/lib/api-client";
 import { localDateTimeToUtc } from "@/lib/local-time";
+import { useOffline, useOnline, useSnapshot } from "@/lib/offline/hooks";
+import { byOrder } from "@/lib/offline/support";
+import type { QuickAddPicks } from "@/lib/offline/task-writes";
+import { isLocalId } from "@/lib/offline/types";
+import { visibleProjects } from "@/lib/task-views";
 import { RecurrencePicker } from "./recurrence-picker";
 import { TaskComposerInput } from "./task-composer-input";
-import { ComposerChip, ComposerPanel, ComposerPriorityPicker, ComposerProjectPicker, composerPriorityColors, type ComposerLabel, type ComposerProject, type ComposerSection } from "./task-composer-controls";
+import { ComposerChip, ComposerPanel, ComposerPriorityPicker, ComposerProjectPicker, composerPriorityColors, type ComposerLabel } from "./task-composer-controls";
 
 type Panel = "project" | "date" | "priority" | "reminders" | "labels" | "deadline" | "duration";
 type Schedule = { date: string; time: string; recurrence: string | null };
-type Details = { labelIds: string[]; reminders: string[]; files: File[] };
 const emptySchedule: Schedule = { date: "", time: "", recurrence: null };
 const panelTitles: Record<Panel, string> = { project: "Project and section", date: "Date and repeat", priority: "Priority", reminders: "Reminders", labels: "Labels", deadline: "Deadline", duration: "Duration" };
 
 export function TaskAddForm({
-  projectId, sectionId, parentId, afterId, today, labels, onCreated, onError, onCancel,
+  projectId, sectionId, parentId, afterId, today, onCreated, onError, onCancel,
   initiallyExpanded = false, alignWithTask = false,
 }: {
   projectId: string;
@@ -33,9 +37,8 @@ export function TaskAddForm({
   parentId?: string;
   afterId?: string | null;
   today: string;
-  labels: ComposerLabel[];
-  onCreated: () => void;
-  onError: () => void;
+  onCreated?: () => void;
+  onError?: () => void;
   onCancel?: () => void;
   initiallyExpanded?: boolean;
   /** Align the collapsed trigger with a task row's title column. */
@@ -51,35 +54,32 @@ export function TaskAddForm({
   const [manualDuration, setManualDuration] = useState("");
   const [destination, setDestination] = useState({ projectId, sectionId });
   const [manualLabelIds, setManualLabelIds] = useState<string[]>([]);
-  const [createdLabels, setCreatedLabels] = useState<ComposerLabel[]>([]);
-  const [projects, setProjects] = useState<ComposerProject[]>([]);
-  const [sections, setSections] = useState<ComposerSection[]>([]);
-  const [referencesLoading, setReferencesLoading] = useState(true);
-  const [referencesError, setReferencesError] = useState(false);
-  const [referenceAttempt, setReferenceAttempt] = useState(0);
   const [panel, setPanel] = useState<Panel | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [projectSearch, setProjectSearch] = useState("");
   const [labelSearch, setLabelSearch] = useState("");
-  const [creatingLabel, setCreatingLabel] = useState(false);
   const [reminderDraft, setReminderDraft] = useState("");
   const [editingReminder, setEditingReminder] = useState<string | null>(null);
   const [reminders, setReminders] = useState<string[]>([]);
   const [files, setFiles] = useState<File[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Once the task exists, retries only write its missing details.
-  const [recovery, setRecovery] = useState<{ taskId: string; details: Details } | null>(null);
+  // Once the task exists, retries only upload the attachments that didn't go.
+  const [recovery, setRecovery] = useState<{ taskId: string; files: File[] } | null>(null);
   const submitting = useRef(false);
-  // A retry of an unchanged body reuses the key, so a create whose response was lost isn't duplicated.
-  const attempt = useRef<{ json: string; key: string } | null>(null);
   const rootRef = useRef<HTMLElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hintId = useId();
   const { dateFormat } = useDatePreferences();
-
-  const availableLabels = useMemo(() => [...labels, ...createdLabels.filter((label) => !labels.some((existing) => existing.id === label.id))], [labels, createdLabels]);
+  const { writes, repo, outbox } = useOffline();
+  const online = useOnline();
+  const labelRows = useSnapshot((snapshot) => snapshot.labels);
+  const projectRows = useSnapshot((snapshot) => snapshot.projects);
+  const sectionRows = useSnapshot((snapshot) => snapshot.sections);
+  const availableLabels: ComposerLabel[] = useMemo(() => [...labelRows.values()].sort(byOrder), [labelRows]);
+  const projects = useMemo(() => visibleProjects(projectRows.values()), [projectRows]);
+  const sections = useMemo(() => [...sectionRows.values()].filter((section) => !section.isArchived).sort(byOrder), [sectionRows]);
   const { parsed, tokens } = useMemo(() => parseQuickAddPreview(content, {
     today,
     dateFormat,
@@ -113,19 +113,6 @@ export function TaskAddForm({
     return () => window.removeEventListener("quick-add:focus", onFocusRequest);
   }, []);
 
-  useEffect(() => {
-    if (!expanded) return;
-    let active = true;
-    Promise.allSettled([api.get<ComposerProject[]>("/api/projects"), api.get<ComposerSection[]>("/api/sections")]).then(([projectResult, sectionResult]) => {
-      if (!active) return;
-      if (projectResult.status === "fulfilled") setProjects(projectResult.value.filter((project) => !project.isArchived));
-      if (sectionResult.status === "fulfilled") setSections(sectionResult.value.filter((section) => !section.isArchived));
-      setReferencesError(projectResult.status === "rejected" || sectionResult.status === "rejected");
-      setReferencesLoading(false);
-    });
-    return () => { active = false; };
-  }, [expanded, referenceAttempt]);
-
   function strip(kinds: QuickAddToken["kind"][], value?: string) {
     setContent(removeQuickAddTokens(content, tokens.filter((token) => kinds.includes(token.kind) && (value === undefined || token.value.toLowerCase() === value.toLowerCase()))));
   }
@@ -154,7 +141,7 @@ export function TaskAddForm({
 
   function cancel() {
     if (pending) return;
-    if (recovery) onCreated();
+    if (recovery) onCreated?.();
     reset();
     setExpanded(false);
     onCancel?.();
@@ -181,76 +168,79 @@ export function TaskAddForm({
     }, 0);
   }
 
-  async function saveDetails(taskId: string, details: Details) {
-    const remaining: Details = { labelIds: [], reminders: [], files: [] };
-    const failures: string[] = [];
-    const jobs: { run: () => Promise<unknown>; failed: () => void; name: string }[] = [];
-    if (details.labelIds.length) jobs.push({ run: () => api.patch(`/api/tasks/${taskId}`, { labelIds: details.labelIds }), failed: () => { remaining.labelIds = details.labelIds; }, name: "labels" });
-    for (const value of details.reminders) jobs.push({ run: () => {
-      const remindAt = localDateTimeToUtc(value, Intl.DateTimeFormat().resolvedOptions().timeZone);
-      if (!remindAt) throw new Error("Invalid reminder time");
-      return api.post("/api/reminders", { taskId, remindAt: remindAt.toISOString() });
-    }, failed: () => { remaining.reminders.push(value); }, name: "reminders" });
-    for (const file of details.files) jobs.push({ run: () => { const body = new FormData(); body.set("taskId", taskId); body.set("file", file); return api.post("/api/attachments", body); }, failed: () => { remaining.files.push(file); }, name: "attachments" });
-    const results = await Promise.allSettled(jobs.map((job) => Promise.resolve().then(job.run)));
-    results.forEach((result, index) => { if (result.status === "rejected") { jobs[index].failed(); failures.push(jobs[index].name); } });
-    if (failures.length) {
-      setRecovery({ taskId, details: remaining });
-      setError(`Task added, but ${[...new Set(failures)].join(" and ")} couldn't be saved. Retry to save the missing details.`);
-      return false;
+  // A task made here has no server id until it has synced, and attachments need one.
+  async function uploadFiles(taskId: string, toUpload: File[]) {
+    let id: string | undefined = taskId;
+    if (isLocalId(id)) {
+      await repo.sync();
+      id = outbox.renamedTo(id);
     }
-    return true;
+    const left: File[] = [];
+    await Promise.all(toUpload.map(async (file) => {
+      try {
+        if (!id) throw new Error("The task hasn't reached the server");
+        const body = new FormData();
+        body.set("taskId", id);
+        body.set("file", file);
+        await api.post("/api/attachments", body);
+      } catch { left.push(file); }
+    }));
+    if (!left.length) return true;
+    setRecovery({ taskId, files: left });
+    setError("Task added, but attachments couldn't be saved. Retry to save the missing details.");
+    return false;
   }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (submitting.current || creatingLabel || (!recovery && !parsed.content.trim())) return;
+    if (submitting.current || (!recovery && !parsed.content.trim())) return;
     if (!recovery && parsed.content.length > 500) { setError("Keep the task name under 500 characters."); return; }
     if (!recovery && duration && (!Number.isInteger(Number(duration)) || Number(duration) < 1 || Number(duration) > 1440)) { setError("Set a duration between 1 and 1,440 minutes."); return; }
     if (!recovery && selectedReminders.some((value) => !localDateTimeToUtc(value, Intl.DateTimeFormat().resolvedOptions().timeZone))) { setError("That reminder time does not exist in this device's time zone. Choose another time."); return; }
     submitting.current = true;
-    setPending(true);
     setError(null);
-    const body = {
-      projectId: targetProjectId, sectionId: targetSectionId, parentId,
-      ...(afterId !== undefined && targetProjectId === projectId && targetSectionId === sectionId ? { afterId } : {}),
-      content: parsed.content, description: description.trim() || undefined, priority,
-      dueDate: dueDate || undefined, dueTime: dueTime || undefined, recurrence: recurrence || undefined,
-      deadlineDate: deadline || undefined, durationMinutes: duration ? Number(duration) : undefined,
-    };
-    const json = JSON.stringify(body);
-    if (attempt.current?.json !== json) attempt.current = { json, key: newIdempotencyKey() };
-    const { key } = attempt.current;
     try {
-      const task = recovery ?? await api.post<{ id: string }>("/api/tasks", body, { "Idempotency-Key": key });
-      attempt.current = null;
-      const taskId = "taskId" in task ? task.taskId : task.id;
-      const details = recovery?.details ?? { labelIds: selectedLabels.map((label) => label.id), reminders: selectedReminders, files };
-      if (!(await saveDetails(taskId, details))) return;
+      let taskId = recovery?.taskId;
+      if (!recovery) {
+        const picks: QuickAddPicks = {
+          projectId: targetProjectId,
+          sectionId: targetSectionId,
+          labelIds: selectedLabels.map((label) => label.id),
+          reminders: selectedReminders,
+          edit: {
+            description: description.trim() || undefined, priority,
+            dueDate: dueDate || undefined, dueTime: dueTime || undefined, recurrence: recurrence || undefined,
+            deadlineDate: deadline || undefined, durationMinutes: duration ? Number(duration) : undefined,
+          },
+        };
+        const task = writes.tasks.quickAdd(content, { projectId, sectionId, parentId }, picks);
+        if (afterId !== undefined && task.projectId === projectId && task.sectionId === sectionId) writes.tasks.place(task, task.sectionId, task.parentId, afterId);
+        taskId = task.id;
+      }
+      const toUpload = recovery?.files ?? files;
+      if (toUpload.length) {
+        setPending(true);
+        if (!(await uploadFiles(taskId!, toUpload))) return;
+      }
       reset();
       setExpanded(true);
-      onCreated();
+      onCreated?.();
       requestAnimationFrame(() => inputRef.current?.focus());
     } catch {
       setError("Couldn't add the task. Your draft is still here; please try again.");
-      onError();
+      onError?.();
     } finally {
       submitting.current = false;
       setPending(false);
     }
   }
 
-  async function createLabel() {
+  function createLabel() {
     const name = labelSearch.trim();
-    if (!name || creatingLabel) return;
-    setCreatingLabel(true); setError(null);
-    try {
-      const label = await api.post<ComposerLabel>("/api/labels", { name, color: "gray" });
-      setCreatedLabels((current) => [...current, label]);
-      setManualLabelIds((current) => [...current, label.id]);
-      setLabelSearch("");
-    } catch { setError("Couldn't create the label. Please try again."); }
-    finally { setCreatingLabel(false); }
+    if (!name) return;
+    const label = writes.lists.createLabel(name, "gray");
+    setManualLabelIds((current) => [...current, label.id]);
+    setLabelSearch("");
   }
 
   const selectedNames = selectedLabels.map((label) => label.name).join(", ");
@@ -290,7 +280,7 @@ export function TaskAddForm({
               <DropdownMenuTrigger render={<button type="button" aria-label="Add task details" title="Add task details" className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"><Plus className="size-4" /></button>} />
               <DropdownMenuContent className="w-60" align="start" sideOffset={8} finalFocus={panel || descriptionOpen ? false : undefined}>
                 <DropdownMenuItem className="min-h-9 gap-3 px-2" onClick={() => { setDescriptionOpen(true); setPanel(null); }}><AlignLeft />Description{descriptionOpen && <Check className="ml-auto" />}</DropdownMenuItem>
-                <DropdownMenuItem className="min-h-9 gap-3 px-2" onClick={() => fileInputRef.current?.click()}><Paperclip />Attachment</DropdownMenuItem>
+                <DropdownMenuItem className="min-h-9 gap-3 px-2" disabled={!online} onClick={() => fileInputRef.current?.click()}><Paperclip />Attachment{!online && <span className="ml-auto text-xs text-muted-foreground">Needs a connection</span>}</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="min-h-9 gap-3 px-2" onClick={() => setPanel("date")}><CalendarDays />Date</DropdownMenuItem>
                 <DropdownMenuItem className="min-h-9 gap-3 px-2" onClick={() => setPanel("priority")}><Flag />Priority<span className="ml-auto text-xs text-muted-foreground">p1–p4</span></DropdownMenuItem>
@@ -310,7 +300,7 @@ export function TaskAddForm({
               event.target.value = "";
             }} />
             <ComposerChip icon={targetProject?.isInbox ? Inbox : Hash} label="Project and section" disabled={Boolean(parentId)} onClick={() => setPanel("project")}>
-              {`${targetProject?.name ?? (referencesLoading ? "Loading…" : "Current project")}${targetSectionId ? ` / ${targetSection?.name ?? "Section"}` : ""}`}
+              {`${targetProject?.name ?? "Current project"}${targetSectionId ? ` / ${targetSection?.name ?? "Section"}` : ""}`}
             </ComposerChip>
             <ComposerChip icon={recurrence ? Repeat : CalendarDays} label="Date" onClick={() => setPanel("date")} onRemove={dueDate ? () => changeSchedule(emptySchedule) : undefined} className={dueDate ? "text-amber-800 dark:text-amber-400" : undefined}>{dateText}</ComposerChip>
             {recurrence && panel !== "date" && <RecurrencePicker value={recurrence} onChange={(rule) => changeSchedule({ date: dueDate, time: dueTime, recurrence: rule })} anchorDate={dueDate || today} />}
@@ -323,14 +313,13 @@ export function TaskAddForm({
           </div>
           {!recovery && <div className="flex shrink-0 items-center gap-1">
             <button type="button" aria-label="Cancel" title="Cancel (Esc)" onClick={cancel} className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"><X className="size-4" /></button>
-            <Button type="submit" size="icon-sm" aria-label="Add task" title="Add task (Enter)" disabled={frozen || creatingLabel || !content.trim()} className="rounded-lg">{pending ? <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" /> : <ArrowUp className="size-4" />}</Button>
+            <Button type="submit" size="icon-sm" aria-label="Add task" title="Add task (Enter)" disabled={frozen || !content.trim()} className="rounded-lg">{pending ? <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" /> : <ArrowUp className="size-4" />}</Button>
           </div>}
         </div>
         {panel && <ComposerPanel title={panelTitles[panel]} onClose={closePanel}>
           {panel === "project" && <>
             <Input autoFocus aria-label="Search projects and sections" placeholder="Search projects and sections" value={projectSearch} onChange={(event) => setProjectSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }} />
-            {referencesLoading ? <p className="py-3 text-sm text-muted-foreground">Loading projects…</p> : <ComposerProjectPicker projects={projects} sections={sections} projectId={targetProjectId} sectionId={targetSectionId} search={projectSearch} onChange={(id, section) => { strip(["project"]); setDestination({ projectId: id, sectionId: section }); closePanel(); }} />}
-            {referencesError && <p className="mt-2 text-sm text-destructive">Couldn&apos;t load all projects and sections. <button type="button" className="underline underline-offset-2" onClick={() => { setReferencesLoading(true); setReferenceAttempt((value) => value + 1); }}>Try again</button></p>}
+            <ComposerProjectPicker projects={projects} sections={sections} projectId={targetProjectId} sectionId={targetSectionId} search={projectSearch} onChange={(id, section) => { strip(["project"]); setDestination({ projectId: id, sectionId: section }); closePanel(); }} />
           </>}
           {panel === "date" && <>
             <div className="mb-3 flex flex-wrap gap-1.5">
@@ -354,11 +343,11 @@ export function TaskAddForm({
             <div className="flex flex-wrap gap-2"><DateTimeInput autoFocus label="Reminder" className="flex-1" value={reminderDraft} onChange={setReminderDraft} /><Button type="button" size="sm" disabled={!reminderDraft || !Number.isFinite(new Date(reminderDraft).getTime())} onClick={() => { if (editingReminder === parsed.reminderAt) strip(["reminder"]); setReminders((current) => [...new Set([...current.filter((value) => value !== editingReminder), reminderDraft])]); setReminderDraft(""); setEditingReminder(null); closePanel(); }}>{editingReminder ? "Save reminder" : "Add reminder"}</Button></div>
           </>}
           {panel === "labels" && <>
-            <Input autoFocus aria-label="Search or create labels" placeholder="Search or create a label" maxLength={120} value={labelSearch} onChange={(event) => setLabelSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); if (labelSearch.trim() && !availableLabels.some((label) => label.name.toLowerCase() === labelSearch.trim().toLowerCase())) void createLabel(); } }} />
+            <Input autoFocus aria-label="Search or create labels" placeholder="Search or create a label" maxLength={120} value={labelSearch} onChange={(event) => setLabelSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); if (labelSearch.trim() && !availableLabels.some((label) => label.name.toLowerCase() === labelSearch.trim().toLowerCase())) createLabel(); } }} />
             <div className="mt-2 max-h-44 overflow-y-auto">
               {availableLabels.filter((label) => label.name.toLowerCase().includes(labelSearch.trim().toLowerCase())).map((label) => <label key={label.id} className="flex min-h-9 cursor-pointer items-center gap-2 rounded-md px-2 text-sm hover:bg-muted"><input type="checkbox" className="size-4 accent-foreground" checked={selectedLabels.some((selected) => selected.id === label.id)} onChange={(event) => event.target.checked ? setManualLabelIds((current) => [...current, label.id]) : removeLabel(label)} /><Tag className="size-3.5 text-muted-foreground" /><span className="truncate">{label.name}</span></label>)}
               {!availableLabels.length && !labelSearch && <p className="py-2 text-sm text-muted-foreground">Type a name above to create your first label.</p>}
-              {labelSearch.trim() && !availableLabels.some((label) => label.name.toLowerCase() === labelSearch.trim().toLowerCase()) && <Button type="button" variant="ghost" size="sm" className="mt-1 max-w-full" disabled={creatingLabel} onClick={() => void createLabel()}><Plus className="size-3.5" /><span className="truncate">{creatingLabel ? "Creating…" : `Create “${labelSearch.trim()}”`}</span></Button>}
+              {labelSearch.trim() && !availableLabels.some((label) => label.name.toLowerCase() === labelSearch.trim().toLowerCase()) && <Button type="button" variant="ghost" size="sm" className="mt-1 max-w-full" onClick={createLabel}><Plus className="size-3.5" /><span className="truncate">{`Create “${labelSearch.trim()}”`}</span></Button>}
             </div>
           </>}
         </ComposerPanel>}

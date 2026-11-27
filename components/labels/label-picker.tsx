@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { Plus, Tag } from "lucide-react";
 
-import { jsonInit } from "@/lib/api-client";
-import type { labels as labelsTable } from "@/lib/db/schema";
+import { useSnapshot, useWrites } from "@/lib/offline/hooks";
+import { byOrder } from "@/lib/offline/support";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -16,24 +16,18 @@ import {
 import { Input } from "@/components/ui/input";
 import { ProjectColorDot } from "@/components/projects/project-color-dot";
 
-type Label = typeof labelsTable.$inferSelect;
-
 export function LabelPicker({
-  labels,
   selectedIds,
   onChange,
 }: {
-  labels: Label[];
   selectedIds: string[];
   onChange: (labelIds: string[]) => void;
 }) {
-  const [createdLabels, setCreatedLabels] = useState<Label[]>([]);
+  const labelRows = useSnapshot((snapshot) => snapshot.labels);
+  const labels = useMemo(() => [...labelRows.values()].sort(byOrder), [labelRows]);
+  const writes = useWrites();
   const [open, setOpen] = useState(false);
   const [newLabelName, setNewLabelName] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const availableLabels = [...labels, ...createdLabels.filter((created) => !labels.some((label) => label.id === created.id))];
 
   function toggle(labelId: string, checked: boolean) {
     onChange(
@@ -43,28 +37,14 @@ export function LabelPicker({
     );
   }
 
-  async function createLabel(event: FormEvent<HTMLFormElement>) {
+  function createLabel(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = newLabelName.trim();
     if (!name) return;
-
-    setCreating(true);
-    setError(null);
-    try {
-      const response = await fetch("/api/labels", jsonInit("POST", { name, color: "gray" }));
-      if (!response.ok) {
-        setError("Could not create label. Try a different name.");
-        return;
-      }
-
-      const label = (await response.json()) as Label;
-      setCreatedLabels((current) => [...current, label]);
-      onChange([...new Set([...selectedIds, label.id])]);
-      setNewLabelName("");
-      setOpen(false);
-    } finally {
-      setCreating(false);
-    }
+    const label = writes.lists.createLabel(name, "gray");
+    onChange([...new Set([...selectedIds, label.id])]);
+    setNewLabelName("");
+    setOpen(false);
   }
 
   return (
@@ -77,12 +57,12 @@ export function LabelPicker({
         }
       />
       <DropdownMenuContent align="end" className="w-60">
-        {availableLabels.length === 0 && (
+        {labels.length === 0 && (
           <p className="px-1.5 py-1 text-xs text-muted-foreground">
             No labels yet.
           </p>
         )}
-        {availableLabels.map((label) => (
+        {labels.map((label) => (
           <DropdownMenuCheckboxItem
             key={label.id}
             checked={selectedIds.includes(label.id)}
@@ -104,13 +84,11 @@ export function LabelPicker({
             placeholder="New label"
             aria-label="New label name"
             maxLength={120}
-            disabled={creating}
           />
-          <Button type="submit" size="icon-xs" aria-label="Create label" disabled={creating || !newLabelName.trim()}>
+          <Button type="submit" size="icon-xs" aria-label="Create label" disabled={!newLabelName.trim()}>
             <Plus className="size-3.5" />
           </Button>
         </form>
-        {error && <p className="px-2 pb-1 text-xs text-destructive">{error}</p>}
       </DropdownMenuContent>
     </DropdownMenu>
   );

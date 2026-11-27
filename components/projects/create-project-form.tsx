@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { jsonInit } from "@/lib/api-client";
+import { useWrites } from "@/lib/offline/hooks";
 import {
   Select,
   SelectContent,
@@ -20,39 +20,21 @@ import type { Project } from "./project-types";
 export function CreateProjectForm({
   projects,
   onDone,
-  onCreated,
 }: {
   projects: Project[];
   onDone: () => void;
-  onCreated: () => void;
 }) {
+  const { lists } = useWrites();
   const [name, setName] = useState("");
   const [icon, setIcon] = useState<string | null>(null);
   const [color, setColor] = useState("gray");
   const [parentId, setParentId] = useState("none");
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  async function submit(event: React.FormEvent) {
+  function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!name.trim()) return;
 
-    setPending(true);
-    setError(null);
-    const response = await fetch("/api/projects", jsonInit("POST", {
-        name,
-        icon,
-        color,
-        parentId: parentId === "none" ? null : parentId,
-      }));
-    setPending(false);
-
-    if (!response.ok) {
-      setError("Couldn't create project.");
-      return;
-    }
-
-    onCreated();
+    lists.createProject(name, color, icon, parentId === "none" ? null : parentId);
     onDone();
   }
 
@@ -96,9 +78,8 @@ export function CreateProjectForm({
           </SelectContent>
         </Select>
       </label>
-      {error && <p className="px-1 text-xs text-destructive">{error}</p>}
       <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={pending}>
+        <Button type="submit" size="sm">
           Add
         </Button>
         <Button type="button" variant="ghost" size="sm" onClick={onDone}>

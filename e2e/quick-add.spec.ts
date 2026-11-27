@@ -17,10 +17,25 @@ async function openAction(page: Page, name: string | RegExp) {
   await page.getByRole("menuitem", { name, exact: typeof name === "string" }).click();
 }
 
-async function tasksIn(page: Page, projectId: string) {
-  const response = await page.request.get(`/api/tasks?projectId=${projectId}`);
-  expect(response.ok()).toBeTruthy();
-  return response.json();
+// A task is written locally first and reaches the server with the next sync, so wait for [count] of them.
+async function tasksIn(page: Page, projectId: string, count = 1) {
+  let tasks: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
+  await expect.poll(async () => {
+    const response = await page.request.get(`/api/tasks?projectId=${projectId}`);
+    expect(response.ok()).toBeTruthy();
+    tasks = await response.json();
+    return tasks.length;
+  }).toBeGreaterThanOrEqual(count);
+  return tasks;
+}
+
+async function remindersOf(page: Page, taskId: string) {
+  let reminders: { remindAt: string }[] = [];
+  await expect.poll(async () => {
+    reminders = await (await page.request.get(`/api/reminders?taskId=${taskId}`)).json();
+    return reminders.length;
+  }).toBeGreaterThanOrEqual(1);
+  return reminders;
 }
 
 test("recognizes details while typing and saves the same preview on Enter", async ({ page }) => {
@@ -32,7 +47,7 @@ test("recognizes details while typing and saves the same preview on Enter", asyn
   await page.getByRole("main").getByRole("button", { name: "New task" }).click();
   await expect(composer.getByRole("button", { name: "Project and section" })).toContainText("Inbox");
   let creates = 0;
-  page.on("request", (request) => { if (request.method() === "POST" && new URL(request.url()).pathname === "/api/tasks") creates++; });
+  page.on("request", (request) => { if (request.method() === "POST" && new URL(request.url()).pathname === "/api/v1/tasks") creates++; });
 
   await input.fill("Pay rent tomorro");
   await expect(composer.getByRole("button", { name: "Date", exact: true })).toHaveText("Date");
@@ -49,8 +64,8 @@ test("recognizes details while typing and saves the same preview on Enter", asyn
 
   await input.press("Enter");
   await expect(input).toHaveValue("");
-  expect(creates).toBe(1);
   const [saved] = await tasksIn(page, project.id);
+  expect(creates).toBe(1);
   expect(saved).toMatchObject({ content: "Pay rent", projectId: project.id, priority: 2, dueTime: "09:00", durationMinutes: 30, labels: [expect.objectContaining({ id: label.id })] });
   expect(saved.dueDate).toBeTruthy();
   expect(saved.deadlineDate).toBeTruthy();
@@ -120,8 +135,7 @@ test("plus menu applies description, dates, labels, reminders and retries only f
   const tasks = await tasksIn(page, projectId);
   expect(tasks).toHaveLength(1);
   expect(tasks[0]).toMatchObject({ content: "Prepare workshop", description: "Bring the printed checklist.", dueDate: "2027-01-12", dueTime: "10:30", priority: 3, deadlineDate: "2027-01-15", durationMinutes: 45, labels: [expect.objectContaining({ name: "workshop" })] });
-  const reminderResponse = await page.request.get(`/api/reminders?taskId=${tasks[0].id}`);
-  expect(await reminderResponse.json()).toHaveLength(1);
+  expect(await remindersOf(page, tasks[0].id)).toHaveLength(1);
 });
 
 test("the sidebar menu is usable above its dialog and Escape closes the active panel first", async ({ page }) => {
@@ -141,10 +155,10 @@ test("the sidebar menu is usable above its dialog and Escape closes the active p
   await expect(dialog).toBeHidden();
 });
 
-test("failed task creation keeps the draft and supports a single retry", async ({ page }) => {
-  const { composer, input, projectId } = await openComposer(page);
+test("a create the network drops stays in the list and goes out on the next sync", async ({ page }) => {
+  const { input, projectId } = await openComposer(page);
   let attempts = 0;
-  await page.route("**/api/tasks", async (route) => {
+  await page.route("**/api/v1/tasks", async (route) => {
     if (route.request().method() !== "POST") return route.continue();
     attempts++;
     if (attempts === 1) return route.abort();
@@ -152,12 +166,13 @@ test("failed task creation keeps the draft and supports a single retry", async (
   });
   await input.fill("Keep my draft tomorrow");
   await input.press("Enter");
-  await expect(composer.getByRole("alert")).toContainText("Your draft is still here");
-  await expect(input).toHaveValue("Keep my draft tomorrow");
-  await expect(composer.getByRole("button", { name: "Add task", exact: true })).toBeEnabled();
-  await input.press("Enter");
   await expect(input).toHaveValue("");
+  await expect(page.locator('[data-task-content^="Keep my draft"]')).toBeVisible();
+  await expect.poll(() => attempts).toBe(1);
+  // The browser coming back online makes the next attempt without waiting out the backoff.
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
   expect(await tasksIn(page, projectId)).toHaveLength(1);
+  expect(attempts).toBe(2);
 });
 
 test("natural-language dates, spaced times and durations preview and save together", async ({ page }) => {
@@ -168,7 +183,7 @@ test("natural-language dates, spaced times and durations preview and save togeth
   await expect(composer.locator('[data-token-kind="time"]')).toHaveText("at 5 pm.");
   await expect(composer.locator('[data-token-kind="duration"]')).toHaveText("for 1.5 hours");
   await expect(composer.locator('[data-token-kind="deadline"]')).toHaveText("deadline September 20, 2027");
-  expect(await tasksIn(page, projectId)).toHaveLength(0);
+  expect(await tasksIn(page, projectId, 0)).toHaveLength(0);
   await input.press("Enter");
   await expect(input).toHaveValue("");
   expect((await tasksIn(page, projectId))[0]).toMatchObject({ content: "Plan release", dueDate: "2027-09-15", dueTime: "17:00", durationMinutes: 90, deadlineDate: "2027-09-20" });
@@ -200,7 +215,7 @@ test("monthly weekday rules survive Custom editing and weekday lists advance on 
   await expect(composer.locator('[data-token-kind="recurrence"]')).toHaveText("every Mon, Wed, Fri");
   await input.press("Enter");
   await expect(input).toHaveValue("");
-  const saved = (await tasksIn(page, projectId)).find((task: { content: string }) => task.content === "Standup");
+  const saved = (await tasksIn(page, projectId, 2)).find((task: { content: string }) => task.content === "Standup");
   expect(saved).toMatchObject({ recurrence: "every monday, wednesday, friday", dueTime: "09:00" });
   const complete = await page.request.patch(`/api/tasks/${saved.id}`, { data: { completed: true } });
   expect(complete.ok()).toBeTruthy();
@@ -222,7 +237,7 @@ test.describe("natural-language reminders", () => {
     await expect(input).toHaveValue("");
     const [saved] = await tasksIn(page, projectId);
     expect(saved).toMatchObject({ content: "call mom", dueDate: null, dueTime: null });
-    const reminders = await (await page.request.get(`/api/reminders?taskId=${saved.id}`)).json();
+    const reminders = await remindersOf(page, saved.id);
     expect(reminders).toHaveLength(1);
     expect(reminders[0].remindAt).toBe("2027-09-15T10:00:00.000Z");
   });
@@ -239,7 +254,7 @@ test.describe("natural-language reminders", () => {
     await input.press("Enter");
     await expect(input).toHaveValue("");
     const [saved] = await tasksIn(page, projectId);
-    const reminders = await (await page.request.get(`/api/reminders?taskId=${saved.id}`)).json();
+    const reminders = await remindersOf(page, saved.id);
     expect(reminders).toHaveLength(1);
     expect(reminders[0].remindAt).toBe("2027-02-10T15:00:00.000Z");
 

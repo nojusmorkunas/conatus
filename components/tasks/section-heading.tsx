@@ -1,7 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useMemo, useRef, useState } from "react";
 import { Archive, ChevronDown, ChevronRight, Copy, Ellipsis, FolderInput, GripVertical, Link as LinkIcon, Pencil, Trash2 } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -18,9 +17,11 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { jsonInit } from "@/lib/api-client";
+import { api } from "@/lib/api-client";
+import { useSnapshot, useWrites } from "@/lib/offline/hooks";
+import { visibleProjects } from "@/lib/task-views";
 import { cn } from "@/lib/utils";
-import type { Project, Section } from "./types";
+import type { Section } from "./types";
 
 export function SectionHeading({
   section,
@@ -28,22 +29,17 @@ export function SectionHeading({
   selecting,
   collapsed,
   onToggleCollapsed,
-  onRename,
-  onDelete,
 }: {
   section: Section;
   taskCount: number;
   selecting: boolean;
   collapsed: boolean;
   onToggleCollapsed: () => void;
-  onRename: (section: Section, name: string) => void;
-  onDelete: (section: Section) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(section.name);
-  const [projects, setProjects] = useState<Project[]>([]);
   const cancelled = useRef(false);
-  const router = useRouter();
+  const { lists } = useWrites();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: section.id,
     disabled: selecting,
@@ -69,18 +65,12 @@ export function SectionHeading({
       return;
     }
     setEditing(false);
-    if (name.trim() && name !== section.name) onRename(section, name.trim());
+    if (name.trim() && name !== section.name) lists.renameSection(section, name.trim());
   }
 
-  async function runAction(body: object) {
-    const response = await fetch(`/api/sections/${section.id}`, jsonInit("PATCH", body));
-    if (response.ok) router.refresh();
-  }
-
-  async function loadProjects() {
-    if (projects.length) return;
-    const response = await fetch("/api/projects");
-    if (response.ok) setProjects(await response.json());
+  // Moving and copying a section across projects only happen on the server, and the next sync brings the result.
+  function runOnServer(body: object) {
+    api.patch(`/api/sections/${section.id}`, body).catch(() => {});
   }
 
   if (editing) {
@@ -152,30 +142,23 @@ export function SectionHeading({
           />
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuItem onClick={beginEditing}><Pencil /> Edit</DropdownMenuItem>
-            <DropdownMenuSub onOpenChange={(open) => { if (open) void loadProjects(); }}>
+            <DropdownMenuSub>
               <DropdownMenuSubTrigger><FolderInput /> Move to…</DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="w-52">
-                {projects.filter((project) => project.id !== section.projectId).map((project) => (
-                  <DropdownMenuItem key={project.id} onClick={() => void runAction({ projectId: project.id })}>
-                    {project.name}
-                  </DropdownMenuItem>
-                ))}
-                {projects.filter((project) => project.id !== section.projectId).length === 0 && (
-                  <p className="px-1.5 py-1 text-xs text-muted-foreground">No other projects</p>
-                )}
+                <MoveTargets exclude={section.projectId} onPick={(projectId) => runOnServer({ projectId })} />
               </DropdownMenuSubContent>
             </DropdownMenuSub>
-            <DropdownMenuItem onClick={() => void runAction({ duplicate: true })}><Copy /> Duplicate</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => void navigator.clipboard.writeText(`${location.origin}/projects/${section.projectId}#section-${section.id}`)}>
+            <DropdownMenuItem onClick={() => runOnServer({ duplicate: true })}><Copy /> Duplicate</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => void navigator.clipboard.writeText(`${location.origin}/projects/${encodeURIComponent(section.projectId)}#section-${section.id}`)}>
               <LinkIcon /> Copy link to section
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => void runAction({ isArchived: true })}><Archive /> Archive</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => lists.archiveSection(section, true)}><Archive /> Archive</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               variant="destructive"
               onClick={() => {
-                if (confirm(`Delete section "${section.name}"? Its tasks will move to Trash.`)) onDelete(section);
+                if (confirm(`Delete section "${section.name}"? Its tasks will move to Trash.`)) lists.deleteSection(section);
               }}
             >
               <Trash2 /> Delete
@@ -194,4 +177,12 @@ export function SectionHeading({
       </button>
     </div>
   );
+}
+
+// A component of its own so only an open menu listens to the store.
+function MoveTargets({ exclude, onPick }: { exclude: string; onPick: (projectId: string) => void }) {
+  const rows = useSnapshot((snapshot) => snapshot.projects);
+  const projects = useMemo(() => visibleProjects(rows.values()).filter((project) => project.id !== exclude), [rows, exclude]);
+  if (projects.length === 0) return <p className="px-1.5 py-1 text-xs text-muted-foreground">No other projects</p>;
+  return projects.map((project) => <DropdownMenuItem key={project.id} onClick={() => onPick(project.id)}>{project.name}</DropdownMenuItem>);
 }

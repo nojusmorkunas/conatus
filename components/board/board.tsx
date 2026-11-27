@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   DndContext,
@@ -17,22 +17,13 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { generateKeyBetween } from "fractional-indexing";
 
-import type {
-  labels as labelsTable,
-  sections as sectionsTable,
-} from "@/lib/db/schema";
-import { jsonInit } from "@/lib/api-client";
+import { useOffline, useProjectLists, useWrites } from "@/lib/offline/hooks";
 import { cn } from "@/lib/utils";
-import { completeRecurring } from "@/lib/recurring-complete";
 import { LabelChip } from "@/components/labels/label-chip";
 import { TaskAddForm } from "@/components/tasks/task-add-form";
 import { TaskCheckbox } from "@/components/tasks/task-checkbox";
-import {
-  CompletedTasks,
-  useCompletedHistory,
-} from "@/components/tasks/completed-tasks";
+import { CompletedTasks } from "@/components/tasks/completed-tasks";
 import {
   AssigneeChip,
   DeadlineChip,
@@ -41,39 +32,28 @@ import {
 } from "@/components/tasks/task-chips";
 import type { ProjectMember, TaskWithLabels } from "@/components/tasks/types";
 
-type Label = typeof labelsTable.$inferSelect;
-type Section = typeof sectionsTable.$inferSelect;
-
 export function Board({
   projectId,
-  sections,
-  initialTasks,
-  labels,
   members,
   currentUserId,
   today,
   dateFormat,
   timezone,
   showCompleted,
-  onOpenCountChange,
 }: {
   projectId: string;
-  sections: Section[];
-  initialTasks: TaskWithLabels[];
-  labels: Label[];
   members: ProjectMember[];
   currentUserId: string;
   today: string;
   dateFormat: string;
   timezone: string;
   showCompleted: boolean;
-  onOpenCountChange: (count: number) => void;
 }) {
-  const [tasks, setTasks] = useState(initialTasks);
+  const { tasks, completedRoots, sections } = useProjectLists(projectId);
+  const stateTasks = useMemo(() => [...tasks, ...completedRoots], [tasks, completedRoots]);
+  const { tasks: writes } = useWrites();
+  const { store } = useOffline();
   const [error, setError] = useState<string | null>(null);
-  const history = useCompletedHistory(projectId, () =>
-    setError("That didn't work. Try again."),
-  );
   // Touch cards drag only after a hold; swipes keep scrolling the board.
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
@@ -82,77 +62,18 @@ export function Board({
     }),
   );
 
-  const [syncedFrom, setSyncedFrom] = useState(initialTasks);
-  if (initialTasks !== syncedFrom) {
-    setSyncedFrom(initialTasks);
-    setTasks(initialTasks);
+  // Writes want the task as the store has it now.
+  const entity = (task: TaskWithLabels) => store.getSnapshot().tasks.get(task.id);
+
+  function restoreCompleted(task: TaskWithLabels) {
+    const current = entity(task);
+    if (!current) return setError("That didn't work. Try again.");
+    writes.reopen(current);
   }
 
-  const openTaskCount = tasks.filter((task) => !task.isCompleted).length;
-  useEffect(() => {
-    onOpenCountChange(openTaskCount);
-  }, [onOpenCountChange, openTaskCount]);
-
-  async function refresh() {
-    const response = await fetch(`/api/tasks?projectId=${projectId}`);
-    if (response.ok) setTasks(await response.json());
-  }
-
-  async function withError(action: () => Promise<Response>) {
-    setError(null);
-    const response = await action();
-    if (!response.ok) {
-      setError("That didn't work. Try again.");
-      return false;
-    }
-    return true;
-  }
-
-  async function restoreCompleted(task: TaskWithLabels) {
-    const ok = await history.restore(task, setTasks);
-    if (!ok) {
-      setError("That didn't work. Try again.");
-      await refresh();
-    }
-  }
-
-  async function toggleComplete(task: TaskWithLabels) {
-    // A recurring task stays on the board with a new due date, so it never gets
-    // the optimistic `isCompleted` that would card-flicker it out and back.
-    if (task.recurrence && task.dueDate) {
-      setError(null);
-      const result = await completeRecurring(task);
-      if (!result) {
-        setError("That didn't work. Try again.");
-        return;
-      }
-      const completedTask = { ...task, ...result.updated };
-      setTasks((current) =>
-        current.map((existing) =>
-          existing.id === task.id ? completedTask : existing,
-        ),
-      );
-      if (completedTask.isCompleted && completedTask.parentId === null) {
-        history.add(completedTask);
-      }
-      return;
-    }
-
-    const completedTask = {
-      ...task,
-      isCompleted: true,
-      completedAt: new Date(),
-    };
-    setTasks((current) =>
-      current.map((existing) =>
-        existing.id === task.id ? completedTask : existing,
-      ),
-    );
-    const ok = await withError(() =>
-      fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", { completed: true })),
-    );
-    if (ok && completedTask.parentId === null) history.add(completedTask);
-    if (!ok) await refresh();
+  function toggleComplete(task: TaskWithLabels) {
+    const current = entity(task);
+    if (current) writes.complete(current);
   }
 
   const roots = (sectionId: string | null) =>
@@ -165,7 +86,7 @@ export function Board({
       )
       .sort((a, b) => (a.order < b.order ? -1 : 1));
 
-  async function handleDragEnd({ active, over }: DragEndEvent) {
+  function handleDragEnd({ active, over }: DragEndEvent) {
     if (!over || active.id === over.id) return;
     const task = tasks.find((candidate) => candidate.id === active.id);
     if (!task) return;
@@ -188,19 +109,9 @@ export function Board({
 
     const cards = roots(sectionId).filter((card) => card.id !== task.id);
     const before = index > 0 ? cards[index - 1] : null;
-    const after = cards[index] ?? null;
 
-    const order = generateKeyBetween(before?.order ?? null, after?.order ?? null);
-    setTasks((current) =>
-      current.map((existing) =>
-        existing.id === task.id ? { ...existing, sectionId, order } : existing,
-      ),
-    );
-
-    const ok = await withError(() =>
-      fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", { sectionId, afterId: before?.id ?? null })),
-    );
-    if (!ok) await refresh();
+    const current = entity(task);
+    if (current) writes.place(current, sectionId, null, before?.id ?? null);
   }
 
   const columns: { id: string | null; name: string }[] = [
@@ -224,19 +135,15 @@ export function Board({
               name={column.name}
               cards={roots(column.id)}
               projectId={projectId}
-              labels={labels}
               members={members}
               currentUserId={currentUserId}
               today={today}
               dateFormat={dateFormat}
               onToggle={toggleComplete}
-              onCreated={refresh}
-              onError={() => setError("That didn't work. Try again.")}
               footer={showCompleted ? (
                 <CompletedTasks
                   sectionId={column.id}
-                  stateTasks={tasks}
-                  history={history}
+                  stateTasks={stateTasks}
                   today={today}
                   dateFormat={dateFormat}
                   timezone={timezone}
@@ -258,28 +165,22 @@ function Column({
   name,
   cards,
   projectId,
-  labels,
   members,
   currentUserId,
   today,
   dateFormat,
   onToggle,
-  onCreated,
-  onError,
   footer,
 }: {
   id: string | null;
   name: string;
   cards: TaskWithLabels[];
   projectId: string;
-  labels: Label[];
   members: ProjectMember[];
   currentUserId: string;
   today: string;
   dateFormat: string;
   onToggle: (task: TaskWithLabels) => void;
-  onCreated: () => void;
-  onError: () => void;
   footer?: ReactNode;
 }) {
   const { setNodeRef } = useDroppable({ id: id ? `column:${id}` : "column:none" });
@@ -309,14 +210,7 @@ function Column({
         </div>
       </SortableContext>
 
-      <TaskAddForm
-        projectId={projectId}
-        sectionId={id}
-        today={today}
-        labels={labels}
-        onCreated={onCreated}
-        onError={onError}
-      />
+      <TaskAddForm projectId={projectId} sectionId={id} today={today} />
       {footer}
     </div>
   );
@@ -362,7 +256,7 @@ function Card({
           checked={task.isCompleted}
           onToggle={() => onToggle(task)}
         />
-        <Link href={`/projects/${task.projectId}?task=${task.id}`} className="text-base sm:text-sm">
+        <Link href={`/projects/${encodeURIComponent(task.projectId)}?task=${encodeURIComponent(task.id)}`} className="text-base sm:text-sm">
           {task.content}
         </Link>
       </div>
