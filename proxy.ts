@@ -126,6 +126,6 @@ export default auth((request) => {
 
 export const config = {
   matcher: [
-    "/((?!api/auth|api/register|api/health|api/ical|api/monitoring|_next/static|_next/image|favicon.ico|icon.svg).*)",
+    "/((?!api/auth|api/register|api/health|api/ical|api/monitoring|_next/static|_next/image|favicon.ico|icon.svg|sw.js|manifest.webmanifest|icon-192.png|icon-512.png|apple-icon.png).*)",
   ],
 };

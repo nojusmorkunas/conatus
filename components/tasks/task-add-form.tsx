@@ -12,7 +12,7 @@ import { parseQuickAddPreview, removeQuickAddTokens, type QuickAddToken } from "
 import { firstOccurrence } from "@/lib/recurrence";
 import { addDays, dueLabel, formatDateTime, humanizeDuration, weekStartOf } from "@/lib/dates";
 import { cn } from "@/lib/utils";
-import { api } from "@/lib/api-client";
+import { api, newIdempotencyKey } from "@/lib/api-client";
 import { localDateTimeToUtc } from "@/lib/local-time";
 import { RecurrencePicker } from "./recurrence-picker";
 import { TaskComposerInput } from "./task-composer-input";
@@ -71,6 +71,8 @@ export function TaskAddForm({
   // Once the task exists, retries only write its missing details.
   const [recovery, setRecovery] = useState<{ taskId: string; details: Details } | null>(null);
   const submitting = useRef(false);
+  // A retry of an unchanged body reuses the key, so a create whose response was lost isn't duplicated.
+  const attempt = useRef<{ json: string; key: string } | null>(null);
   const rootRef = useRef<HTMLElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -209,14 +211,19 @@ export function TaskAddForm({
     submitting.current = true;
     setPending(true);
     setError(null);
+    const body = {
+      projectId: targetProjectId, sectionId: targetSectionId, parentId,
+      ...(afterId !== undefined && targetProjectId === projectId && targetSectionId === sectionId ? { afterId } : {}),
+      content: parsed.content, description: description.trim() || undefined, priority,
+      dueDate: dueDate || undefined, dueTime: dueTime || undefined, recurrence: recurrence || undefined,
+      deadlineDate: deadline || undefined, durationMinutes: duration ? Number(duration) : undefined,
+    };
+    const json = JSON.stringify(body);
+    if (attempt.current?.json !== json) attempt.current = { json, key: newIdempotencyKey() };
+    const { key } = attempt.current;
     try {
-      const task = recovery ?? await api.post<{ id: string }>("/api/tasks", {
-        projectId: targetProjectId, sectionId: targetSectionId, parentId,
-        ...(afterId !== undefined && targetProjectId === projectId && targetSectionId === sectionId ? { afterId } : {}),
-        content: parsed.content, description: description.trim() || undefined, priority,
-        dueDate: dueDate || undefined, dueTime: dueTime || undefined, recurrence: recurrence || undefined,
-        deadlineDate: deadline || undefined, durationMinutes: duration ? Number(duration) : undefined,
-      });
+      const task = recovery ?? await api.post<{ id: string }>("/api/tasks", body, { "Idempotency-Key": key });
+      attempt.current = null;
       const taskId = "taskId" in task ? task.taskId : task.id;
       const details = recovery?.details ?? { labelIds: selectedLabels.map((label) => label.id), reminders: selectedReminders, files };
       if (!(await saveDetails(taskId, details))) return;

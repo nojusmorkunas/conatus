@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { api, ApiError } from "./api-client";
+import { api, ApiError, newIdempotencyKey } from "./api-client";
 
 describe("api-client", () => {
   afterEach(() => {
@@ -114,5 +114,19 @@ describe("api-client", () => {
 
     const [, init] = fetchMock.mock.calls[0];
     expect(init).toEqual({ method: "DELETE" });
+  });
+
+  test("post sends extra headers alongside the JSON content type", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await api.post("/api/tasks", { content: "x" }, { "Idempotency-Key": "k" });
+
+    expect(fetchMock.mock.calls[0][1].headers).toEqual({ "Content-Type": "application/json", "Idempotency-Key": "k" });
+  });
+
+  test("makes v4-style keys without crypto.randomUUID", () => {
+    vi.stubGlobal("crypto", { getRandomValues: (a: Uint8Array) => a.fill(255) });
+    expect(newIdempotencyKey()).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   });
 });

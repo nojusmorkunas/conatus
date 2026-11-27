@@ -11,6 +11,9 @@ const allowed = new Set([
   // Not HTML, so it carries no scripts and no nonce.
   "/favicon.ico",
   "/icon.svg",
+  // Not HTML: manifest and apple touch icon.
+  "/manifest.webmanifest",
+  "/apple-icon.png",
   // Renders its own <html> and so escapes the root layout's force-dynamic.
   // Served only when a server render throws; documented in proxy.ts.
   "/_global-error",

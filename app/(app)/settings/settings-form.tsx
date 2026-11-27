@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { signOut } from "next-auth/react";
+import { signOutAndClearCache } from "@/lib/sign-out";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -405,7 +405,7 @@ export function SettingsForm({
           <Button
             type="button"
             variant="ghost"
-            onClick={() => signOut({ callbackUrl: "/login" })}
+            onClick={() => signOutAndClearCache()}
           >
             Sign out
           </Button>
