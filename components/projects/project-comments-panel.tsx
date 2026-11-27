@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { Pencil, Trash2, X } from "lucide-react";
 
-import { jsonInit } from "@/lib/api-client";
-import type { comments as commentsTable } from "@/lib/db/schema";
+import { useOnline, useProjectComments, useWrites } from "@/lib/offline/hooks";
+import type { CommentEntity } from "@/lib/offline/types";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useDatePreferences } from "@/components/date-input";
 import { formatDateTime } from "@/lib/dates";
 
-type Comment = typeof commentsTable.$inferSelect;
+type Comment = CommentEntity;
 
 export function ProjectCommentsPanel({
   projectId,
@@ -26,69 +26,18 @@ export function ProjectCommentsPanel({
   onClose: () => void;
   onCommentCountChange: (count: number) => void;
 }) {
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const writes = useWrites();
+  const { comments, loaded } = useProjectComments(projectId);
+  const online = useOnline();
 
-  const [loading, setLoading] = useState(true);
-
+  // The header's count is the server's until the panel has all the comments.
   useEffect(() => {
-    const controller = new AbortController();
-    fetch(`/api/comments?projectId=${projectId}`, { signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Load failed");
-        const loaded = await response.json();
-        if (!controller.signal.aborted) setComments(loaded);
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setError("Couldn't load comments. Close this panel and try again.");
-      })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
-  }, [projectId]);
+    if (loaded) onCommentCountChange(comments.length);
+  }, [loaded, comments.length, onCommentCountChange]);
 
-  async function withError(action: () => Promise<Response>) {
-    setError(null);
-    try {
-      const response = await action();
-      if (!response.ok) throw new Error("Request failed");
-      return response;
-    } catch {
-      setError("Couldn't save the change. Check your connection and try again.");
-      return null;
-    }
-  }
-
-  async function addComment(content: string) {
-    const response = await withError(() =>
-      fetch("/api/comments", jsonInit("POST", { projectId, content })),
-    );
-    if (!response) return false;
-    const comment = await response.json();
-    const next = [...comments, comment];
-    setComments(next);
-    onCommentCountChange(next.length);
-    return true;
-  }
-
-  async function editComment(comment: Comment, content: string) {
-    const response = await withError(() =>
-      fetch(`/api/comments/${comment.id}`, jsonInit("PATCH", { content })),
-    );
-    if (!response) return false;
-    const updated = await response.json();
-    setComments((current) =>
-      current.map((existing) => (existing.id === updated.id ? updated : existing)),
-    );
-  }
-
-  async function deleteComment(comment: Comment) {
-    const response = await withError(() =>
-      fetch(`/api/comments/${comment.id}`, { method: "DELETE" }),
-    );
-    if (!response) return false;
-    const next = comments.filter((existing) => existing.id !== comment.id);
-    setComments(next);
-    onCommentCountChange(next.length);
+  function addComment(content: string) {
+    writes.notes.addComment(null, projectId, content, currentUserId);
+    return Promise.resolve(true);
   }
 
   return (
@@ -105,19 +54,17 @@ export function ProjectCommentsPanel({
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
-          {loading && <p role="status" className="text-sm text-muted-foreground">Loading comments…</p>}
-          {!loading && !error && comments.length === 0 && <p className="text-sm text-muted-foreground">No comments yet.</p>}
+          {comments.length === 0 && (loaded || !online) && <p className="text-sm text-muted-foreground">No comments yet.</p>}
           {comments.map((comment) => (
             <CommentRow
               key={comment.id}
               comment={comment}
               canEdit={comment.userId === currentUserId}
-              onEdit={(content) => editComment(comment, content)}
-              onDelete={() => deleteComment(comment)}
+              onEdit={(content) => writes.notes.editComment(comment, content)}
+              onDelete={() => writes.notes.deleteComment(comment)}
             />
           ))}
-          <CommentForm onSubmit={addComment} disabled={loading} />
-          {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+          <CommentForm onSubmit={addComment} />
         </div>
         </Dialog.Popup>
       </Dialog.Portal>
@@ -182,7 +129,7 @@ function CommentRow({
   );
 }
 
-function CommentForm({ onSubmit, disabled }: { onSubmit: (content: string) => Promise<boolean>; disabled: boolean }) {
+function CommentForm({ onSubmit }: { onSubmit: (content: string) => Promise<boolean> }) {
   const [content, setContent] = useState("");
   const [pending, setPending] = useState(false);
 
@@ -203,10 +150,10 @@ function CommentForm({ onSubmit, disabled }: { onSubmit: (content: string) => Pr
         aria-label="Add a comment"
         placeholder="Add a comment"
         value={content}
-        disabled={disabled || pending}
+        disabled={pending}
         onChange={(event) => setContent(event.target.value)}
       />
-      <Button type="submit" size="sm" className="self-end" disabled={disabled || pending || !content.trim()}>
+      <Button type="submit" size="sm" className="self-end" disabled={pending || !content.trim()}>
         {pending ? "Adding…" : "Add comment"}
       </Button>
     </form>

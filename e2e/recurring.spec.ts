@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { registerAndLogin } from "./helpers";
+import { registerAndLogin, waitForSync } from "./helpers";
 
 // An overdue recurring task is a state you would have to wait days to reach,
 // so the fixture is built through the API on a disposable account. The demo
@@ -57,11 +57,15 @@ async function resetToOverdue(page: Page, projectId: string) {
     data: { dueDate: overdueDate() },
   });
   expect(response.ok()).toBeTruthy();
+  const changed = Date.now();
   await page.reload();
   await expect(taskRow(page)).toBeVisible();
+  // The page shows its local copy first. Completing before that has caught up with the change above would clash with it.
+  await waitForSync(page, changed);
 }
 
-// Clicks complete and returns how long the server took to hear about it.
+// Clicks complete and returns how long the server took to hear about it. The change goes out with
+// the sync that follows the click, which waits a moment so a burst of writes is one request.
 // The elapsed time is the assertion that matters: the old code held the write
 // in a five-second undo timer, so anything that merely waits for the response
 // sleeps through the bug and passes either way.
@@ -71,7 +75,7 @@ async function completeAndMeasure(page: Page): Promise<number> {
     page.waitForResponse(
       (response) =>
         response.request().method() === "PATCH" &&
-        /\/api\/tasks\//.test(response.url()),
+        /\/api\/v1\/tasks\//.test(response.url()),
     ),
     taskRow(page).getByRole("button", { name: "Mark complete" }).click(),
   ]);

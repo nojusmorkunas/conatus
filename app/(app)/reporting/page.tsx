@@ -6,7 +6,7 @@ import { accessibleProjectIds } from "@/lib/db/access";
 import { activityEvents, projects, tasks, users } from "@/lib/db/schema";
 import { pastDateLabel, todayInTimezone } from "@/lib/dates";
 import { ActivityList } from "@/components/activity/activity-list";
-import { CompletedTaskList } from "@/components/tasks/completed-task-list";
+import { CompletedReportList } from "@/components/reporting/completed-report-list";
 import { MobilePageHeader } from "@/components/projects/mobile-sidebar-trigger";
 
 const LIMIT = 200;
@@ -62,7 +62,7 @@ export default async function ReportingPage() {
       <div className="space-y-10">
         <section>
           <h2 className="mb-4 text-base font-semibold">Completed</h2>
-          <CompletedTaskList initialGroups={groups} timezone={settings.timezone} />
+          <CompletedReportList initialGroups={groups} timezone={settings.timezone} />
         </section>
         <section>
           <h2 className="mb-4 text-base font-semibold">Activity</h2>

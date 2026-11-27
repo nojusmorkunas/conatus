@@ -14,7 +14,7 @@ import {
 } from "@/lib/validation";
 import { activityGraphSourceOptions } from "@/lib/activity-sources";
 import { defaultStartPage, startPageViews } from "@/lib/start-page";
-import { api, jsonInit } from "@/lib/api-client";
+import { api, jsonInit, serverWritten } from "@/lib/api-client";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -108,6 +108,7 @@ export function SettingsForm({
       const body = JSON.parse(await file.text());
       const res = await fetch("/api/import", jsonInit("POST", body));
       const result = await res.json();
+      if (res.ok) serverWritten();
       setImportResult(
         res.ok
           ? `Imported ${result.projects} projects, ${result.sections} sections, ${result.tasks} tasks, ${result.labels} labels.`

@@ -21,6 +21,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { DateInput } from "@/components/date-input";
+import { serverWritten } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 type ProjectPreview = {
@@ -175,7 +176,7 @@ export function TodoistImporter({ onboarding = false }: { onboarding?: boolean }
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "The import failed.");
       setResult(body as ImportResult);
-      window.dispatchEvent(new Event("sidebar:projects:refresh"));
+      serverWritten();
       router.refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The import failed.");

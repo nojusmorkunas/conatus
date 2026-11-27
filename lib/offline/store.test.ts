@@ -33,11 +33,11 @@ describe("seqs", () => {
     const store = new OfflineStore(undefined, undefined, 0);
     const loaded = (seq: number) => ({ id: "a", kind: "Update" as const, target: "Task" as const, body: "{}", summary: "", idempotencyKey: null, failure: null, createdAt: 0, base: null, seq });
     const ahead = 1_800_000_000_000 * 1000 + 5000;
-    store.load({ tasks: [], projects: [], sections: [], labels: [], comments: [], reminders: [], conflicts: [], meta: { tasksUpdatedSince: null, lastSyncAt: null }, changes: [loaded(1), loaded(2), loaded(ahead)] });
+    store.load({ tasks: [], projects: [], sections: [], labels: [], filters: [], comments: [], reminders: [], conflicts: [], meta: { tasksUpdatedSince: null, lastSyncAt: null }, changes: [loaded(1), loaded(2), loaded(ahead)] });
     const next = store.transaction((tx) => add(tx));
     expect(next).toBeGreaterThan(ahead);
     const small = new OfflineStore(undefined, undefined, 0);
-    small.load({ tasks: [], projects: [], sections: [], labels: [], comments: [], reminders: [], conflicts: [], meta: { tasksUpdatedSince: null, lastSyncAt: null }, changes: [loaded(1), loaded(2)] });
+    small.load({ tasks: [], projects: [], sections: [], labels: [], filters: [], comments: [], reminders: [], conflicts: [], meta: { tasksUpdatedSince: null, lastSyncAt: null }, changes: [loaded(1), loaded(2)] });
     expect(small.transaction((tx) => add(tx))).toBeGreaterThan(2);
   });
 

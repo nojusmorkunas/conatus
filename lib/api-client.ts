@@ -66,8 +66,22 @@ export function jsonInit(method: string, body?: unknown): RequestInit {
   };
 }
 
+// Writes that go straight to the server (assignees, attachments, collaborators, import, restoring
+// a project this device doesn't hold) leave the local copy behind. The provider registers a sync
+// here, and each such write calls it once the server has taken it.
+let afterServerWrite: (() => void) | null = null;
+
+export function onServerWrite(listener: (() => void) | null) {
+  afterServerWrite = listener;
+}
+
+export function serverWritten() {
+  afterServerWrite?.();
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
+  if (response.ok && init?.method && init.method !== "GET") serverWritten();
   return handle<T>(response);
 }
 

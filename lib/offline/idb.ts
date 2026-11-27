@@ -4,7 +4,7 @@ import { emptyMeta, OfflineStore, type Loaded, type Meta, type TableName, type W
 // loaded into memory when it opens. Other tabs of the same user hear about a write on a
 // BroadcastChannel and reload.
 
-const TABLES: TableName[] = ["tasks", "projects", "sections", "labels", "comments", "reminders", "changes", "conflicts", "meta"];
+const TABLES: TableName[] = ["tasks", "projects", "sections", "labels", "filters", "comments", "reminders", "changes", "conflicts", "meta"];
 
 const KEY_PATH: Record<string, string | undefined> = { changes: "seq", conflicts: "taskId", meta: undefined };
 
@@ -21,16 +21,31 @@ const finish = (tx: IDBTransaction) =>
     tx.onabort = () => reject(tx.error);
   });
 
+// 2 added the filters table. An upgrade only adds the stores that are missing, so what a user
+// has stored, queued changes included, survives it.
+export const DB_VERSION = 2;
+
 const open = (name: string) =>
   new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(name, 1);
+    const request = indexedDB.open(name, DB_VERSION);
     request.onupgradeneeded = () => {
       for (const table of TABLES) {
+        if (request.result.objectStoreNames.contains(table)) continue;
         const keyPath = table in KEY_PATH ? KEY_PATH[table] : "id";
         request.result.createObjectStore(table, keyPath ? { keyPath, autoIncrement: table === "changes" } : undefined);
       }
     };
-    request.onsuccess = () => resolve(request.result);
+    // A tab still holding an older version gets "versionchange" and closes (below), which lets this
+    // request go on. Until then it stays pending, so there is nothing to do here.
+    request.onblocked = () => {};
+    request.onsuccess = () => {
+      // Another tab is upgrading: let it. This tab's code is out of date, so it starts over.
+      request.result.onversionchange = () => {
+        request.result.close();
+        globalThis.location?.reload();
+      };
+      resolve(request.result);
+    };
     request.onerror = () => reject(request.error);
   });
 
@@ -38,20 +53,22 @@ async function readAll(db: IDBDatabase): Promise<Loaded> {
   const tx = db.transaction(TABLES, "readonly");
   const all = <T>(table: TableName) => settle(tx.objectStore(table).getAll() as IDBRequest<T[]>);
   const meta = tx.objectStore("meta");
-  const [tasks, projects, sections, labels, comments, reminders, changes, conflicts, since, lastSyncAt] = await Promise.all([
+  const [tasks, projects, sections, labels, filters, comments, reminders, changes, conflicts, since, lastSyncAt, aliases] = await Promise.all([
     all<Loaded["tasks"][number]>("tasks"),
     all<Loaded["projects"][number]>("projects"),
     all<Loaded["sections"][number]>("sections"),
     all<Loaded["labels"][number]>("labels"),
+    all<Loaded["filters"][number]>("filters"),
     all<Loaded["comments"][number]>("comments"),
     all<Loaded["reminders"][number]>("reminders"),
     all<Loaded["changes"][number]>("changes"),
     all<Loaded["conflicts"][number]>("conflicts"),
     settle(meta.get("tasksUpdatedSince")),
     settle(meta.get("lastSyncAt")),
+    settle(meta.get("aliases")),
   ]);
-  const values: Meta = { ...emptyMeta(), tasksUpdatedSince: since ?? null, lastSyncAt: lastSyncAt ?? null };
-  return { tasks, projects, sections, labels, comments, reminders, changes, conflicts, meta: values };
+  const values: Meta = { ...emptyMeta(), tasksUpdatedSince: since ?? null, lastSyncAt: lastSyncAt ?? null, aliases: aliases ?? {} };
+  return { tasks, projects, sections, labels, filters, comments, reminders, changes, conflicts, meta: values };
 }
 
 /**

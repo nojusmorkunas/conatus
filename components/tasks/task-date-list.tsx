@@ -1,196 +1,66 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { CheckCircle2 } from "lucide-react";
 
 import { TaskModal } from "./task-modal";
 import { TaskRow } from "./task-row";
 import type { Label, TaskWithLabels } from "./types";
-import { jsonInit } from "@/lib/api-client";
-import { truncate } from "@/lib/utils";
-import { usePendingAction } from "@/lib/use-pending-action";
+import { useWrites } from "@/lib/offline/hooks";
+import type { TaskEdit } from "@/lib/offline/task-writes";
+import { useTaskActions } from "@/lib/use-task-actions";
 import { useTaskSelection } from "@/lib/use-task-selection";
 import { selectionRoots } from "@/lib/task-tree";
-import { completeRecurring } from "@/lib/recurring-complete";
 import { EmptyState } from "@/components/ui/empty-state";
 
 export type TaskDateGroup = { heading: string; tasks: TaskWithLabels[] };
 
+/** Date-grouped task rows. The screen above it reads the local copy and passes [groups]; every change goes through the local copy too. */
 export function TaskDateList({
-  initialGroups,
+  groups,
   labels,
   currentUserId,
   today,
   dateFormat,
   emptyState,
 }: {
-  initialGroups: TaskDateGroup[];
+  groups: TaskDateGroup[];
   labels: Label[];
   currentUserId: string;
   today: string;
   dateFormat: string;
   emptyState?: React.ReactNode;
 }) {
-  const router = useRouter();
-  const [groups, setGroups] = useState(initialGroups);
-  const [error, setError] = useState<string | null>(null);
+  const writes = useWrites();
+  const actions = useTaskActions(writes.tasks);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
-  const { pending, schedule, reapply, undo } = usePendingAction<TaskDateGroup[]>();
   const {
     selecting,
     selectedIds,
     start: startSelecting,
     toggle: toggleSelection,
     range: selectRange,
-    run: runOnSelection,
+    exit: exitSelection,
   } = useTaskSelection((ids) => {
     const single = ids.length === 1 ? allTasks.find((task) => task.id === ids[0]) : undefined;
-    if (single) deleteTask(single);
+    if (single) actions.deleteTask(single);
     else deleteSelected();
   });
 
-  const [syncedFrom, setSyncedFrom] = useState(initialGroups);
-  if (initialGroups !== syncedFrom) {
-    setSyncedFrom(initialGroups);
-    setGroups(reapply(initialGroups));
-  }
-
-  async function withError(action: () => Promise<Response>) {
-    setError(null);
-    const response = await action();
-    if (!response.ok) {
-      setError("That didn't work. Try again.");
-      return false;
-    }
-    router.refresh();
-    return true;
-  }
-
-  function patch(taskId: string, body: Record<string, unknown>) {
-    return withError(() =>
-      fetch(`/api/tasks/${taskId}`, jsonInit("PATCH", body)),
-    );
-  }
-
-  async function toggleComplete(task: TaskWithLabels) {
-    const completed = !task.isCompleted;
-    if (!completed) {
-      setGroups((current) =>
-        current.map((group) => ({
-          ...group,
-          tasks: group.tasks.map((existing) =>
-            existing.id === task.id ? { ...existing, isCompleted: false } : existing,
-          ),
-        })),
-      );
-      await patch(task.id, { completed: false });
-      return;
-    }
-
-    const previousGroups = groups;
-
-    if (task.recurrence && task.dueDate) {
-      setError(null);
-      const result = await completeRecurring(task);
-      if (!result) {
-        setError("That didn't work. Try again.");
-        return;
-      }
-      // Regroup on the server: an advanced due date usually moves the task out
-      // of these date groups entirely, which local state cannot work out.
-      router.refresh();
-      schedule(
-        `Completed "${truncate(task.content)}"`,
-        // Already written, so the toast only has an inverse left to offer.
-        () => {},
-        () => {
-          setGroups(previousGroups);
-          void patch(task.id, result.undo);
-        },
-      );
-      return;
-    }
-
-    const complete = (current: TaskDateGroup[]) =>
-      current.map((group) => ({
-        ...group,
-        tasks: group.tasks.map((existing) =>
-          existing.id === task.id
-            ? { ...existing, isCompleted: true }
-            : existing,
-        ),
-      }));
-    setGroups(complete);
-    schedule(
-      `Completed "${truncate(task.content)}"`,
-      () => patch(task.id, { completed: true }),
-      () => setGroups(previousGroups),
-      complete,
-    );
-  }
-
-  function deleteTask(task: TaskWithLabels) {
-    const previousGroups = groups;
-    const hide = (current: TaskDateGroup[]) => current.map((group) => ({
-      ...group,
-      tasks: group.tasks.filter((existing) => existing.id !== task.id),
-    }));
-    setGroups(hide);
-    schedule(
-      `Moved "${truncate(task.content)}" to Trash`,
-      () => withError(() => fetch(`/api/tasks/${task.id}`, { method: "DELETE" })),
-      () => setGroups(previousGroups),
-      hide,
-    );
-  }
-
-  async function duplicateTask(task: TaskWithLabels) {
-    const response = await fetch("/api/tasks", jsonInit("POST", {
-        projectId: task.projectId,
-        sectionId: task.sectionId,
-        parentId: task.parentId,
-        content: task.content,
-        description: task.description ?? undefined,
-        priority: task.priority,
-        dueDate: task.dueDate,
-        dueTime: task.dueTime,
-        deadlineDate: task.deadlineDate,
-        durationMinutes: task.durationMinutes,
-        recurrence: task.recurrence,
-        afterId: task.id,
-      }));
-    if (!response.ok) { setError("That didn't work. Try again."); return; }
-    const duplicate: { id: string } = await response.json();
-    if (task.labels.length) await patch(duplicate.id, { labelIds: task.labels.map((label) => label.id) });
-    router.refresh();
-  }
-
   const allTasks = groups.flatMap((group) => group.tasks);
-
-  async function bulkAction(action: (task: TaskWithLabels) => Promise<Response>, ids?: string[]) {
-    setError(null);
-    const byId = new Map(allTasks.map((task) => [task.id, task]));
-    const ok = await runOnSelection(
-      (taskId) => action(byId.get(taskId)!),
-      () => router.refresh(),
-      ids,
-    );
-    if (!ok) setError("Some updates failed.");
-    return ok;
-  }
 
   // Trashing a task takes its subtasks along, so only the top of each
   // selected branch is sent.
   function deleteSelected() {
-    void bulkAction(
-      (task) => fetch(`/api/tasks/${task.id}`, { method: "DELETE" }),
-      selectionRoots(allTasks, selectedIds),
-    );
+    if (selectedIds.length === 0) return;
+    actions.deleteMany(selectionRoots(allTasks, selectedIds), selectedIds.length);
+    exitSelection();
   }
 
-  function patchSelected(body: Record<string, unknown>, ids?: string[]) {
-    void bulkAction((task) => fetch(`/api/tasks/${task.id}`, jsonInit("PATCH", body)), ids);
+  function completeSelected() {
+    if (selectedIds.length === 0) return;
+    actions.completeMany(selectedIds);
+    exitSelection();
   }
 
   // A row inside the selection speaks for all of it.
@@ -202,23 +72,21 @@ export function TaskDateList({
   function changeSelectionLabels(task: TaskWithLabels, labelIds: string[]) {
     const added = labelIds.filter((id) => !task.labels.some((label) => label.id === id));
     const removed = task.labels.filter((label) => !labelIds.includes(label.id)).map((label) => label.id);
-    void bulkAction((selected) =>
-      fetch(`/api/tasks/${selected.id}`, jsonInit("PATCH", {
-        labelIds: [...new Set([...selected.labels.map((label) => label.id), ...added])]
-          .filter((id) => !removed.includes(id)),
-      })),
-    );
+    actions.changeLabelsMany(selectedIds, (current) => [...new Set([...current, ...added])].filter((id) => !removed.includes(id)));
+    exitSelection();
   }
 
-  const visibleGroups = groups
-    .map((group) => ({
-      ...group,
-      tasks: group.tasks.filter((task) => !task.isCompleted),
-    }))
-    .filter((group) => group.tasks.length > 0);
-  const detailTask = detailTaskId
-    ? groups.flatMap((group) => group.tasks).find((task) => task.id === detailTaskId) ?? null
-    : null;
+  function moveSelected(projectId: string) {
+    actions.moveMany(selectionRoots(allTasks, selectedIds), projectId);
+    exitSelection();
+  }
+
+  function updateSelected(edit: TaskEdit) {
+    actions.updateMany(selectedIds, edit);
+    exitSelection();
+  }
+
+  const visibleGroups = groups.filter((group) => group.tasks.length > 0);
   const flatOrder = visibleGroups.flatMap((group) => group.tasks.map((task) => task.id));
   const detailIndex = detailTaskId ? flatOrder.indexOf(detailTaskId) : -1;
 
@@ -243,27 +111,24 @@ export function TaskDateList({
               depth={0}
               today={today}
               dateFormat={dateFormat}
-              onToggle={(target) => actsOnSelection(target) ? patchSelected({ completed: true }) : toggleComplete(target)}
-              onDelete={(target) => actsOnSelection(target) ? deleteSelected() : deleteTask(target)}
+              onToggle={(target) => actsOnSelection(target) ? completeSelected() : actions.toggleComplete(target)}
+              onDelete={(target) => actsOnSelection(target) ? deleteSelected() : actions.deleteTask(target)}
               onLabelsChange={(target, labelIds) =>
-                actsOnSelection(target)
-                  ? changeSelectionLabels(target, labelIds)
-                  : void patch(target.id, { labelIds })
+                actsOnSelection(target) ? changeSelectionLabels(target, labelIds) : actions.setLabels(target, labelIds)
               }
               onDueChange={(target, dueDate, dueTime, deadlineDate, durationMinutes) =>
-                patch(target.id, { dueDate, dueTime, deadlineDate, durationMinutes })
+                actions.update(target, { dueDate, dueTime, deadlineDate, durationMinutes })
               }
               onQuickDueChange={(target, dueDate) =>
-                actsOnSelection(target) ? patchSelected({ dueDate }) : void patch(target.id, { dueDate })
+                actsOnSelection(target) ? updateSelected({ dueDate }) : actions.update(target, { dueDate })
               }
               onPriorityChange={(target, priority) =>
-                actsOnSelection(target) ? patchSelected({ priority }) : void patch(target.id, { priority })
+                actsOnSelection(target) ? updateSelected({ priority }) : actions.update(target, { priority })
               }
               onMove={(target, projectId) =>
-                actsOnSelection(target) ? patchSelected({ projectId }, selectionRoots(allTasks, selectedIds)) : void patch(target.id, { projectId })
+                actsOnSelection(target) ? moveSelected(projectId) : actions.move(target, projectId)
               }
-              onDuplicate={duplicateTask}
-              onSubtaskAdded={() => router.refresh()}
+              onDuplicate={(target) => actions.duplicate(target)}
               onOpenDetail={(task) => setDetailTaskId(task.id)}
               selecting={selecting}
               selected={selectedIds.includes(task.id)}
@@ -271,37 +136,29 @@ export function TaskDateList({
               onSelectionToggle={(target) => toggleSelection([target.id])}
               onSelectionStart={(target) => startSelecting([target.id])}
               onSelectionRange={(target) => selectRange(target.id, allTasks.map(({ id }) => id))}
-              onError={() => setError("That didn't work. Try again.")}
             />
           ))}
         </div>
       ))}
 
-      {error && <p className="text-xs text-destructive">{error}</p>}
-
-      {pending && (
+      {actions.pending && (
         <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-foreground px-4 py-2 text-sm text-background shadow-lg">
-          <span>{pending.label}</span>
-          <button type="button" className="font-medium underline" onClick={undo}>
+          <span>{actions.pending.label}</span>
+          <button type="button" className="font-medium underline" onClick={actions.undo}>
             Undo
           </button>
         </div>
       )}
 
-      {detailTask && (
+      {detailTaskId && (
         <TaskModal
-          key={detailTask.id}
-          task={detailTask}
-          labels={labels}
+          key={detailTaskId}
+          taskId={detailTaskId}
           currentUserId={currentUserId}
           today={today}
           dateFormat={dateFormat}
-          onClose={() => {
-            setDetailTaskId(null);
-            router.refresh();
-          }}
-          onChanged={() => router.refresh()}
-          onDelete={deleteTask}
+          onClose={() => setDetailTaskId(null)}
+          onDelete={(task) => actions.deleteTask(task)}
           onPrev={detailIndex > 0 ? () => setDetailTaskId(flatOrder[detailIndex - 1]) : undefined}
           onNext={detailIndex !== -1 && detailIndex < flatOrder.length - 1 ? () => setDetailTaskId(flatOrder[detailIndex + 1]) : undefined}
         />

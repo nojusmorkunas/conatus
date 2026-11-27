@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { labelEntity, projectEntity, sectionEntity, taskEntity } from "./fixtures";
+import { filterEntity, labelEntity, projectEntity, sectionEntity, taskEntity } from "./fixtures";
 import { ListWrites } from "./list-writes";
 import { OfflineStore, pendingChanges } from "./store";
 
@@ -74,6 +74,64 @@ describe("projects", () => {
   });
 });
 
+describe("project placement", () => {
+  const seed = (store: OfflineStore) =>
+    store.transaction((tx) =>
+      tx.projects.upsert([
+        projectEntity({ id: "a", order: "a0" }),
+        projectEntity({ id: "b", order: "a1" }),
+        projectEntity({ id: "c", order: "a2" }),
+        projectEntity({ id: "child", parentId: "a", order: "a0" }),
+        projectEntity({ id: "theirs", order: "a1V", shared: true }),
+        projectEntity({ id: "gone", order: "a1G", deletedAt: "2026-10-01T00:00:00.000Z" }),
+      ]),
+    );
+
+  test("place puts a project after a sibling and sends the parent only when it changed", () => {
+    const { store, writes, snapshot, queue } = setup();
+    seed(store);
+    writes.placeProject(snapshot().projects.get("c")!, null, "a");
+    const moved = snapshot().projects.get("c")!;
+    expect(moved.parentId).toBeNull();
+    expect(moved.order > "a0" && moved.order < "a1").toBe(true);
+    expect(JSON.parse(queue()[0].body)).toEqual({ afterId: "a" });
+    expect(queue()[0]).toMatchObject({ target: "Project", kind: "Update", summary: "Move the project “Home”" });
+  });
+
+  test("place under another project, first among its sub-projects", () => {
+    const { store, writes, snapshot, queue } = setup();
+    seed(store);
+    writes.placeProject(snapshot().projects.get("b")!, "a", null);
+    const moved = snapshot().projects.get("b")!;
+    expect(moved).toMatchObject({ parentId: "a" });
+    expect(moved.order < "a0").toBe(true);
+    expect(JSON.parse(queue()[0].body)).toEqual({ parentId: "a", afterId: null });
+  });
+
+  test("pinning puts a project last among the pinned, and place reorders them", () => {
+    const { store, writes, snapshot, queue } = setup();
+    seed(store);
+    writes.favoriteProject(snapshot().projects.get("a")!, true);
+    writes.favoriteProject(snapshot().projects.get("c")!, true);
+    writes.favoriteProject(snapshot().projects.get("b")!, true);
+    const key = (id: string) => snapshot().projects.get(id)!.favoriteOrder!;
+    expect(key("a") < key("c") && key("c") < key("b")).toBe(true);
+    writes.placeFavorite(snapshot().projects.get("b")!, null);
+    expect(key("b") < key("a")).toBe(true);
+    writes.placeFavorite(snapshot().projects.get("b")!, "a");
+    expect(key("a") < key("b") && key("b") < key("c")).toBe(true);
+    expect(queue().slice(3).map((change) => JSON.parse(change.body))).toEqual([{ favoriteAfterId: null }, { favoriteAfterId: "a" }]);
+  });
+
+  test("a pinned project without a place of its own is ordered by its project order", () => {
+    const { store, writes, snapshot } = setup();
+    store.transaction((tx) => tx.projects.upsert([projectEntity({ id: "a", order: "a0", isFavorite: true }), projectEntity({ id: "b", order: "a5", isFavorite: true }), projectEntity({ id: "c", order: "a9" })]));
+    writes.placeFavorite(snapshot().projects.get("c")!, "a");
+    const order = snapshot().projects.get("c")!.favoriteOrder!;
+    expect(order > "a0" && order < "a5").toBe(true);
+  });
+});
+
 describe("sections", () => {
   test("create goes after the project's last section", () => {
     const { store, writes, snapshot, queue } = setup();
@@ -135,6 +193,17 @@ describe("labels", () => {
     expect(queue().map((change) => [change.kind, JSON.parse(change.body)])).toEqual([["Create", { name: "urgent", color: "red" }], ["Update", { name: "later" }]]);
   });
 
+  test("pin and unpin", () => {
+    const { store, writes, snapshot, queue } = setup();
+    const label = labelEntity({ id: "x" });
+    store.transaction((tx) => tx.labels.upsert([label]));
+    writes.favoriteLabel(label, true);
+    expect(snapshot().labels.get("x")!.isFavorite).toBe(true);
+    writes.favoriteLabel(snapshot().labels.get("x")!, false);
+    expect(snapshot().labels.get("x")!.isFavorite).toBe(false);
+    expect(queue().map((change) => [change.summary, JSON.parse(change.body)])).toEqual([["Pin the label “errand”", { isFavorite: true }], ["Unpin the label “errand”", { isFavorite: false }]]);
+  });
+
   test("delete takes the label off every task", () => {
     const { store, writes, snapshot, queue } = setup();
     const label = labelEntity({ id: "x" });
@@ -146,5 +215,47 @@ describe("labels", () => {
     expect(snapshot().labels.has("x")).toBe(false);
     expect(["t1", "t2", "t3"].map((id) => snapshot().tasks.get(id)!.labelIds)).toEqual([["y"], [], ["y"]]);
     expect(queue()).toMatchObject([{ id: "x", target: "Label", kind: "Delete" }]);
+  });
+});
+
+describe("filters", () => {
+  test("create adds a local filter at the end and queues name and query", () => {
+    const { store, writes, snapshot, queue } = setup();
+    store.transaction((tx) => tx.filters.upsert([filterEntity({ id: "x", order: "a1" })]));
+    const filter = writes.createFilter(" Soon ", " today & p1 ");
+    expect(snapshot().filters.get(filter.id)).toMatchObject({ name: "Soon", query: "today & p1", isFavorite: false, order: "a2" });
+    expect(queue()).toMatchObject([{ id: filter.id, target: "Filter", kind: "Create", idempotencyKey: expect.any(String) }]);
+    expect(JSON.parse(queue()[0].body)).toEqual({ name: "Soon", query: "today & p1" });
+  });
+
+  test("edit sends only what changed, and nothing when nothing did", () => {
+    const { store, writes, snapshot, queue } = setup();
+    const filter = filterEntity();
+    store.transaction((tx) => tx.filters.upsert([filter]));
+    writes.editFilter(filter, "Urgent", "p1");
+    expect(queue()).toEqual([]);
+    writes.editFilter(filter, "Urgent", "p1 | p2");
+    writes.editFilter(snapshot().filters.get("f")!, "Later", "p1 | p2");
+    expect(snapshot().filters.get("f")).toMatchObject({ name: "Later", query: "p1 | p2" });
+    expect(queue().map((change) => [change.kind, JSON.parse(change.body)])).toEqual([["Update", { query: "p1 | p2" }], ["Update", { name: "Later" }]]);
+  });
+
+  test("pin and unpin", () => {
+    const { store, writes, snapshot, queue } = setup();
+    const filter = filterEntity();
+    store.transaction((tx) => tx.filters.upsert([filter]));
+    writes.favoriteFilter(filter, true);
+    expect(snapshot().filters.get("f")!.isFavorite).toBe(true);
+    writes.favoriteFilter(snapshot().filters.get("f")!, false);
+    expect(queue().map((change) => JSON.parse(change.body))).toEqual([{ isFavorite: true }, { isFavorite: false }]);
+  });
+
+  test("delete removes it and queues the delete", () => {
+    const { store, writes, snapshot, queue } = setup();
+    const filter = filterEntity();
+    store.transaction((tx) => tx.filters.upsert([filter]));
+    writes.deleteFilter(filter);
+    expect(snapshot().filters.has("f")).toBe(false);
+    expect(queue()).toMatchObject([{ id: "f", target: "Filter", kind: "Delete" }]);
   });
 });

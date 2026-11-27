@@ -7,7 +7,7 @@ import { ChevronDown, ChevronRight, Folder, MoreHorizontal, Users } from "lucide
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-import { api } from "@/lib/api-client";
+import { useOffline, useWrites } from "@/lib/offline/hooks";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +20,6 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { toastError } from "@/components/ui/toast";
 import { TASK_INDENT_WIDTH } from "@/lib/task-tree";
 import { ProjectIconPicker, ProjectTile } from "./project-icon-picker";
 import { ProjectColorPicker } from "./project-color-picker";
@@ -37,7 +36,6 @@ export function ProjectRow({
   collapsed = false,
   dropIndicator = null,
   onCollapse,
-  onChanged,
 }: {
   project: Project;
   count?: number;
@@ -49,14 +47,17 @@ export function ProjectRow({
   collapsed?: boolean;
   dropIndicator?: ProjectDropIndicator;
   onCollapse?: () => void;
-  onChanged: () => void;
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { store } = useOffline();
+  const { lists } = useWrites();
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(project.name);
   const [optionsOpen, setOptionsOpen] = useState(false);
-  const active = pathname === `/projects/${project.id}`;
+  const href = `/projects/${encodeURIComponent(project.id)}`;
+  // Ids made here have a colon, which the address may spell either way.
+  const active = pathname === href || decodeURIComponent(pathname) === `/projects/${project.id}`;
   const draggable = (treeRow || favoriteRow) && !project.shared && !project.isInbox;
   const {
     attributes,
@@ -70,36 +71,23 @@ export function ProjectRow({
     disabled: !draggable,
   });
 
-  async function patch(body: Record<string, unknown>) {
-    try {
-      await api.patch(`/api/projects/${project.id}`, body);
-    } catch (error) {
-      toastError(error, "Couldn't update the project.");
-    } finally {
-      onChanged();
-    }
-  }
-
-  async function submitRename(event: React.FormEvent) {
+  function submitRename(event: React.FormEvent) {
     event.preventDefault();
     setRenaming(false);
-    if (name.trim() && name !== project.name) await patch({ name: name.trim() });
+    if (name.trim()) lists.editProject(project, name, project.color, project.icon, project.parentId);
   }
 
-  async function remove() {
+  function remove() {
     const childMessage = hasSubProjects
       ? " Its sub-projects will move to Trash too."
       : "";
     if (!confirm(`Move "${project.name}" to Trash? You can restore it later.${childMessage}`)) {
       return;
     }
-    try {
-      await api.delete(`/api/projects/${project.id}`);
-    } catch (error) {
-      toastError(error, "Couldn't delete the project.");
-    } finally {
-      onChanged();
-    }
+    lists.deleteProject(project);
+    // The open project, or one inside it, just went to Trash.
+    const open = store.getSnapshot().projects.get(decodeURIComponent(pathname).split("/")[2] ?? "");
+    if (pathname.startsWith("/projects/") && open?.deletedAt) router.replace("/today");
   }
 
   if (renaming) {
@@ -161,7 +149,7 @@ export function ProjectRow({
           "button, input, a, textarea, select, [role=menuitem]",
         );
         if (control) return;
-        router.push(`/projects/${project.id}`);
+        router.push(href);
       }}
       className={cn(
         "group/project relative flex min-h-9 items-center gap-2 rounded-lg border border-transparent py-1 pr-1.5 text-sm transition-all hover:bg-background/65 focus-within:bg-background/65",
@@ -189,7 +177,7 @@ export function ProjectRow({
         </span>
       ) : (
         <Link
-          href={`/projects/${project.id}`}
+          href={href}
           className="flex flex-1 items-center gap-2 truncate"
         >
           <ProjectTile icon={project.icon} color={project.color} />
@@ -247,17 +235,17 @@ export function ProjectRow({
                 <ProjectIconPicker
                   value={project.icon}
                   color={project.color}
-                  onChange={(icon) => void patch({ icon })}
+                  onChange={(icon) => lists.editProject(project, project.name, project.color, icon, project.parentId)}
                 />
                 <div className="my-1 h-px bg-border" />
                 <ProjectColorPicker
                   value={project.color}
-                  onChange={(color) => void patch({ color })}
+                  onChange={(color) => lists.editProject(project, project.name, color, project.icon, project.parentId)}
                 />
               </DropdownMenuSubContent>
             </DropdownMenuSub>
             <DropdownMenuItem
-              onClick={() => patch({ isFavorite: !project.isFavorite })}
+              onClick={() => lists.favoriteProject(project, !project.isFavorite)}
             >
               {project.isFavorite ? "Unpin it" : "Pin it!"}
             </DropdownMenuItem>
@@ -322,7 +310,6 @@ export function ProjectBranch({
   allProjects,
   activeProjectId,
   dropIndicator,
-  onChanged,
   depth = 0,
 }: {
   node: ProjectTreeNode;
@@ -330,7 +317,6 @@ export function ProjectBranch({
   allProjects: Project[];
   activeProjectId: string | null;
   dropIndicator: ProjectDropIndicator;
-  onChanged: () => void;
   depth?: number;
 }) {
   const hasChildren = node.children.length > 0;
@@ -364,7 +350,6 @@ export function ProjectBranch({
         collapsed={collapsed}
         dropIndicator={dropIndicator}
         onCollapse={toggleCollapsed}
-        onChanged={onChanged}
       />
       {!collapsed && node.project.id !== activeProjectId &&
         node.children.map((child) => (
@@ -375,7 +360,6 @@ export function ProjectBranch({
             allProjects={allProjects}
             activeProjectId={activeProjectId}
             dropIndicator={dropIndicator}
-            onChanged={onChanged}
             depth={depth + 1}
           />
         ))}

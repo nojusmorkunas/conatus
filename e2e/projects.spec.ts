@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { registerAndLogin } from "./helpers";
+import { registerAndLogin, waitForSync } from "./helpers";
 
 async function addProject(page: Page, name: string) {
   await page.getByRole("button", { name: "Add project" }).click();
@@ -38,7 +38,7 @@ async function dragProject(
   const persisted = page.waitForResponse(
     (response) =>
       response.request().method() === "PATCH" &&
-      response.url().includes("/api/projects/"),
+      /\/api\/(v1\/)?projects\//.test(response.url()),
   );
   await page.mouse.move(source!.x + source!.width / 2, source!.y + source!.height / 2);
   await page.mouse.down();
@@ -71,7 +71,7 @@ async function dragFavoriteProject(page: Page, sourceName: string, targetName: s
   const persisted = page.waitForResponse(
     (response) =>
       response.request().method() === "PATCH" &&
-      response.url().includes("/api/projects/"),
+      /\/api\/(v1\/)?projects\//.test(response.url()),
   );
   await page.mouse.move(source!.x + source!.width / 2, source!.y + source!.height / 2);
   await page.mouse.down();
@@ -183,9 +183,11 @@ test("projects drag from the whole row without a visible drag handle", async ({
   }>;
   const alphaProject = projectRecords.find((project) => project.name === "Alpha project")!;
   const betaProject = projectRecords.find((project) => project.name === "Beta project")!;
+  const pinned = Date.now();
   await page.request.patch(`/api/projects/${alphaProject.id}`, { data: { isFavorite: true } });
   await page.request.patch(`/api/projects/${betaProject.id}`, { data: { isFavorite: true } });
   await page.reload();
+  await waitForSync(page, pinned);
 
   await dragFavoriteProject(page, "Alpha project", "Beta project");
   await expect.poll(async () => {
@@ -267,4 +269,18 @@ test("a project saved as board reloads as board without a hydration error", asyn
   await expect(page.getByText("(No section)")).toBeVisible();
   await expect(page.getByText("On the board")).toBeVisible();
   expect(errors.filter((text) => text.includes("Hydration"))).toEqual([]);
+});
+
+test("an archived project can be opened and unarchived", async ({ page }) => {
+  await registerAndLogin(page, `e2e-${Date.now()}-archived-${test.info().workerIndex}`);
+  const project = await (await page.request.post("/api/projects", { data: { name: "Old plans" } })).json();
+  await page.request.post("/api/tasks", { data: { projectId: project.id, content: "Dusty task" } });
+  expect((await page.request.patch(`/api/projects/${project.id}`, { data: { isArchived: true } })).ok()).toBe(true);
+
+  await page.goto(`/projects/${project.id}`);
+  await expect(page.getByText("This project is archived.")).toBeVisible();
+  await expect(page.getByText("Dusty task")).toBeVisible();
+  await page.getByRole("button", { name: "Unarchive" }).click();
+  await expect(page.getByRole("main").getByRole("button", { name: "New task" }).first()).toBeVisible();
+  await expect(page.getByText("Dusty task")).toBeVisible();
 });

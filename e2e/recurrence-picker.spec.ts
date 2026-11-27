@@ -70,8 +70,9 @@ test.describe("setting a repeat from the UI", () => {
     await page.getByRole("main").getByRole("button", { name: "Add task", exact: true }).click();
 
     await expect(page.locator(`[data-task-content="${taskContent}"]`)).toBeVisible();
+    // The task is written locally first and reaches the server with the next sync.
+    await expect.poll(async () => (await fixtureTask(page, projectId))?.recurrence).toBe("every 2 weeks");
     const task = await fixtureTask(page, projectId);
-    expect(task.recurrence).toBe("every 2 weeks");
     // An interval rule needs an anchor to count from, so it starts today.
     expect(task.dueDate).toBe(new Date().toISOString().slice(0, 10));
   });

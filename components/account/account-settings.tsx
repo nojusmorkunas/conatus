@@ -97,7 +97,8 @@ export function AccountSettings({
       return;
     }
 
-    await signOutAndClearCache();
+    // The account is gone, so unsent changes have nowhere to go.
+    await signOutAndClearCache({ force: true });
   }
 
   return (

@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { registerAndLogin } from "./helpers";
 
-test("calendar projects repeats, preserves the selected period, and recovers a failed move", async ({ page }) => {
+test("calendar projects repeats, preserves the selected period, and moves a task while offline", async ({ page }) => {
   await registerAndLogin(page, `e2e-${Date.now()}-calendar`);
   const projects = await (await page.request.get("/api/projects")).json();
   const projectId = projects.find((project: { isInbox: boolean }) => project.isInbox).id;
@@ -22,31 +22,24 @@ test("calendar projects repeats, preserves the selected period, and recovers a f
   await page.goto("/calendar?view=week&week=2027-01-31");
   const current = page.locator('[data-occurrence-date="2027-01-31"]').filter({ hasText: "Calendar repeat regression" });
   await expect(current).toBeVisible();
-  await page.route(`**/api/tasks/${task.id}`, (route) => route.abort());
+  // A move lands on this device at once and is sent when the connection returns, so it works offline.
+  await page.context().setOffline(true);
   const box = (await current.boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   await page.mouse.move(box.x + box.width / 2 + 10, box.y + box.height / 2, { steps: 3 });
   await page.mouse.move(box.x - box.width * 0.6, box.y + box.height / 2, { steps: 10 });
   await page.mouse.up();
-  await expect(page.getByRole("alert").filter({ hasText: "Couldn't move the task" })).toBeVisible();
-  await expect(current).toBeVisible();
-  await page.unroute(`**/api/tasks/${task.id}`);
-  const retryBox = (await current.boundingBox())!;
-  await page.mouse.move(retryBox.x + retryBox.width / 2, retryBox.y + retryBox.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(retryBox.x + retryBox.width / 2 + 10, retryBox.y + retryBox.height / 2, { steps: 3 });
-  await page.mouse.move(retryBox.x - retryBox.width * 0.6, retryBox.y + retryBox.height / 2, { steps: 10 });
-  await page.mouse.up();
   await expect(page.locator('[data-occurrence-date="2027-01-30"]').filter({ hasText: "Calendar repeat regression" })).toBeVisible();
-  await expect.poll(async () => (await (await page.request.get(`/api/tasks?projectId=${projectId}`)).json()).find((entry: { id: string }) => entry.id === task.id).dueDate).toBe("2027-01-30");
+  await page.context().setOffline(false);
+  await expect.poll(async () => (await (await page.request.get(`/api/tasks?projectId=${projectId}`)).json()).find((entry: { id: string }) => entry.id === task.id).dueDate, { timeout: 30_000 }).toBe("2027-01-30");
   await page.screenshot({ path: "/tmp/conatus-calendar-desktop.png" });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: "/tmp/conatus-calendar-mobile.png" });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-test("sidebar width persists and project comments fill the viewport and retain failed drafts", async ({ page }) => {
+test("sidebar width persists and project comments fill the viewport", async ({ page }) => {
   await registerAndLogin(page, `e2e-${Date.now()}-panels`);
   await page.getByRole("link", { name: "Inbox", exact: true }).click();
   const sidebar = page.locator("#project-sidebar-panel");
@@ -72,14 +65,9 @@ test("sidebar width persists and project comments fill the viewport and retain f
   expect(panelBox.y).toBe(0);
   expect(panelBox.height).toBe(page.viewportSize()!.height);
   const draft = panel.getByRole("textbox", { name: "Add a comment" });
-  await draft.fill("Keep this draft after failure");
-  await page.route("**/api/comments", (route) => route.abort());
+  await draft.fill("A comment on the project");
   await panel.getByRole("button", { name: "Add comment", exact: true }).click();
-  await expect(panel.getByRole("alert")).toBeVisible();
-  await expect(draft).toHaveValue("Keep this draft after failure");
-  await page.unroute("**/api/comments");
-  await panel.getByRole("button", { name: "Add comment", exact: true }).click();
-  await expect(panel.getByText("Keep this draft after failure", { exact: true })).toBeVisible();
+  await expect(panel.getByText("A comment on the project", { exact: true })).toBeVisible();
   await expect(draft).toHaveValue("");
   await page.screenshot({ path: "/tmp/conatus-comments-desktop.png" });
   await page.keyboard.press("Escape");

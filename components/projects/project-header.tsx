@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Download,
@@ -19,9 +19,10 @@ import {
   X,
 } from "lucide-react";
 
-import type { projects } from "@/lib/db/schema";
+import { useSidebarLists, useWrites } from "@/lib/offline/hooks";
+import type { ProjectEntity } from "@/lib/offline/types";
 import type { SortBy } from "@/lib/task-sort";
-import { api, jsonInit } from "@/lib/api-client";
+import { jsonInit, serverWritten } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -37,14 +38,13 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { toastError } from "@/components/ui/toast";
 import { ProjectCommentsPanel } from "./project-comments-panel";
 import { projectColorTextClass } from "./project-color-dot";
 import { ProjectIcon } from "./project-icons";
 import { ProjectIconPicker } from "./project-icon-picker";
 import { ProjectColorPicker } from "./project-color-picker";
 
-type Project = typeof projects.$inferSelect;
+type Project = Pick<ProjectEntity, "id" | "parentId">;
 type Member = { userId: string; username: string; role: "owner" | "editor" };
 
 export function ProjectHeader({
@@ -60,7 +60,7 @@ export function ProjectHeader({
   onSortChange,
   onShowCompletedChange,
 }: {
-  project: Project;
+  project: ProjectEntity;
   role: "owner" | "editor";
   members: Member[];
   currentUserId: string;
@@ -73,80 +73,47 @@ export function ProjectHeader({
   onShowCompletedChange: (showCompleted: boolean) => void;
 }) {
   const router = useRouter();
+  const { lists } = useWrites();
+  const { projects } = useSidebarLists();
   const [sharingOpen, setSharingOpen] = useState(false);
-  const [parentOptions, setParentOptions] = useState<Project[] | null>(null);
-  const [parentId, setParentId] = useState(project.parentId ?? "none");
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [commentCount, setCommentCount] = useState(projectCommentCount);
   const [editingName, setEditingName] = useState(false);
   const [name, setName] = useState(project.name);
   const isOwner = role === "owner";
 
-  useEffect(() => {
-    if (!isOwner || project.isInbox) return;
+  const parentOptions = useMemo(
+    () =>
+      isOwner && !project.isInbox
+        ? projects.filter(
+            (candidate) =>
+              !candidate.shared &&
+              !candidate.isInbox &&
+              candidate.id !== project.id &&
+              projectDepth(candidate, projects) < 3 &&
+              !isDescendant(candidate, project.id, projects),
+          )
+        : null,
+    [isOwner, project.id, project.isInbox, projects],
+  );
+  const parentId = project.parentId && projects.some((candidate) => candidate.id === project.parentId) ? project.parentId : "none";
 
-    void fetch("/api/projects").then(async (response) => {
-      if (!response.ok) return;
-      const allProjects = (await response.json()) as (Project & { shared?: boolean })[];
-      setParentId(
-        project.parentId && allProjects.some((candidate) => candidate.id === project.parentId)
-          ? project.parentId
-          : "none",
-      );
-      setParentOptions(
-        allProjects.filter(
-          (candidate) =>
-            !candidate.shared &&
-            !candidate.isInbox &&
-            candidate.id !== project.id &&
-            projectDepth(candidate, allProjects) < 3 &&
-            !isDescendant(candidate, project.id, allProjects),
-        ),
-      );
-    });
-  }, [isOwner, project.id, project.isInbox, project.parentId]);
-
-  async function updateProject(body: { name?: string; icon?: string | null; color?: string; isFavorite?: boolean }) {
-    try {
-      await api.patch(`/api/projects/${project.id}`, body);
-      window.dispatchEvent(new Event("sidebar:projects:refresh"));
-      router.refresh();
-      return true;
-    } catch (error) {
-      toastError(error, "Couldn't update the project.");
-      return false;
-    }
-  }
-
-  async function removeProject() {
+  function removeProject() {
     if (!confirm(`Move "${project.name}" to Trash? Any sub-projects will move to Trash too. You can restore them later.`)) return;
-    try {
-      await api.delete(`/api/projects/${project.id}`);
-      window.dispatchEvent(new Event("sidebar:projects:refresh"));
-      router.replace("/today");
-      router.refresh();
-    } catch (error) {
-      toastError(error, "Couldn't delete the project.");
-    }
+    lists.deleteProject(project);
+    router.replace("/today");
   }
 
-  async function moveProject(value: unknown) {
+  function moveProject(value: unknown) {
     if (typeof value !== "string") return;
-    const nextParentId = value === "none" ? null : value;
-    const response = await fetch(`/api/projects/${project.id}`, jsonInit("PATCH", { parentId: nextParentId }));
-    if (!response.ok) return;
-    setParentId(value);
-    router.refresh();
+    lists.editProject(project, project.name, project.color, project.icon, value === "none" ? null : value);
   }
 
-  async function saveName() {
+  function saveName() {
     const nextName = name.trim();
     setEditingName(false);
-    if (!nextName || nextName === project.name) {
-      setName(project.name);
-      return;
-    }
-    if (!await updateProject({ name: nextName })) setName(project.name);
+    if (!nextName || nextName === project.name) setName(project.name);
+    else lists.editProject(project, nextName, project.color, project.icon, project.parentId);
   }
 
   return (
@@ -175,9 +142,9 @@ export function ProjectHeader({
                 aria-label="Project name"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                onBlur={() => void saveName()}
+                onBlur={saveName}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter") void saveName();
+                  if (event.key === "Enter") saveName();
                   if (event.key === "Escape") { setName(project.name); setEditingName(false); }
                 }}
                 className="h-8 text-2xl font-bold sm:text-[28px]"
@@ -316,16 +283,16 @@ export function ProjectHeader({
                     <ProjectIconPicker
                       value={project.icon}
                       color={project.color}
-                      onChange={(icon) => void updateProject({ icon })}
+                      onChange={(icon) => lists.editProject(project, project.name, project.color, icon, project.parentId)}
                     />
                     <DropdownMenuSeparator />
                     <ProjectColorPicker
                       value={project.color}
-                      onChange={(color) => void updateProject({ color })}
+                      onChange={(color) => lists.editProject(project, project.name, color, project.icon, project.parentId)}
                     />
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
-                <DropdownMenuItem onClick={() => void updateProject({ isFavorite: !project.isFavorite })}>
+                <DropdownMenuItem onClick={() => lists.favoriteProject(project, !project.isFavorite)}>
                   <Star /> {project.isFavorite ? "Unpin it" : "Pin it!"}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -379,7 +346,7 @@ export function ProjectHeader({
             {isOwner && !project.isInbox && (
               <>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem variant="destructive" onClick={() => void removeProject()}>
+                <DropdownMenuItem variant="destructive" onClick={removeProject}>
                   <Trash2 /> Move to Trash
                 </DropdownMenuItem>
               </>
@@ -471,6 +438,7 @@ function SharePanel({
       return;
     }
 
+    serverWritten();
     setConfirmation(`Added ${username.trim()}.`);
     setUsername("");
     router.refresh();
@@ -480,6 +448,7 @@ function SharePanel({
     const response = await fetch(`/api/projects/${projectId}/collaborators`, jsonInit("DELETE", { userId }));
     if (!response.ok) return;
 
+    serverWritten();
     if (userId === currentUserId) {
       router.push("/today");
     }

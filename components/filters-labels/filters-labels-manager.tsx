@@ -3,44 +3,25 @@
 import { useState, type FormEvent } from "react";
 import { Plus } from "lucide-react";
 
-import { jsonInit } from "@/lib/api-client";
-import type { filters as filtersTable, labels as labelsTable } from "@/lib/db/schema";
+import { parseFilter } from "@/lib/filter";
+import { useSidebarLists, useWrites } from "@/lib/offline/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ProjectColorPicker } from "@/components/projects/project-color-picker";
 import { FilterRow } from "@/components/filters/filter-sidebar-section";
 import { LabelRow } from "@/components/labels/label-sidebar-section";
 
-type FilterItem = typeof filtersTable.$inferSelect;
-type LabelItem = typeof labelsTable.$inferSelect;
 type FormKind = "filter" | "label" | null;
 
-async function errorMessage(response: Response) {
-  const body = await response.json().catch(() => null);
-  if (typeof body?.error === "string") return body.error;
-  if (body?.error && typeof body.error === "object") {
-    const first = Object.values(body.error).flat().find(Boolean);
-    if (typeof first === "string") return first;
-  }
-  return "Could not save your changes. Please try again.";
-}
-
-export function FiltersLabelsManager({
-  initialFilters,
-  initialLabels,
-}: {
-  initialFilters: FilterItem[];
-  initialLabels: LabelItem[];
-}) {
-  const [filters, setFilters] = useState(initialFilters);
-  const [labels, setLabels] = useState(initialLabels);
+export function FiltersLabelsManager() {
+  const { lists } = useWrites();
+  const { labels, filters } = useSidebarLists();
   const [creating, setCreating] = useState<FormKind>(null);
   const [filterName, setFilterName] = useState("");
   const [filterQuery, setFilterQuery] = useState("");
   const [labelName, setLabelName] = useState("");
   const [labelColor, setLabelColor] = useState("gray");
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
 
   function openForm(kind: Exclude<FormKind, null>) {
     setCreating(kind);
@@ -52,58 +33,25 @@ export function FiltersLabelsManager({
     setError(null);
   }
 
-  async function createFilter(event: FormEvent<HTMLFormElement>) {
+  function createFilter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
-    setSaving(true);
-
-    try {
-      const response = await fetch("/api/filters", jsonInit("POST", { name: filterName, query: filterQuery }));
-      if (!response.ok) {
-        setError(await errorMessage(response));
-        return;
-      }
-      const filter = (await response.json()) as FilterItem;
-      setFilters((current) => [...current, filter]);
-      setFilterName("");
-      setFilterQuery("");
-      closeForm();
-    } finally {
-      setSaving(false);
+    const parsed = parseFilter(filterQuery.trim());
+    if ("error" in parsed) {
+      setError(parsed.error);
+      return;
     }
+    lists.createFilter(filterName, filterQuery);
+    setFilterName("");
+    setFilterQuery("");
+    closeForm();
   }
 
-  async function createLabel(event: FormEvent<HTMLFormElement>) {
+  function createLabel(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
-    setSaving(true);
-
-    try {
-      const response = await fetch("/api/labels", jsonInit("POST", { name: labelName, color: labelColor }));
-      if (!response.ok) {
-        setError(await errorMessage(response));
-        return;
-      }
-      const label = (await response.json()) as LabelItem;
-      setLabels((current) => [...current, label]);
-      setLabelName("");
-      setLabelColor("gray");
-      closeForm();
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function refreshFilters() {
-    const response = await fetch("/api/filters");
-    if (response.ok) setFilters(await response.json());
-    window.dispatchEvent(new Event("sidebar:favorites:refresh"));
-  }
-
-  async function refreshLabels() {
-    const response = await fetch("/api/labels");
-    if (response.ok) setLabels(await response.json());
-    window.dispatchEvent(new Event("sidebar:favorites:refresh"));
+    lists.createLabel(labelName, labelColor);
+    setLabelName("");
+    setLabelColor("gray");
+    closeForm();
   }
 
   return (
@@ -142,11 +90,11 @@ export function FiltersLabelsManager({
             </p>
             {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
             <div className="mt-3 flex justify-end gap-2">
-              <Button type="button" variant="ghost" size="sm" onClick={closeForm} disabled={saving}>
+              <Button type="button" variant="ghost" size="sm" onClick={closeForm}>
                 Cancel
               </Button>
-              <Button type="submit" size="sm" disabled={saving}>
-                {saving ? "Creating…" : "Create filter"}
+              <Button type="submit" size="sm">
+                Create filter
               </Button>
             </div>
           </form>
@@ -159,7 +107,6 @@ export function FiltersLabelsManager({
               <FilterRow
                 key={filter.id}
                 filter={filter}
-                onChanged={refreshFilters}
                 menuAlwaysVisible
                 className="h-10 rounded-none border-0 border-b border-border pl-1.5 pr-2 last:border-b-0 hover:bg-muted focus-within:bg-muted"
               />
@@ -191,13 +138,12 @@ export function FiltersLabelsManager({
               <p className="mb-1 text-xs font-medium text-muted-foreground">Color</p>
               <ProjectColorPicker value={labelColor} onChange={setLabelColor} />
             </div>
-            {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
             <div className="mt-3 flex justify-end gap-2">
-              <Button type="button" variant="ghost" size="sm" onClick={closeForm} disabled={saving}>
+              <Button type="button" variant="ghost" size="sm" onClick={closeForm}>
                 Cancel
               </Button>
-              <Button type="submit" size="sm" disabled={saving}>
-                {saving ? "Creating…" : "Create label"}
+              <Button type="submit" size="sm">
+                Create label
               </Button>
             </div>
           </form>
@@ -210,7 +156,6 @@ export function FiltersLabelsManager({
               <LabelRow
                 key={label.id}
                 label={label}
-                onChanged={refreshLabels}
                 menuAlwaysVisible
                 className="h-10 rounded-none border-0 border-b border-border pl-1.5 pr-2 last:border-b-0 hover:bg-muted focus-within:bg-muted"
               />

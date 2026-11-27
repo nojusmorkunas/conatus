@@ -53,4 +53,11 @@ describe("merge", () => {
     expect(merged.task).toMatchObject({ isCompleted: true, completedAt: expect.any(String) });
     expect(merged.conflicts).toEqual({});
   });
+
+  test("a task moved here keeps its new order until the move has gone out", () => {
+    const local = { ...base, parentId: null, sectionId: "s2", order: "a5" };
+    const merged = merge(local, { ...base, order: "a0", updatedAt: "2" }, [queued(["sectionId", "parentId"])]);
+    expect(merged.task.order).toBe("a5");
+    expect(merge({ ...base, content: "Pay the rent", order: "a5" }, { ...base, order: "a0" }, [queued(["content"])]).task.order).toBe("a0");
+  });
 });

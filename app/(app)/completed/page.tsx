@@ -1,15 +1,10 @@
-import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { eq } from "drizzle-orm";
 
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { accessibleProjectIds } from "@/lib/db/access";
-import { projects, tasks, users } from "@/lib/db/schema";
-import { pastDateLabel, todayInTimezone } from "@/lib/dates";
+import { users } from "@/lib/db/schema";
 import { CompletedTaskList } from "@/components/tasks/completed-task-list";
 import { MobilePageHeader } from "@/components/projects/mobile-sidebar-trigger";
-
-const LIMIT = 200;
 
 export default async function CompletedPage() {
   const user = await requireUser();
@@ -19,58 +14,13 @@ export default async function CompletedPage() {
     .select({ timezone: users.timezone, dateFormat: users.dateFormat })
     .from(users)
     .where(eq(users.id, user.id));
-  const today = todayInTimezone(settings.timezone);
-  const parent = alias(tasks, "parent");
-
-  const completed = await db
-    .select({
-      id: tasks.id,
-      content: tasks.content,
-      priority: tasks.priority,
-      completedAt: tasks.completedAt,
-      projectName: projects.name,
-    })
-    .from(tasks)
-    .leftJoin(parent, eq(parent.id, tasks.parentId))
-    .innerJoin(projects, eq(projects.id, tasks.projectId))
-    .where(
-      and(
-        inArray(tasks.projectId, await accessibleProjectIds(user)),
-        eq(tasks.isCompleted, true),
-        isNull(tasks.deletedAt),
-        or(isNull(parent.id), eq(parent.isCompleted, false)),
-      ),
-    )
-    .orderBy(desc(tasks.completedAt))
-    .limit(LIMIT);
-
-  const groups: { heading: string; tasks: typeof completed }[] = [];
-  for (const task of completed) {
-    const dateKey = task.completedAt
-      ? new Intl.DateTimeFormat("en-CA", { timeZone: settings.timezone }).format(
-          task.completedAt,
-        )
-      : today;
-    const heading = pastDateLabel(dateKey, today, settings.dateFormat);
-    const group = groups.at(-1);
-    if (group?.heading === heading) group.tasks.push(task);
-    else groups.push({ heading, tasks: [task] });
-  }
 
   return (
     <div className="mx-auto w-full max-w-4xl px-3 py-6 sm:p-6">
       <MobilePageHeader className="mb-6">
         <h1 className="text-xl font-semibold">Completed</h1>
       </MobilePageHeader>
-      <CompletedTaskList
-        initialGroups={groups}
-        timezone={settings.timezone}
-      />
-      {completed.length === LIMIT && (
-        <p className="mt-6 text-xs text-muted-foreground">
-          Showing most recent {LIMIT}.
-        </p>
-      )}
+      <CompletedTaskList timezone={settings.timezone} dateFormat={settings.dateFormat} />
     </div>
   );
 }

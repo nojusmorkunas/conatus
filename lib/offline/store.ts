@@ -1,6 +1,7 @@
 import type {
   CommentEntity,
   Conflict,
+  FilterEntity,
   LabelEntity,
   NewChange,
   PendingChange,
@@ -20,6 +21,8 @@ export type Meta = {
   tasksUpdatedSince: string | null;
   /** When the last sync finished, in epoch milliseconds. */
   lastSyncAt: number | null;
+  /** The server ids that things made here took, so an address from before the sync still opens them. Never pruned: an entry is a few dozen bytes. */
+  aliases?: Record<string, string>;
 };
 
 export type Snapshot = {
@@ -27,6 +30,7 @@ export type Snapshot = {
   readonly projects: ReadonlyMap<string, ProjectEntity>;
   readonly sections: ReadonlyMap<string, SectionEntity>;
   readonly labels: ReadonlyMap<string, LabelEntity>;
+  readonly filters: ReadonlyMap<string, FilterEntity>;
   readonly comments: ReadonlyMap<string, CommentEntity>;
   readonly reminders: ReadonlyMap<string, ReminderEntity>;
   readonly changes: ReadonlyMap<number, PendingChange>;
@@ -41,6 +45,7 @@ export type Loaded = {
   projects: ProjectEntity[];
   sections: SectionEntity[];
   labels: LabelEntity[];
+  filters: FilterEntity[];
   comments: CommentEntity[];
   reminders: ReminderEntity[];
   changes: PendingChange[];
@@ -65,6 +70,7 @@ const empty = (): Snapshot => ({
   projects: new Map(),
   sections: new Map(),
   labels: new Map(),
+  filters: new Map(),
   comments: new Map(),
   reminders: new Map(),
   changes: new Map(),
@@ -172,6 +178,7 @@ export class Tx {
   readonly projects: TableTx<string, ProjectEntity>;
   readonly sections: TableTx<string, SectionEntity>;
   readonly labels: TableTx<string, LabelEntity>;
+  readonly filters: TableTx<string, FilterEntity>;
   readonly comments: TableTx<string, CommentEntity>;
   readonly reminders: TableTx<string, ReminderEntity>;
   readonly changes: ChangesTx;
@@ -185,6 +192,7 @@ export class Tx {
     this.projects = new TableTx("projects", from.projects, id, this.writes);
     this.sections = new TableTx("sections", from.sections, id, this.writes);
     this.labels = new TableTx("labels", from.labels, id, this.writes);
+    this.filters = new TableTx("filters", from.filters, id, this.writes);
     this.comments = new TableTx("comments", from.comments, id, this.writes);
     this.reminders = new TableTx("reminders", from.reminders, id, this.writes);
     this.changes = new ChangesTx(from.changes, this.writes, nextSeq);
@@ -209,6 +217,7 @@ export class Tx {
       projects: this.projects.result(),
       sections: this.sections.result(),
       labels: this.labels.result(),
+      filters: this.filters.result(),
       comments: this.comments.result(),
       reminders: this.reminders.result(),
       changes: this.changes.result(),
@@ -282,6 +291,7 @@ export class OfflineStore {
       projects: mapOf(data.projects, (row) => row.id),
       sections: mapOf(data.sections, (row) => row.id),
       labels: mapOf(data.labels, (row) => row.id),
+      filters: mapOf(data.filters, (row) => row.id),
       comments: mapOf(data.comments, (row) => row.id),
       reminders: mapOf(data.reminders, (row) => row.id),
       changes: mapOf([...data.changes].sort(bySeq), (row) => row.seq),

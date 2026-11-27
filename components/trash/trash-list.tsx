@@ -1,40 +1,54 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Folder, RotateCcw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { serverWritten } from "@/lib/api-client";
+import { StoreReady, useSnapshot, useWrites } from "@/lib/offline/hooks";
+import { trashItems } from "@/lib/task-views";
 
-type DeletedProject = { id: string; name: string; deletedAt: Date | null };
-type DeletedTask = { id: string; content: string; projectName: string; deletedAt: Date | null };
+type ServerProject = { id: string; name: string; deletedAt: string };
 
-export function TrashList({
-  initialProjects,
-  initialTasks,
-}: {
-  initialProjects: DeletedProject[];
-  initialTasks: DeletedTask[];
-}) {
-  const [projects, setProjects] = useState(initialProjects);
-  const [tasks, setTasks] = useState(initialTasks);
+export function TrashList({ serverProjects }: { serverProjects: ServerProject[] }) {
+  return (
+    <StoreReady fallback={<div className="flex animate-pulse flex-col gap-2"><div className="h-10 rounded-md bg-muted" /></div>}>
+      <Trash serverProjects={serverProjects} />
+    </StoreReady>
+  );
+}
+
+function Trash({ serverProjects }: { serverProjects: ServerProject[] }) {
+  const router = useRouter();
+  const taskRows = useSnapshot((snapshot) => snapshot.tasks);
+  const projectRows = useSnapshot((snapshot) => snapshot.projects);
+  const writes = useWrites();
   const [error, setError] = useState<string | null>(null);
-  const [restoring, setRestoring] = useState<string | null>(null);
+  const trash = useMemo(() => trashItems(taskRows, projectRows), [taskRows, projectRows]);
+  // A project the local copy holds is shown from there; the rest come from the server page.
+  const projects = useMemo(
+    () =>
+      [
+        ...trash.projects.map((project) => ({ id: project.id, name: project.name, deletedAt: project.deletedAt ?? "" })),
+        ...serverProjects.filter((project) => !projectRows.has(project.id)),
+      ].sort((a, b) => (Date.parse(b.deletedAt) || 0) - (Date.parse(a.deletedAt) || 0)),
+    [trash.projects, serverProjects, projectRows],
+  );
 
-  async function restore(kind: "projects" | "tasks", id: string) {
+  function restoreProject(id: string) {
     setError(null);
-    setRestoring(`${kind}:${id}`);
-    const response = await fetch(`/api/trash/${kind}/${id}/restore`, { method: "POST" });
-    setRestoring(null);
-    if (!response.ok) {
-      setError("Couldn’t restore that item. Try again.");
-      return;
-    }
-    if (kind === "projects") setProjects((current) => current.filter((item) => item.id !== id));
-    else setTasks((current) => current.filter((item) => item.id !== id));
-    window.dispatchEvent(new Event("sidebar:projects:refresh"));
+    const project = projectRows.get(id);
+    if (project) return writes.lists.restoreProject(project);
+    // Not on this device yet, so only the server can bring it back.
+    void fetch(`/api/trash/projects/${id}/restore`, { method: "POST" }).then((response) => {
+      if (!response.ok) return setError("Couldn’t restore that item. Try again.");
+      serverWritten();
+      router.refresh();
+    }, () => setError("Couldn’t restore that item. Try again."));
   }
 
-  if (!projects.length && !tasks.length) {
+  if (!projects.length && !trash.tasks.length) {
     return <p className="text-sm text-muted-foreground">Trash is empty.</p>;
   }
 
@@ -48,7 +62,7 @@ export function TrashList({
               <div key={project.id} className="flex items-center gap-3 p-3">
                 <Folder className="size-4 text-muted-foreground" />
                 <span className="min-w-0 flex-1 truncate text-sm">{project.name}</span>
-                <Button size="sm" variant="outline" disabled={restoring === `projects:${project.id}`} onClick={() => void restore("projects", project.id)}>
+                <Button size="sm" variant="outline" onClick={() => restoreProject(project.id)}>
                   <RotateCcw /> Restore
                 </Button>
               </div>
@@ -56,17 +70,17 @@ export function TrashList({
           </div>
         </section>
       )}
-      {tasks.length > 0 && (
+      {trash.tasks.length > 0 && (
         <section>
           <h2 className="mb-2 text-sm font-medium text-muted-foreground">Tasks</h2>
           <div className="divide-y rounded-lg border">
-            {tasks.map((task) => (
+            {trash.tasks.map((task) => (
               <div key={task.id} className="flex items-center gap-3 p-3">
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm">{task.content}</span>
-                  <span className="block truncate text-xs text-muted-foreground">{task.projectName}</span>
+                  <span className="block truncate text-xs text-muted-foreground">{projectRows.get(task.projectId)?.name}</span>
                 </span>
-                <Button size="sm" variant="outline" disabled={restoring === `tasks:${task.id}`} onClick={() => void restore("tasks", task.id)}>
+                <Button size="sm" variant="outline" onClick={() => writes.tasks.restore(task)}>
                   <RotateCcw /> Restore
                 </Button>
               </div>

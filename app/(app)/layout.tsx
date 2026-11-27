@@ -1,19 +1,19 @@
 import { redirect } from "next/navigation";
-import { and, count, eq, inArray, isNull, lte, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { accessibleProjects } from "@/lib/db/access";
-import { filters, labels, tasks, users } from "@/lib/db/schema";
+import { users } from "@/lib/db/schema";
 import { ProjectSidebar } from "@/components/projects/project-sidebar";
 import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
 import { BetaInviteDialog } from "@/components/beta-invite-dialog";
 import { betaInviteFor } from "@/lib/beta-invites";
 import { Toaster } from "@/components/ui/toast";
 import { ServiceWorkerRegistration } from "@/components/service-worker-registration";
-import { OfflineNotice } from "@/components/offline-notice";
+import { SyncStatus } from "@/components/offline/sync-status";
 import { DatePreferencesProvider } from "@/components/date-input";
-import { todayInTimezone } from "@/lib/dates";
+import { OfflineProvider } from "@/components/offline/offline-provider";
 // Read on the server so the client bundle carries the version string, not the whole package.json.
 import { version } from "@/package.json";
 
@@ -25,18 +25,8 @@ export default async function AppLayout({
   const user = await requireUser();
   if (!user) redirect("/login");
 
-  const [userProjects, userLabels, userFilters, [account]] = await Promise.all([
+  const [userProjects, [account]] = await Promise.all([
     accessibleProjects(user),
-    db
-      .select()
-      .from(labels)
-      .where(eq(labels.userId, user.id))
-      .orderBy(labels.order),
-    db
-      .select()
-      .from(filters)
-      .where(eq(filters.userId, user.id))
-      .orderBy(filters.order),
     db
       .select({
         username: users.username,
@@ -60,58 +50,40 @@ export default async function AppLayout({
   // A shared project can be someone else's Inbox. Mine is the unshared one.
   const inboxProjectId =
     userProjects.find((project) => project.isInbox && !project.shared)?.id ?? null;
-  const today = todayInTimezone(account.timezone);
-  const projectIds = userProjects.map((project) => project.id);
-  const taskCounts = projectIds.length
-    ? await db
-      .select({
-        projectId: tasks.projectId,
-        count: count(),
-        todayCount: sql<number>`count(*) filter (where ${lte(tasks.dueDate, today)})`,
-      })
-      .from(tasks)
-      .where(and(inArray(tasks.projectId, projectIds), eq(tasks.isCompleted, false), isNull(tasks.deletedAt)))
-      .groupBy(tasks.projectId)
-    : [];
-  const counts = Object.fromEntries(taskCounts.map(({ projectId, count }) => [projectId, count]));
-  const todayCount = taskCounts.reduce((total, row) => total + Number(row.todayCount), 0);
   const betaInvite = betaInviteFor(account);
 
   return (
     <DatePreferencesProvider dateFormat={account.dateFormat} weekStart={account.weekStart}>
-      <div className="flex h-dvh flex-col md:flex-row">
-        <KeyboardShortcuts inboxProjectId={inboxProjectId} />
-        <ProjectSidebar
-          initialProjects={userProjects}
-          initialLabels={userLabels}
-          initialFilters={userFilters}
-          username={account.username}
-          userName={account.name}
-          hasAvatar={!!account.image}
-          avatarVersion={String(account.updatedAt.getTime())}
-          appVersion={version}
-          inboxProjectId={inboxProjectId}
-          today={today}
-          labels={userLabels}
-          counts={counts}
-          todayCount={todayCount}
-        />
-        <main className="flex-1 min-w-0 overflow-y-auto pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0">
-          <OfflineNotice />
-          {children}
-        </main>
-        <Toaster />
-        <ServiceWorkerRegistration />
-        <BetaInviteDialog
-          invite={betaInvite && {
-            id: betaInvite.id,
-            title: betaInvite.title,
-            body: betaInvite.body,
-            joinUrl: betaInvite.joinUrl,
-            alternative: betaInvite.alternative,
-          }}
-        />
-      </div>
+      <OfflineProvider userId={user.id} timeZone={account.timezone} dateFormat={account.dateFormat}>
+        <div className="flex h-dvh flex-col md:flex-row">
+          <KeyboardShortcuts inboxProjectId={inboxProjectId} />
+          <ProjectSidebar
+            username={account.username}
+            userName={account.name}
+            hasAvatar={!!account.image}
+            avatarVersion={String(account.updatedAt.getTime())}
+            appVersion={version}
+            inboxProjectId={inboxProjectId}
+          />
+          <div className="relative flex min-h-0 min-w-0 flex-1">
+            <main className="flex-1 min-w-0 overflow-y-auto pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0">
+              {children}
+            </main>
+            <SyncStatus />
+          </div>
+          <Toaster />
+          <ServiceWorkerRegistration />
+          <BetaInviteDialog
+            invite={betaInvite && {
+              id: betaInvite.id,
+              title: betaInvite.title,
+              body: betaInvite.body,
+              joinUrl: betaInvite.joinUrl,
+              alternative: betaInvite.alternative,
+            }}
+          />
+        </div>
+      </OfflineProvider>
     </DatePreferencesProvider>
   );
 }
