@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { signOutAndClearCache } from "@/lib/sign-out";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -97,7 +97,7 @@ export function AccountSettings({
       return;
     }
 
-    await signOut({ callbackUrl: "/login" });
+    await signOutAndClearCache();
   }
 
   return (

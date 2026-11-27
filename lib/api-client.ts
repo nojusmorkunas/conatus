@@ -73,7 +73,10 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   get: <T>(url: string) => request<T>(url),
-  post: <T>(url: string, body?: unknown) => request<T>(url, jsonInit("POST", body)),
+  post: <T>(url: string, body?: unknown, headers?: Record<string, string>) => {
+    const init = jsonInit("POST", body);
+    return request<T>(url, headers ? { ...init, headers: { ...init.headers, ...headers } } : init);
+  },
   patch: <T>(url: string, body?: unknown) => request<T>(url, jsonInit("PATCH", body)),
   delete: <T>(url: string, body?: unknown) => request<T>(url, jsonInit("DELETE", body)),
 };

@@ -2,6 +2,7 @@ import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { generateKeyBetween } from "fractional-indexing";
 import { z } from "zod";
 
+import { withIdempotency } from "@/lib/api/idempotency";
 import { invalid, notFound, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -56,6 +57,17 @@ export async function POST(request: Request) {
   const user = await requireUser("tasks:write");
   if (!user) return unauthorized();
 
+  return withIdempotency(
+    request,
+    { userId: user.id, tokenId: user.tokenId, operation: "web.tasks.create" },
+    () => createTask(request, user),
+  );
+}
+
+async function createTask(
+  request: Request,
+  user: NonNullable<Awaited<ReturnType<typeof requireUser>>>,
+) {
   const parsed = taskCreateSchema.safeParse(await request.json());
   if (!parsed.success) {
     return invalid(parsed.error);

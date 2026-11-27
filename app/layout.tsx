@@ -17,6 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Conatus",
   description: "A self-hosted task manager.",
+  appleWebApp: { capable: true, title: "Conatus" },
 };
 
 export const viewport: Viewport = {

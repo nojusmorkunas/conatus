@@ -2,7 +2,7 @@
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { signOutAndClearCache } from "@/lib/sign-out";
 import {
   CalendarDays,
   CalendarRange,
@@ -714,7 +714,7 @@ export function ProjectSidebar({
                 <Keyboard /> Keyboard shortcuts
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => signOut({ callbackUrl: "/login" })}>
+              <DropdownMenuItem onClick={() => signOutAndClearCache()}>
                 <LogOut /> Log out
               </DropdownMenuItem>
               <p className="px-2 py-1.5 text-xs text-muted-foreground">v{appVersion}</p>

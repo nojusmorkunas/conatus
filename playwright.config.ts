@@ -16,6 +16,8 @@ export default defineConfig({
   expect: { timeout: process.env.CI ? 20_000 : 5_000 },
   use: {
     baseURL,
+    // Playwright's page.route can't see requests a service worker answers, and the other specs mock with it.
+    serviceWorkers: "block",
   },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },

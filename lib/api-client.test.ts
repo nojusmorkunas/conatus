@@ -115,4 +115,13 @@ describe("api-client", () => {
     const [, init] = fetchMock.mock.calls[0];
     expect(init).toEqual({ method: "DELETE" });
   });
+
+  test("post sends extra headers alongside the JSON content type", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await api.post("/api/tasks", { content: "x" }, { "Idempotency-Key": "k" });
+
+    expect(fetchMock.mock.calls[0][1].headers).toEqual({ "Content-Type": "application/json", "Idempotency-Key": "k" });
+  });
 });

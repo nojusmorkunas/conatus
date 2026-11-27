@@ -12,7 +12,9 @@ import { parseQuickAddPreview, removeQuickAddTokens, type QuickAddToken } from "
 import { firstOccurrence } from "@/lib/recurrence";
 import { addDays, dueLabel, formatDateTime, humanizeDuration, weekStartOf } from "@/lib/dates";
 import { cn } from "@/lib/utils";
-import { api } from "@/lib/api-client";
+import { api, ApiError } from "@/lib/api-client";
+import { newIdempotencyKey, queueOfflineTask } from "@/lib/offline-tasks";
+import { toastManager } from "@/components/ui/toast";
 import { localDateTimeToUtc } from "@/lib/local-time";
 import { RecurrencePicker } from "./recurrence-picker";
 import { TaskComposerInput } from "./task-composer-input";
@@ -209,14 +211,16 @@ export function TaskAddForm({
     submitting.current = true;
     setPending(true);
     setError(null);
+    const key = newIdempotencyKey();
+    const body = {
+      projectId: targetProjectId, sectionId: targetSectionId, parentId,
+      ...(afterId !== undefined && targetProjectId === projectId && targetSectionId === sectionId ? { afterId } : {}),
+      content: parsed.content, description: description.trim() || undefined, priority,
+      dueDate: dueDate || undefined, dueTime: dueTime || undefined, recurrence: recurrence || undefined,
+      deadlineDate: deadline || undefined, durationMinutes: duration ? Number(duration) : undefined,
+    };
     try {
-      const task = recovery ?? await api.post<{ id: string }>("/api/tasks", {
-        projectId: targetProjectId, sectionId: targetSectionId, parentId,
-        ...(afterId !== undefined && targetProjectId === projectId && targetSectionId === sectionId ? { afterId } : {}),
-        content: parsed.content, description: description.trim() || undefined, priority,
-        dueDate: dueDate || undefined, dueTime: dueTime || undefined, recurrence: recurrence || undefined,
-        deadlineDate: deadline || undefined, durationMinutes: duration ? Number(duration) : undefined,
-      });
+      const task = recovery ?? await api.post<{ id: string }>("/api/tasks", body, { "Idempotency-Key": key });
       const taskId = "taskId" in task ? task.taskId : task.id;
       const details = recovery?.details ?? { labelIds: selectedLabels.map((label) => label.id), reminders: selectedReminders, files };
       if (!(await saveDetails(taskId, details))) return;
@@ -224,7 +228,23 @@ export function TaskAddForm({
       setExpanded(true);
       onCreated();
       requestAnimationFrame(() => inputRef.current?.focus());
-    } catch {
+    } catch (caught) {
+      if (!recovery && !(caught instanceof ApiError)) {
+        // A network failure: keep the task on this device until the connection returns.
+        if (selectedReminders.length || files.length) {
+          setError("You're offline. Reminders and attachments need a connection, so remove them to save this task for later.");
+          return;
+        }
+        // Same key and body as the request above: if it reached the server, a different body would get a permanent 409.
+        if (queueOfflineTask({ key, body, labelIds: selectedLabels.map((label) => label.id), content: parsed.content, projectName: targetProject?.name ?? null })) {
+          reset();
+          setExpanded(true);
+          // onCreated refreshes the router, and an offline refresh forces a full reload.
+          toastManager.add({ title: "Saved on this device. It will sync when you're back online." });
+          requestAnimationFrame(() => inputRef.current?.focus());
+          return;
+        }
+      }
       setError("Couldn't add the task. Your draft is still here; please try again.");
       onError();
     } finally {
