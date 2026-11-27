@@ -28,32 +28,35 @@ test("a task added offline stays on the device, and syncs exactly once", async (
   await input.press("Enter");
   await expect(region).toContainText("Buy milk offline");
 
+  // One handler for the whole test: background syncs (mount, online, interval) can fire at any point, so the mode decides what each create gets.
+  let mode: "abort" | "lose-response" | "pass" = "abort";
+  let lost = 0;
+  await page.route("**/api/tasks", async (route) => {
+    if (route.request().method() !== "POST" || mode === "pass") return route.continue();
+    if (mode === "lose-response") {
+      // The server stores the task, but the page never sees the reply.
+      await route.fetch();
+      lost++;
+    }
+    return route.abort();
+  });
   // Every create fails while the page reloads, so the task must come back from storage.
-  await page.route("**/api/tasks", (route) => (route.request().method() === "POST" ? route.abort() : route.continue()));
   await page.context().setOffline(false);
   await page.reload();
   await expect(region).toContainText("Buy milk offline");
 
-  // The server stores the task, but the page never sees the reply.
-  await page.unroute("**/api/tasks");
-  let posts = 0;
-  await page.route("**/api/tasks", async (route) => {
-    if (route.request().method() !== "POST") return route.continue();
-    posts++;
-    if (posts === 1) {
-      await route.fetch();
-      return route.abort();
-    }
-    return route.continue();
-  });
-  await expect(syncNow).toBeEnabled();
-  await syncNow.click();
-  await expect(syncNow).toBeEnabled();
+  mode = "lose-response";
+  await expect(async () => {
+    if (await region.count()) await syncNow.click({ timeout: 1000 });
+    expect(lost).toBeGreaterThan(0);
+  }).toPass();
   await expect(region).toContainText("Buy milk offline");
 
-  await syncNow.click();
-  await expect(region).toHaveCount(0);
-  expect(posts).toBe(2);
+  mode = "pass";
+  await expect(async () => {
+    if (await region.count()) await syncNow.click({ timeout: 1000 });
+    await expect(region).toHaveCount(0, { timeout: 2000 });
+  }).toPass();
   expect((await tasksIn(page, projectId)).filter((task) => task.content === "Buy milk offline")).toHaveLength(1);
   await expect(page.getByRole("main").getByText("Buy milk offline", { exact: true })).toBeVisible();
 });

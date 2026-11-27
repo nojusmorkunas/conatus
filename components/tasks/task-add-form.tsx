@@ -73,6 +73,8 @@ export function TaskAddForm({
   // Once the task exists, retries only write its missing details.
   const [recovery, setRecovery] = useState<{ taskId: string; details: Details } | null>(null);
   const submitting = useRef(false);
+  // A retry of an unchanged body reuses the key, so a create whose response was lost isn't duplicated.
+  const attempt = useRef<{ json: string; key: string } | null>(null);
   const rootRef = useRef<HTMLElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -211,7 +213,6 @@ export function TaskAddForm({
     submitting.current = true;
     setPending(true);
     setError(null);
-    const key = newIdempotencyKey();
     const body = {
       projectId: targetProjectId, sectionId: targetSectionId, parentId,
       ...(afterId !== undefined && targetProjectId === projectId && targetSectionId === sectionId ? { afterId } : {}),
@@ -219,8 +220,12 @@ export function TaskAddForm({
       dueDate: dueDate || undefined, dueTime: dueTime || undefined, recurrence: recurrence || undefined,
       deadlineDate: deadline || undefined, durationMinutes: duration ? Number(duration) : undefined,
     };
+    const json = JSON.stringify(body);
+    if (attempt.current?.json !== json) attempt.current = { json, key: newIdempotencyKey() };
+    const { key } = attempt.current;
     try {
       const task = recovery ?? await api.post<{ id: string }>("/api/tasks", body, { "Idempotency-Key": key });
+      attempt.current = null;
       const taskId = "taskId" in task ? task.taskId : task.id;
       const details = recovery?.details ?? { labelIds: selectedLabels.map((label) => label.id), reminders: selectedReminders, files };
       if (!(await saveDetails(taskId, details))) return;
@@ -229,14 +234,15 @@ export function TaskAddForm({
       onCreated();
       requestAnimationFrame(() => inputRef.current?.focus());
     } catch (caught) {
-      if (!recovery && !(caught instanceof ApiError)) {
-        // A network failure: keep the task on this device until the connection returns.
+      if (!recovery && !(caught instanceof ApiError) && !navigator.onLine) {
+        // A network failure while offline: keep the task on this device until the connection returns.
         if (selectedReminders.length || files.length) {
           setError("You're offline. Reminders and attachments need a connection, so remove them to save this task for later.");
           return;
         }
         // Same key and body as the request above: if it reached the server, a different body would get a permanent 409.
         if (queueOfflineTask({ key, body, labelIds: selectedLabels.map((label) => label.id), content: parsed.content, projectName: targetProject?.name ?? null })) {
+          attempt.current = null;
           reset();
           setExpanded(true);
           // onCreated refreshes the router, and an offline refresh forces a full reload.
