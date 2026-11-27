@@ -12,9 +12,7 @@ import { parseQuickAddPreview, removeQuickAddTokens, type QuickAddToken } from "
 import { firstOccurrence } from "@/lib/recurrence";
 import { addDays, dueLabel, formatDateTime, humanizeDuration, weekStartOf } from "@/lib/dates";
 import { cn } from "@/lib/utils";
-import { api, ApiError } from "@/lib/api-client";
-import { newIdempotencyKey, queueOfflineTask } from "@/lib/offline-tasks";
-import { toastManager } from "@/components/ui/toast";
+import { api, newIdempotencyKey } from "@/lib/api-client";
 import { localDateTimeToUtc } from "@/lib/local-time";
 import { RecurrencePicker } from "./recurrence-picker";
 import { TaskComposerInput } from "./task-composer-input";
@@ -233,24 +231,7 @@ export function TaskAddForm({
       setExpanded(true);
       onCreated();
       requestAnimationFrame(() => inputRef.current?.focus());
-    } catch (caught) {
-      if (!recovery && !(caught instanceof ApiError) && !navigator.onLine) {
-        // A network failure while offline: keep the task on this device until the connection returns.
-        if (selectedReminders.length || files.length) {
-          setError("You're offline. Reminders and attachments need a connection, so remove them to save this task for later.");
-          return;
-        }
-        // Same key and body as the request above: if it reached the server, a different body would get a permanent 409.
-        if (queueOfflineTask({ key, body, labelIds: selectedLabels.map((label) => label.id), content: parsed.content, projectName: targetProject?.name ?? null })) {
-          attempt.current = null;
-          reset();
-          setExpanded(true);
-          // onCreated refreshes the router, and an offline refresh forces a full reload.
-          toastManager.add({ title: "Saved on this device. It will sync when you're back online." });
-          requestAnimationFrame(() => inputRef.current?.focus());
-          return;
-        }
-      }
+    } catch {
       setError("Couldn't add the task. Your draft is still here; please try again.");
       onError();
     } finally {

@@ -1,8 +1,6 @@
 const PAGES = "conatus-pages";
 // shortcut: hashed /_next/static files are never pruned, so this cache grows a little with each deploy; prune by age if it gets large.
 const STATIC = "conatus-static";
-const DATA_CACHE = "conatus-data";
-const DATA = new Set(["/api/projects", "/api/sections"]);
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
@@ -51,14 +49,5 @@ self.addEventListener("fetch", (event) => {
       })(),
     );
     return;
-  }
-
-  if (DATA.has(url.pathname) && url.search === "") {
-    event.respondWith(
-      networkFirst(event, request, DATA_CACHE, async (cache) => {
-        const cached = await cache.match(request, { ignoreVary: true });
-        return cached ?? Response.error();
-      }),
-    );
   }
 });

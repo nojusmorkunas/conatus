@@ -11,7 +11,7 @@ import { BetaInviteDialog } from "@/components/beta-invite-dialog";
 import { betaInviteFor } from "@/lib/beta-invites";
 import { Toaster } from "@/components/ui/toast";
 import { ServiceWorkerRegistration } from "@/components/service-worker-registration";
-import { OfflineTasks } from "@/components/offline-tasks";
+import { OfflineNotice } from "@/components/offline-notice";
 import { DatePreferencesProvider } from "@/components/date-input";
 import { todayInTimezone } from "@/lib/dates";
 // Read on the server so the client bundle carries the version string, not the whole package.json.
@@ -97,7 +97,7 @@ export default async function AppLayout({
           todayCount={todayCount}
         />
         <main className="flex-1 min-w-0 overflow-y-auto pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0">
-          <OfflineTasks userId={user.id} inboxProjectId={inboxProjectId} />
+          <OfflineNotice />
           {children}
         </main>
         <Toaster />
