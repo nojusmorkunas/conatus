@@ -92,7 +92,7 @@ export function visibleFlatRows<T extends TreeTask>(
   return rows.filter((row) => !hiddenIds.has(row.id));
 }
 
-export function subtreeIds(tasks: TreeTask[], rootId: string) {
+export function subtreeIds(tasks: Pick<TreeTask, "id" | "parentId">[], rootId: string) {
   // Group children once (O(n)) then walk down from the root, instead of the
   // fixed-point scan that re-swept the whole list per depth level (O(n²)).
   // Runs on every drag move via projectTaskDepth, so the difference shows on

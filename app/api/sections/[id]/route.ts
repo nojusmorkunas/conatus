@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { type ProjectActor, requireProjectAccess } from "@/lib/db/access";
 import { sections, taskLabels, tasks } from "@/lib/db/schema";
 import { notifyDevices } from "@/lib/push";
+import { keyAfterSibling } from "@/lib/task-rules";
 import { sectionUpdateSchema } from "@/lib/validation";
 
 async function accessibleSection(user: ProjectActor, sectionId: string) {
@@ -135,21 +136,12 @@ export async function PATCH(
   if ("afterId" in parsed.data) {
     const { afterId } = parsed.data;
     const others = siblings.filter((sibling) => sibling.id !== id);
-    let index = 0;
-    if (afterId) {
-      index = others.findIndex((sibling) => sibling.id === afterId) + 1;
-      if (index === 0) return notFound();
-    }
+    const order = keyAfterSibling(others, afterId);
+    if (order === undefined) return notFound();
 
     const [updated] = await db
       .update(sections)
-      .set({
-        order: generateKeyBetween(
-          others[index - 1]?.order ?? null,
-          others[index]?.order ?? null,
-        ),
-        updatedAt: new Date(),
-      })
+      .set({ order, updatedAt: new Date() })
       .where(eq(sections.id, id))
       .returning();
     notifyDevices(user, { projects: [section.projectId] });
