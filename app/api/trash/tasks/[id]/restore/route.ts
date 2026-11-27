@@ -1,12 +1,11 @@
 import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
-import { generateKeyBetween } from "fractional-indexing";
-
 import { notFound, unauthorized } from "@/lib/api/responses";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { allowedProjectIds } from "@/lib/db/access";
 import { projectCollaborators, projects, tasks } from "@/lib/db/schema";
 import { notifyDevices } from "@/lib/push";
+import { restoredOrder } from "@/lib/task-rules";
 import { subtreeIds } from "@/lib/task-tree";
 
 export async function POST(
@@ -64,9 +63,7 @@ export async function POST(
     .filter((task) => !task.deletedAt && task.parentId === row.task.parentId
       && (row.task.parentId !== null || task.sectionId === row.task.sectionId))
     .map((task) => task.order);
-  const order = siblingOrders.includes(row.task.order)
-    ? generateKeyBetween(siblingOrders.reduce((last, key) => (key > last ? key : last)), null)
-    : row.task.order;
+  const order = restoredOrder(siblingOrders, row.task.order);
 
   await db.transaction(async (tx) => {
     await tx

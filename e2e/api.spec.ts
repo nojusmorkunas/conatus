@@ -104,7 +104,9 @@ test("an app's creates are idempotent and its token revokes itself on sign-out",
   }
   const projectId = await createTwice("/api/v1/projects", "project", { name: "Made on a phone" });
   await createTwice("/api/v1/sections", "section", { projectId, name: "Later" });
-  await createTwice("/api/tasks", "web-task", { projectId, content: "Captured offline" });
+  const taskId = await createTwice("/api/tasks", "web-task", { projectId, content: "Captured offline" });
+  await createTwice("/api/v1/comments", "comment", { taskId, content: "Written offline" });
+  await createTwice("/api/v1/reminders", "reminder", { taskId, remindAt: "2027-09-15T10:00:00.000Z" });
   await createTwice("/api/v1/labels", "label", { name: "phone" });
   const projects = await (await request.get("/api/v1/projects", { headers })).json() as { name: string }[];
   expect(projects.filter((project) => project.name === "Made on a phone")).toHaveLength(1);

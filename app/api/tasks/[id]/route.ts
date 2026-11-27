@@ -16,6 +16,7 @@ import { notifyDevices } from "@/lib/push";
 import { nextOccurrenceWithinEnd } from "@/lib/recurrence";
 import { withLabels } from "@/lib/db/task-labels";
 import { taskUpdateSchema } from "@/lib/validation";
+import { cascadedIds, clearedWithSchedule, completedAncestorIds, keyAfterSibling, moveTarget } from "@/lib/task-rules";
 import { MAX_TASK_DEPTH, subtreeIds, taskDepth, wouldCreateTaskCycle } from "@/lib/task-tree";
 
 type Task = typeof tasks.$inferSelect;
@@ -56,10 +57,10 @@ export async function PATCH(
         order: tasks.order,
         isCompleted: tasks.isCompleted,
         completedAt: tasks.completedAt,
+        deletedAt: tasks.deletedAt,
       })
       .from(tasks)
       .where(eq(tasks.projectId, task.projectId));
-    const descendantIds = [...subtreeIds(projectTasks, id)].filter((taskId) => taskId !== id);
 
     // Completing a recurring task advances it to the next occurrence
     // instead of archiving it.
@@ -76,6 +77,7 @@ export async function PATCH(
         task.recurrenceEndDate,
       );
       const recurrenceFinished = nextDueDate === null;
+      const descendantIds = cascadedIds(projectTasks, task, recurrenceFinished, true);
       const completedAt = new Date();
       const [updated] = await db.transaction(async (tx) => {
         const updated = await tx
@@ -95,13 +97,7 @@ export async function PATCH(
               completedAt: recurrenceFinished ? completedAt : null,
               updatedAt: new Date(),
             })
-            .where(
-              and(
-                inArray(tasks.id, descendantIds),
-                eq(tasks.isCompleted, !recurrenceFinished),
-                isNull(tasks.deletedAt),
-              ),
-            );
+            .where(inArray(tasks.id, descendantIds));
         }
         return updated;
       });
@@ -125,42 +121,26 @@ export async function PATCH(
 
     const completed = parsed.data.completed;
     const completedAt = completed ? new Date() : null;
+    const descendantIds = cascadedIds(projectTasks, task, completed);
     const [updated] = await db.transaction(async (tx) => {
       const updated = await tx
         .update(tasks)
         .set({ isCompleted: completed, completedAt, updatedAt: new Date() })
         .where(eq(tasks.id, id))
         .returning();
-      if (descendantIds.length && (completed || task.completedAt)) {
+      if (descendantIds.length) {
         await tx
           .update(tasks)
           .set({ isCompleted: completed, completedAt, updatedAt: new Date() })
-          .where(
-            and(
-              inArray(tasks.id, descendantIds),
-              eq(tasks.isCompleted, !completed),
-              completed ? undefined : eq(tasks.completedAt, task.completedAt!),
-              isNull(tasks.deletedAt),
-            ),
-          );
+          .where(inArray(tasks.id, descendantIds));
       }
       if (!completed) {
-        const byId = new Map(projectTasks.map((row) => [row.id, row]));
-        const ancestorIds: string[] = [];
-        const seen = new Set([id]);
-        let parentId = task.parentId;
-        while (parentId && !seen.has(parentId)) {
-          seen.add(parentId);
-          const parent = byId.get(parentId);
-          if (!parent) break;
-          if (parent.isCompleted) ancestorIds.push(parent.id);
-          parentId = parent.parentId;
-        }
+        const ancestorIds = completedAncestorIds(projectTasks, task);
         if (ancestorIds.length) {
           await tx
             .update(tasks)
             .set({ isCompleted: false, completedAt: null, updatedAt: new Date() })
-            .where(and(inArray(tasks.id, ancestorIds), isNull(tasks.deletedAt)));
+            .where(inArray(tasks.id, ancestorIds));
         }
       }
       return updated;
@@ -267,11 +247,8 @@ export async function PATCH(
       .orderBy(tasks.order);
     const others = siblings.filter((sibling) => sibling.id !== id);
 
-    let index = 0;
-    if (afterId) {
-      index = others.findIndex((sibling) => sibling.id === afterId) + 1;
-      if (index === 0) return notFound();
-    }
+    const order = keyAfterSibling(others, afterId);
+    if (order === undefined) return notFound();
 
     const descendantIds = [...descendants].filter((descendantId) => descendantId !== id);
     const [updated] = await db.transaction(async (tx) => {
@@ -280,10 +257,7 @@ export async function PATCH(
         .set({
           sectionId,
           parentId,
-          order: generateKeyBetween(
-            others[index - 1]?.order ?? null,
-            others[index]?.order ?? null,
-          ),
+          order,
           updatedAt: new Date(),
         })
         .where(eq(tasks.id, id))
@@ -328,22 +302,20 @@ export async function PATCH(
   }
 
   const { projectId, sectionId, ...rest } = parsed.data;
-  const targetProjectId = projectId ?? task.projectId;
+  const {
+    projectId: targetProjectId,
+    sectionId: targetSectionId,
+    parentId,
+    movingLists,
+  } = moveTarget(task, projectId, sectionId);
 
   const targetDueDate = rest.dueDate === undefined ? task.dueDate : rest.dueDate;
-  if (!targetDueDate) {
-    rest.dueTime = null;
-    rest.recurrence = null;
-    rest.recurrenceEndDate = null;
-  }
-  const targetRecurrence = rest.recurrence === undefined ? task.recurrence : rest.recurrence;
+  Object.assign(rest, clearedWithSchedule(task, rest));
   const targetRecurrenceEndDate =
     rest.recurrenceEndDate === undefined
       ? task.recurrenceEndDate
       : rest.recurrenceEndDate;
-  if (!targetRecurrence) {
-    rest.recurrenceEndDate = null;
-  } else if (
+  if (
     targetRecurrenceEndDate &&
     targetDueDate &&
     targetRecurrenceEndDate < targetDueDate
@@ -386,15 +358,9 @@ export async function PATCH(
 
   // A project move drops sections from the old project; an explicit
   // sectionId still gets validated against the target project above.
-  // Resending the current projectId is not a move.
-  const targetSectionId =
-    sectionId !== undefined ? sectionId : projectChanged ? null : task.sectionId;
-
-  const movingLists = projectChanged || targetSectionId !== task.sectionId;
-  // A subtask moved to another project or section on its own becomes a
-  // top-level task there; its own subtasks come along below.
-  const parentId = task.parentId && movingLists ? null : task.parentId;
-
+  // Resending the current projectId is not a move. A subtask moved to
+  // another project or section on its own becomes a top-level task there;
+  // its own subtasks come along below.
   const projectTasks = movingLists
     ? await db
         .select({
